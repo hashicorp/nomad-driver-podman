@@ -12,6 +12,9 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
+	"github.com/pascomnet/nomad-driver-podman/iopodman"
+
+	"github.com/varlink/go/varlink"
 )
 
 const (
@@ -84,12 +87,16 @@ type Driver struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
+
+	// podman varlink connection
+	varlinkConnection *varlink.Connection
 }
 
 // Config is the driver configuration set by the SetConfig RPC call
 type Config struct {
-
+	Enabled bool `codec:"enabled"`
 }
+
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
 }
@@ -143,6 +150,10 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 }
 
 func (d *Driver) Shutdown(ctx context.Context) error {
+	if d.varlinkConnection != nil {
+		d.logger.Debug("Closing podman varlink connection")
+		d.varlinkConnection.Close()
+	}
 	d.signalShutdown()
 	return nil
 }
@@ -182,25 +193,39 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	var desc string
 	attrs := map[string]*pstructs.Attribute{}
 
-	// lxcVersion := lxc.Version()
+	// be negative and guess that we will not be able to get a podman connection
+	health = drivers.HealthStateUndetected
+	desc = "disabled"
 
-	// if d.config.Enabled && lxcVersion != "" {
-	// 	health = drivers.HealthStateHealthy
-	// 	desc = "ready"
-	// 	attrs["driver.lxc"] = pstructs.NewBoolAttribute(true)
-	// 	attrs["driver.lxc.version"] = pstructs.NewStringAttribute(lxcVersion)
-	// } else {
-	// 	health = drivers.HealthStateUndetected
-	// 	desc = "disabled"
-	// }
+	var err error
 
-	// if d.config.AllowVolumes {
-	// 	attrs["driver.lxc.volumes.enabled"] = pstructs.NewBoolAttribute(true)
-	// }
-
-	// FIXME: implement!
-	health = drivers.HealthStateHealthy
-	desc = "ready"
+	// try to connect if the driver is enabled
+	if d.config.Enabled {
+		if d.varlinkConnection == nil {
+			// FIXME: a parameter for the socket would be nice
+			d.varlinkConnection, err = varlink.NewConnection("unix://run/podman/io.podman")
+			if err != nil {
+				d.logger.Error("Could not connect to podman", "err", err)
+			}
+		}
+		if d.varlinkConnection != nil {
+			//  see if we get the system info from podman
+			info, err := iopodman.GetInfo().Call(d.varlinkConnection)
+			if err == nil {
+				// yay! we can enable the driver
+				health = drivers.HealthStateHealthy
+				desc = "ready"
+				// FIXME: we would have more data here...
+				attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+				attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Podman.Podman_version)
+				d.logger.Debug("Connected to podman", "version", info.Podman.Podman_version)
+			} else {
+				d.logger.Error("Cound not get podman info", "err", err)
+				d.varlinkConnection = nil
+				// FIXME: we could check for "broken pipe" and try to reconnect
+			}
+		}
+	}
 
 	return &drivers.Fingerprint{
 		Attributes:        attrs,
@@ -213,7 +238,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	if handle == nil {
 		return fmt.Errorf("error: handle cannot be nil")
 	}
-
 
 	if _, ok := d.tasks.Get(handle.Config.ID); ok {
 		return nil
@@ -281,8 +305,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	driverState := TaskState{
 		//ContainerName: c.Name(),
-		TaskConfig:    cfg,
-		StartedAt:     h.startedAt,
+		TaskConfig: cfg,
+		StartedAt:  h.startedAt,
 	}
 
 	if err := handle.SetDriverState(&driverState); err != nil {
