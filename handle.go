@@ -19,6 +19,12 @@ const (
 	containerMonitorIntv = 2 * time.Second
 )
 
+var (
+	MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
+
+	MeasuredMemStats = []string{"RSS", "Cache", "Swap", "Max Usage", "Kernel Usage", "Kernel Max Usage"}
+)
+
 type TaskHandle struct {
 	//container *lxc.Container
 	initPid     int
@@ -110,9 +116,35 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		//fixme implement stats
 		t := time.Now()
 
+		cs := &drivers.CpuStats{
+			// SystemMode: h.systemCpuStats.Percent(float64(system)),
+			SystemMode: 0,
+			// UserMode:   h.systemCpuStats.Percent(float64(user)),
+			UserMode: 0,
+			// Percent:    h.totalCpuStats.Percent(float64(total)),
+			Percent: 0,
+			// TotalTicks: float64(user + system),
+			TotalTicks: 0,
+			// Measured:   LXCMeasuredCpuStats,
+			Measured: MeasuredCpuStats,
+		}
+
+		ms := &drivers.MemoryStats{
+			// RSS:      memData["rss"],
+			RSS: 0,
+			// Cache:    memData["cache"],
+			Cache: 0,
+			// Swap:     memData["swap"],
+			Swap:     0,
+			Measured: MeasuredMemStats,
+		}
+
 		taskResUsage := drivers.TaskResourceUsage{
-			ResourceUsage: &drivers.ResourceUsage{},
-			Timestamp:     t.UTC().UnixNano(),
+			ResourceUsage: &drivers.ResourceUsage{
+				CpuStats:    cs,
+				MemoryStats: ms,
+			},
+			Timestamp: t.UTC().UnixNano(),
 		}
 		select {
 		case <-ctx.Done():
