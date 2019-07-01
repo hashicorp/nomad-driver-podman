@@ -49,7 +49,7 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		// "command": hclspec.NewAttr("command", "string", true),
+		"image": hclspec.NewAttr("image", "string", true),
 		// "args":    hclspec.NewAttr("args", "list(string)", false),
 	})
 
@@ -87,9 +87,6 @@ type Driver struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
-
-	// podman varlink connection
-	varlinkConnection *varlink.Connection
 }
 
 // Config is the driver configuration set by the SetConfig RPC call
@@ -99,16 +96,16 @@ type Config struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
+	Image string `codec:"image"`
 }
 
 // TaskState is the state which is encoded in the handle returned in
 // StartTask. This information is needed to rebuild the task state and handler
 // during recovery.
 type TaskState struct {
-	ReattachConfig *pstructs.ReattachConfig
-	TaskConfig     *drivers.TaskConfig
-	Pid            int
-	StartedAt      time.Time
+	TaskConfig  *drivers.TaskConfig
+	ContainerID string
+	StartedAt   time.Time
 }
 
 // NewPodmanDriver returns a new DriverPlugin implementation
@@ -150,10 +147,6 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 }
 
 func (d *Driver) Shutdown(ctx context.Context) error {
-	if d.varlinkConnection != nil {
-		d.logger.Debug("Closing podman varlink connection")
-		d.varlinkConnection.Close()
-	}
 	d.signalShutdown()
 	return nil
 }
@@ -197,20 +190,15 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	health = drivers.HealthStateUndetected
 	desc = "disabled"
 
-	var err error
-
 	// try to connect if the driver is enabled
 	if d.config.Enabled {
-		if d.varlinkConnection == nil {
-			// FIXME: a parameter for the socket would be nice
-			d.varlinkConnection, err = varlink.NewConnection("unix://run/podman/io.podman")
-			if err != nil {
-				d.logger.Error("Could not connect to podman", "err", err)
-			}
-		}
-		if d.varlinkConnection != nil {
+		varlinkConnection, err := d.getConnection()
+		if err != nil {
+			d.logger.Error("Could not connect to podman", "err", err)
+		} else {
+			defer varlinkConnection.Close()
 			//  see if we get the system info from podman
-			info, err := iopodman.GetInfo().Call(d.varlinkConnection)
+			info, err := iopodman.GetInfo().Call(varlinkConnection)
 			if err == nil {
 				// yay! we can enable the driver
 				health = drivers.HealthStateHealthy
@@ -218,11 +206,8 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 				// FIXME: we would have more data here...
 				attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 				attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Podman.Podman_version)
-				d.logger.Debug("Connected to podman", "version", info.Podman.Podman_version)
 			} else {
 				d.logger.Error("Cound not get podman info", "err", err)
-				d.varlinkConnection = nil
-				// FIXME: we could check for "broken pipe" and try to reconnect
 			}
 		}
 	}
@@ -248,21 +233,35 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		return fmt.Errorf("failed to decode task state from handle: %v", err)
 	}
 
-	// c, err := lxc.NewContainer(taskState.ContainerName, d.lxcPath())
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create container ref: %v", err)
-	// }
+	varlinkConnection, err := d.getConnection()
+	if err != nil {
+		return fmt.Errorf("failed to recover container ref: %v", err)
+	}
+	defer varlinkConnection.Close()
 
-	//initPid := c.InitPid()
-	initPid := -1
+	filters := []string{"id=" + taskState.ContainerID}
+	psOpts := iopodman.PsOpts{
+		Filters: &filters,
+	}
+	psContainers, err := iopodman.Ps().Call(varlinkConnection, psOpts)
+	if err != nil {
+		return fmt.Errorf("failt to recover task, could not get container info: %v", err)
+	}
+	if len(psContainers) != 1 {
+		return fmt.Errorf("failt to recover task, problem with Ps()")
+	}
+	// pid := strconv.FormatInt(psContainers[0].PidNum, 10)
+	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID, "pid", psContainers[0].PidNum)
+
 	h := &TaskHandle{
-		// FIXME container:  c,
-		initPid:    initPid,
-		taskConfig: taskState.TaskConfig,
-		procState:  drivers.TaskStateRunning,
-		startedAt:  taskState.StartedAt,
-		exitResult: &drivers.ExitResult{},
-		logger:     d.logger,
+		initPid:     int(psContainers[0].PidNum),
+		containerID: taskState.ContainerID,
+		driver:      d,
+		taskConfig:  taskState.TaskConfig,
+		procState:   drivers.TaskStateRunning,
+		startedAt:   taskState.StartedAt,
+		exitResult:  &drivers.ExitResult{},
+		logger:      d.logger,
 
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
@@ -271,8 +270,8 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	d.tasks.Set(taskState.TaskConfig.ID, h)
 
-	// FIXME
-	// go h.run()
+	go h.run()
+
 	return nil
 }
 
@@ -286,17 +285,61 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to decode driver config: %v", err)
 	}
 
-	d.logger.Info("starting podman task", "driver_cfg", hclog.Fmt("%+v", driverConfig))
+	// d.logger.Info("starting podman task", "driver_cfg", hclog.Fmt("%+v", driverConfig))
 	handle := drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
-	pid := -1
+	varlinkConnection, err := d.getConnection()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failt to start task, could not connect to podman: %v", err)
+	}
+	defer varlinkConnection.Close()
+
+	args := []string{driverConfig.Image}
+	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
+	truep := true
+
+	createOpts := iopodman.Create{
+		Args:   args,
+		Name:   &containerName,
+		Detach: &truep,
+	}
+
+	containerID, err := iopodman.CreateContainer().Call(varlinkConnection, createOpts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failt to start task, could not create container: %v", err)
+	}
+	d.logger.Info("Created container", "container", containerID)
+
+	_, err = iopodman.StartContainer().Call(varlinkConnection, containerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failt to start task, could not start container: %v", err)
+	}
+	d.logger.Info("Started container", "containerId", containerID)
+
+	filters := []string{"id=" + containerID}
+	psOpts := iopodman.PsOpts{
+		Filters: &filters,
+	}
+	psContainers, err := iopodman.Ps().Call(varlinkConnection, psOpts)
+	if err != nil {
+		d.logger.Error("failt to get ps", "err", err)
+		return nil, nil, fmt.Errorf("failt to start task, could not get container info: %v", err)
+	}
+	if len(psContainers) != 1 {
+		return nil, nil, fmt.Errorf("failt to recover task, problem with Ps()")
+	}
+	// pid := strconv.FormatInt(psContainers[0].PidNum, 10)
+	d.logger.Debug("Started podman container", "container", containerID, "pid", psContainers[0].PidNum)
+
 	h := &TaskHandle{
-		initPid:    pid,
-		taskConfig: cfg,
-		procState:  drivers.TaskStateRunning,
-		startedAt:  time.Now().Round(time.Millisecond),
-		logger:     d.logger,
+		initPid:     int(psContainers[0].PidNum),
+		containerID: containerID,
+		driver:      d,
+		taskConfig:  cfg,
+		procState:   drivers.TaskStateRunning,
+		startedAt:   time.Now().Round(time.Millisecond),
+		logger:      d.logger,
 
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
@@ -304,9 +347,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	driverState := TaskState{
-		//ContainerName: c.Name(),
-		TaskConfig: cfg,
-		StartedAt:  h.startedAt,
+		ContainerID: containerID,
+		TaskConfig:  cfg,
+		StartedAt:   h.startedAt,
 	}
 
 	if err := handle.SetDriverState(&driverState); err != nil {
@@ -317,7 +360,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.tasks.Set(cfg.ID, h)
 
-	//go h.run()
+	go h.run()
+
+	d.logger.Debug("DONE STARTING")
 
 	return handle, nil, nil
 }
@@ -371,7 +416,14 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 		return drivers.ErrTaskNotFound
 	}
 
-	if err := handle.shutdown(timeout); err != nil {
+	varlinkConnection, err := d.getConnection()
+	if err != nil {
+		return fmt.Errorf("executor Shutdown failed, could not get podman connection: %v", err)
+
+	}
+	defer varlinkConnection.Close()
+	d.logger.Debug("Stopping podman container", "container", handle.containerID)
+	if _, err := iopodman.StopContainer().Call(varlinkConnection, handle.containerID, int64(timeout)); err != nil {
 		return fmt.Errorf("executor Shutdown failed: %v", err)
 	}
 
@@ -437,4 +489,10 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
 	return nil, fmt.Errorf("LXC driver does not support exec")
+}
+
+func (d *Driver) getConnection() (*varlink.Connection, error) {
+	// FIXME: a parameter for the socket would be nice
+	varlinkConnection, err := varlink.NewConnection("unix://run/podman/io.podman")
+	return varlinkConnection, err
 }

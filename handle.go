@@ -1,12 +1,12 @@
 package main
 
 import (
-	"sync"
-	"time"
-	"strconv"
 	"context"
 	"os"
+	"strconv"
+	"sync"
 	"syscall"
+	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -21,8 +21,10 @@ const (
 
 type TaskHandle struct {
 	//container *lxc.Container
-	initPid   int
-	logger    hclog.Logger
+	initPid     int
+	containerID string
+	logger      hclog.Logger
+	driver      *Driver
 
 	totalCpuStats  *stats.CpuStats
 	userCpuStats   *stats.CpuStats
@@ -37,7 +39,6 @@ type TaskHandle struct {
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 }
-
 
 func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
 	h.stateLock.RLock()
@@ -68,11 +69,14 @@ func (h *TaskHandle) run() {
 		h.exitResult = &drivers.ExitResult{}
 	}
 	h.stateLock.Unlock()
+	h.logger.Debug("Monitoring process", "container", h.containerID, "pid", h.initPid)
 
 	if ok, err := waitTillStopped(h.initPid); !ok {
 		h.logger.Error("failed to find container process", "error", err)
 		return
 	}
+
+	h.logger.Debug("Process stopped", "container", h.containerID, "pid", h.initPid)
 
 	h.stateLock.Lock()
 	defer h.stateLock.Unlock()
@@ -107,9 +111,8 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		t := time.Now()
 
 		taskResUsage := drivers.TaskResourceUsage{
-			ResourceUsage: &drivers.ResourceUsage{
-			},
-			Timestamp: t.UTC().UnixNano(),
+			ResourceUsage: &drivers.ResourceUsage{},
+			Timestamp:     t.UTC().UnixNano(),
 		}
 		select {
 		case <-ctx.Done():
