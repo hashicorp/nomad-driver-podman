@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -106,6 +107,7 @@ type TaskState struct {
 	TaskConfig  *drivers.TaskConfig
 	ContainerID string
 	StartedAt   time.Time
+	Net         *drivers.DriverNetwork
 }
 
 // NewPodmanDriver returns a new DriverPlugin implementation
@@ -239,6 +241,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 	defer varlinkConnection.Close()
 
+	// FIXME: use inspect... share code with StartTask
 	filters := []string{"id=" + taskState.ContainerID}
 	psOpts := iopodman.PsOpts{
 		Filters: &filters,
@@ -317,23 +320,28 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	d.logger.Info("Started container", "containerId", containerID)
 
-	filters := []string{"id=" + containerID}
-	psOpts := iopodman.PsOpts{
-		Filters: &filters,
-	}
-	psContainers, err := iopodman.Ps().Call(varlinkConnection, psOpts)
+	inspectJson, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
 	if err != nil {
-		d.logger.Error("failt to get ps", "err", err)
-		return nil, nil, fmt.Errorf("failt to start task, could not get container info: %v", err)
+		d.logger.Error("failt to inspect container", "err", err)
+		return nil, nil, fmt.Errorf("failt to start task, could not inspect container : %v", err)
 	}
-	if len(psContainers) != 1 {
-		return nil, nil, fmt.Errorf("failt to recover task, problem with Ps()")
+	var inspectData iopodman.InspectContainerData
+	err = json.Unmarshal([]byte(inspectJson), &inspectData)
+	if err != nil {
+		d.logger.Error("failt to unmarshal inspect container", "err", err)
+		return nil, nil, fmt.Errorf("failt to start task, could not unmarshal inspect container : %v", err)
 	}
 	// pid := strconv.FormatInt(psContainers[0].PidNum, 10)
-	d.logger.Debug("Started podman container", "container", containerID, "pid", psContainers[0].PidNum)
+	d.logger.Debug("Started podman container", "container", containerID, "pid", inspectData.State.Pid, "ip", inspectData.NetworkSettings.IPAddress)
+
+	net := &drivers.DriverNetwork{
+		// 	// PortMap:       driverConfig.PortMap,
+		IP:            inspectData.NetworkSettings.IPAddress,
+		AutoAdvertise: true,
+	}
 
 	h := &TaskHandle{
-		initPid:     int(psContainers[0].PidNum),
+		initPid:     inspectData.State.Pid,
 		containerID: containerID,
 		driver:      d,
 		taskConfig:  cfg,
@@ -350,6 +358,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		ContainerID: containerID,
 		TaskConfig:  cfg,
 		StartedAt:   h.startedAt,
+		Net:         net,
 	}
 
 	if err := handle.SetDriverState(&driverState); err != nil {
@@ -364,7 +373,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.logger.Debug("DONE STARTING")
 
-	return handle, nil, nil
+	return handle, net, nil
 }
 
 func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.ExitResult, error) {
