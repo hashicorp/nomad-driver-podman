@@ -302,10 +302,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
 	truep := true
 
+	allocMounts := []string{
+		fmt.Sprintf("type=bind,source=%s,target=/nomad/alloc", cfg.TaskDir().SharedAllocDir),
+		fmt.Sprintf("type=bind,source=%s,target=/nomad/local", cfg.TaskDir().LocalDir),
+		fmt.Sprintf("type=bind,source=%s,target=/nomad/secrets", cfg.TaskDir().SecretsDir),
+	}
 	createOpts := iopodman.Create{
 		Args:   args,
 		Name:   &containerName,
 		Detach: &truep,
+		Mount:  &allocMounts,
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(varlinkConnection, createOpts)
