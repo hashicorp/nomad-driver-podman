@@ -4,7 +4,7 @@ Nomad podman Driver
 *THIS IS A PROOF OF CONCEPT PLUGIN*. Do not run it in production!
 Contributions are welcome, of course.
 
-== Building The Driver ==
+## Building The Driver
 
 This project has a go.mod definition. So you can clone it to whatever directory you want.
 It is not necessary to setup a go path at all.
@@ -15,7 +15,7 @@ cd nomad-driver-podman
 ./build.sh
 ```
 
-== Runtime dependencies ==
+## Runtime dependencies
 
 - [Nomad](https://www.nomadproject.io/downloads.html) 0.9+
 - Linux host with `podman` installed
@@ -28,7 +28,7 @@ do not have to worry about the ssh aspects of podman varlink.
 
 Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
 
-== Using the driver ==
+## Using the driver
 
 The featureset is very limit. 
 For now you can:
