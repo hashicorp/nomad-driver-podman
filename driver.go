@@ -51,7 +51,6 @@ var (
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
 		"image": hclspec.NewAttr("image", "string", true),
-		// "args":    hclspec.NewAttr("args", "list(string)", false),
 	})
 
 	// capabilities is returned by the Capabilities RPC and indicates what
@@ -205,7 +204,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 				// yay! we can enable the driver
 				health = drivers.HealthStateHealthy
 				desc = "ready"
-				// FIXME: we would have more data here...
+				// TODO: we would have more data here... maybe we can return more details to nomad
 				attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 				attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Podman.Podman_version)
 			} else {
@@ -241,7 +240,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 	defer varlinkConnection.Close()
 
-	// FIXME: use inspect... share code with StartTask
+	// FIXME: duplicated code. share more code with StartTask
 	filters := []string{"id=" + taskState.ContainerID}
 	psOpts := iopodman.PsOpts{
 		Filters: &filters,
@@ -253,7 +252,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	if len(psContainers) != 1 {
 		return fmt.Errorf("failt to recover task, problem with Ps()")
 	}
-	// pid := strconv.FormatInt(psContainers[0].PidNum, 10)
 	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID, "pid", psContainers[0].PidNum)
 
 	h := &TaskHandle{
@@ -326,6 +324,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	d.logger.Info("Started container", "containerId", containerID)
 
+	// FIXME: there is some podman race condition to end up in a deadlock here
+	//
+	d.logger.Info("inspecting container", "containerId", containerID)
 	inspectJson, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
 	if err != nil {
 		d.logger.Error("failt to inspect container", "err", err)
@@ -337,7 +338,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		d.logger.Error("failt to unmarshal inspect container", "err", err)
 		return nil, nil, fmt.Errorf("failt to start task, could not unmarshal inspect container : %v", err)
 	}
-	// pid := strconv.FormatInt(psContainers[0].PidNum, 10)
 	d.logger.Debug("Started podman container", "container", containerID, "pid", inspectData.State.Pid, "ip", inspectData.NetworkSettings.IPAddress)
 
 	net := &drivers.DriverNetwork{
@@ -377,7 +377,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	go h.run()
 
-	d.logger.Debug("DONE STARTING")
+	d.logger.Debug("Completely started","containerID", containerID)
 
 	return handle, net, nil
 }
@@ -430,19 +430,8 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
-
-	varlinkConnection, err := d.getConnection()
-	if err != nil {
-		return fmt.Errorf("executor Shutdown failed, could not get podman connection: %v", err)
-
-	}
-	defer varlinkConnection.Close()
-	d.logger.Debug("Stopping podman container", "container", handle.containerID)
-	if _, err := iopodman.StopContainer().Call(varlinkConnection, handle.containerID, int64(timeout)); err != nil {
-		return fmt.Errorf("executor Shutdown failed: %v", err)
-	}
-
-	return nil
+	err := handle.shutdown(timeout);
+	return err
 }
 
 func (d *Driver) DestroyTask(taskID string, force bool) error {
@@ -456,22 +445,11 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	}
 
 	if handle.IsRunning() {
-		// grace period is chosen arbitrary here
-		if err := handle.shutdown(1 * time.Minute); err != nil {
-			handle.logger.Error("failed to destroy executor", "err", err)
-		}
+		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
+		// we can not do anything, so catching the error is useless
+		handle.shutdown(1 * time.Minute);
 	}
 
-	// FIXME: implement!
-	// if d.config.DestroyContainers {
-	// 	handle.logger.Debug("Destroying container", "container", handle.container.Name())
-	// 	// delete the container itself
-	// 	if err := handle.container.Destroy(); err != nil {
-	// 		handle.logger.Error("failed to destroy lxc container", "err", err)
-	// 	}
-	// }
-
-	// finally cleanup task map
 	d.tasks.Delete(taskID)
 	return nil
 }
@@ -486,6 +464,7 @@ func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 }
 
 func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
+	d.logger.Error("TaskStats called")
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound
@@ -499,11 +478,11 @@ func (d *Driver) TaskEvents(ctx context.Context) (<-chan *drivers.TaskEvent, err
 }
 
 func (d *Driver) SignalTask(taskID string, signal string) error {
-	return fmt.Errorf("LXC driver does not support signals")
+	return fmt.Errorf("Pdoman driver does not support signals")
 }
 
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
-	return nil, fmt.Errorf("LXC driver does not support exec")
+	return nil, fmt.Errorf("Pdoman driver does not support exec")
 }
 
 func (d *Driver) getConnection() (*varlink.Connection, error) {

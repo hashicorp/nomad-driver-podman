@@ -7,10 +7,12 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"fmt"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/plugins/drivers"
+	"github.com/pascomnet/nomad-driver-podman/iopodman"
 )
 
 const (
@@ -20,13 +22,12 @@ const (
 )
 
 var (
-	MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
-
-	MeasuredMemStats = []string{"RSS", "Cache", "Swap", "Max Usage", "Kernel Usage", "Kernel Max Usage"}
+	// MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
+	MeasuredCpuStats = []string{}
+	MeasuredMemStats = []string{"RSS"}
 )
 
 type TaskHandle struct {
-	//container *lxc.Container
 	initPid     int
 	containerID string
 	logger      hclog.Logger
@@ -104,6 +105,17 @@ func (h *TaskHandle) stats(ctx context.Context, interval time.Duration) (<-chan 
 func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResourceUsage, interval time.Duration) {
 	defer close(ch)
 	timer := time.NewTimer(0)
+
+	// stats are polled relatively often so it should be better
+	// to open a long living varlink connection instead
+	// of re-opening it on each poll cycle in the for-loop.
+	varlinkConnection, err := h.driver.getConnection()
+	if err != nil {
+		h.logger.Error("failed to get varlink connection for stats", "err", err)
+		return
+	}
+	defer varlinkConnection.Close()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -113,29 +125,28 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 			timer.Reset(interval)
 		}
 
-		//fixme implement stats
+		containerStats, err := iopodman.GetContainerStats().Call(varlinkConnection, h.containerID)
+		if err != nil {
+			h.logger.Error("Could not get container stats", "err", err)
+			// maybe varlink connection was lost, we should check and try to reconnect
+			// FIXME: reconnect
+
+			// try again
+			continue
+		}
+
 		t := time.Now()
 
+		//FIXME implement cpu stats correctly
 		cs := &drivers.CpuStats{
-			// SystemMode: h.systemCpuStats.Percent(float64(system)),
-			SystemMode: 0,
-			// UserMode:   h.systemCpuStats.Percent(float64(user)),
-			UserMode: 0,
-			// Percent:    h.totalCpuStats.Percent(float64(total)),
-			Percent: 0,
-			// TotalTicks: float64(user + system),
-			TotalTicks: 0,
-			// Measured:   LXCMeasuredCpuStats,
+			// SystemMode: h.systemCpuStats.Percent(float64(containerStats.System_nano)),
+			// UserMode:   h.userCpuStats.Percent(float64(containerStats.Cpu_nano)),
+			// TotalTicks: containerStats.Cpu,
 			Measured: MeasuredCpuStats,
 		}
 
 		ms := &drivers.MemoryStats{
-			// RSS:      memData["rss"],
-			RSS: 0,
-			// Cache:    memData["cache"],
-			Cache: 0,
-			// Swap:     memData["swap"],
-			Swap:     0,
+			RSS:      uint64(containerStats.Mem_usage),
 			Measured: MeasuredMemStats,
 		}
 
@@ -157,16 +168,27 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 // shutdown shuts down the container, with `timeout` grace period
 // before killing the container with SIGKILL.
 func (h *TaskHandle) shutdown(timeout time.Duration) error {
-	// FIXME: implement
+	varlinkConnection, err := h.driver.getConnection()
+	if err != nil {
+		return fmt.Errorf("executor Shutdown failed, could not get podman connection: %v", err)
+	}
+	defer varlinkConnection.Close()
+
+	h.driver.logger.Debug("Stopping podman container", "container", h.containerID)
+	// TODO: we should respect the "signal" parameter here
+	if _, err := iopodman.StopContainer().Call(varlinkConnection, h.containerID, int64(timeout)); err != nil {
+		h.driver.logger.Warn("Could not stop container gracefully, killing it now", "containerID", h.containerID, "err", err)
+		if _, err := iopodman.KillContainer().Call(varlinkConnection, h.containerID, 9); err != nil {
+			h.driver.logger.Error("Could not kill container", "containerID", h.containerID, "err", err)
+			return fmt.Errorf("Could not kill container: %v", err)
+		}
+	}
 	return nil
 }
 
 // waitTillStopped blocks and returns true when container stops;
 // returns false with an error message if the container processes cannot be identified.
 //
-// fixme comment
-// Use this in preference to c.Wait() - lxc Wait() function holds a write lock on the container
-// blocking any other operation on container, including looking up container stats
 func waitTillStopped(pid int) (bool, error) {
 	ps, err := os.FindProcess(pid)
 	if err != nil {
