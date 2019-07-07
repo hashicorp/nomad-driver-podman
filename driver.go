@@ -298,7 +298,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	args := []string{driverConfig.Image}
 	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
-	truep := true
 
 	allocMounts := []string{
 		fmt.Sprintf("type=bind,source=%s,target=/nomad/alloc", cfg.TaskDir().SharedAllocDir),
@@ -308,7 +307,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts := iopodman.Create{
 		Args:   args,
 		Name:   &containerName,
-		Detach: &truep,
 		Mount:  &allocMounts,
 	}
 
@@ -327,13 +325,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// FIXME: there is some podman race condition to end up in a deadlock here
 	//
 	d.logger.Info("inspecting container", "containerId", containerID)
-	inspectJson, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
+	inspectJSON, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
 	if err != nil {
 		d.logger.Error("failt to inspect container", "err", err)
 		return nil, nil, fmt.Errorf("failt to start task, could not inspect container : %v", err)
 	}
 	var inspectData iopodman.InspectContainerData
-	err = json.Unmarshal([]byte(inspectJson), &inspectData)
+	err = json.Unmarshal([]byte(inspectJSON), &inspectData)
 	if err != nil {
 		d.logger.Error("failt to unmarshal inspect container", "err", err)
 		return nil, nil, fmt.Errorf("failt to start task, could not unmarshal inspect container : %v", err)
