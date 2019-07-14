@@ -15,6 +15,7 @@ import (
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	"github.com/pascomnet/nomad-driver-podman/iopodman"
 
+	shelpers "github.com/hashicorp/nomad/helper/stats"
 	"github.com/varlink/go/varlink"
 )
 
@@ -161,6 +162,11 @@ func (d *Driver) Capabilities() (*drivers.Capabilities, error) {
 }
 
 func (d *Driver) Fingerprint(ctx context.Context) (<-chan *drivers.Fingerprint, error) {
+	err := shelpers.Init()
+	if err != nil {
+		d.logger.Error("Could not init stats helper", "err", err)
+		return nil, err
+	}
 	ch := make(chan *drivers.Fingerprint)
 	go d.handleFingerprint(ctx, ch)
 	return ch, nil
@@ -298,6 +304,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	args := []string{driverConfig.Image}
 	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
+	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 
 	allocMounts := []string{
 		fmt.Sprintf("type=bind,source=%s,target=/nomad/alloc", cfg.TaskDir().SharedAllocDir),
@@ -308,6 +315,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Args:   args,
 		Name:   &containerName,
 		Mount:  &allocMounts,
+		Memory: &memoryLimit,
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(varlinkConnection, createOpts)
@@ -316,8 +324,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	d.logger.Info("Created container", "container", containerID)
 
+	cleanup := func() {
+		d.logger.Debug("Cleaning up", "container", containerID)
+		if _, err := iopodman.RemoveContainer().Call(varlinkConnection, containerID, true, true); err != nil {
+			d.logger.Error("failed to clean up from an error in Start", "error", err)
+		}
+	}
+
 	_, err = iopodman.StartContainer().Call(varlinkConnection, containerID)
 	if err != nil {
+		cleanup()
 		return nil, nil, fmt.Errorf("failt to start task, could not start container: %v", err)
 	}
 	d.logger.Info("Started container", "containerId", containerID)
@@ -328,11 +344,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	inspectJSON, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
 	if err != nil {
 		d.logger.Error("failt to inspect container", "err", err)
+		cleanup()
 		return nil, nil, fmt.Errorf("failt to start task, could not inspect container : %v", err)
 	}
 	var inspectData iopodman.InspectContainerData
 	err = json.Unmarshal([]byte(inspectJSON), &inspectData)
 	if err != nil {
+		cleanup()
 		d.logger.Error("failt to unmarshal inspect container", "err", err)
 		return nil, nil, fmt.Errorf("failt to start task, could not unmarshal inspect container : %v", err)
 	}
@@ -367,7 +385,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	if err := handle.SetDriverState(&driverState); err != nil {
 		d.logger.Error("failed to start task, error setting driver state", "error", err)
-		//cleanup()
+		cleanup()
 		return nil, nil, fmt.Errorf("failed to set driver state: %v", err)
 	}
 
@@ -375,7 +393,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	go h.run()
 
-	d.logger.Debug("Completely started","containerID", containerID)
+	d.logger.Debug("Completely started", "containerID", containerID)
 
 	return handle, net, nil
 }
@@ -428,7 +446,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
-	err := handle.shutdown(timeout);
+	err := handle.shutdown(timeout)
 	return err
 }
 
@@ -445,7 +463,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.IsRunning() {
 		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		handle.shutdown(1 * time.Minute);
+		handle.shutdown(1 * time.Minute)
 	}
 
 	d.tasks.Delete(taskID)
