@@ -10,5 +10,5 @@ jobs:
           command: |
             ./build.sh
       - store_artifacts:
-        path: nomad-driver-podman
-        destination: /dist
+          path: nomad-driver-podman
+          destination: nomad-driver-podman
