@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
-	"fmt"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -22,8 +22,7 @@ const (
 )
 
 var (
-	// MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
-	MeasuredCpuStats = []string{}
+	MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
 	MeasuredMemStats = []string{"RSS"}
 )
 
@@ -138,12 +137,19 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
+		//available := shelpers.TotalTicksAvailable()
+		//cpus := shelpers.CPUNumCores()
+
+		totalPercent := h.totalCpuStats.Percent(containerStats.Cpu * 10e16)
 		cs := &drivers.CpuStats{
-			// SystemMode: h.systemCpuStats.Percent(float64(containerStats.System_nano)),
-			// UserMode:   h.userCpuStats.Percent(float64(containerStats.Cpu_nano)),
-			// TotalTicks: containerStats.Cpu,
-			Measured: MeasuredCpuStats,
+			SystemMode: h.systemCpuStats.Percent(float64(containerStats.System_nano)),
+			UserMode:   h.userCpuStats.Percent(float64(containerStats.Cpu_nano)),
+			Percent:    totalPercent,
+			TotalTicks: h.systemCpuStats.TicksConsumed(totalPercent),
+			Measured:   MeasuredCpuStats,
 		}
+
+		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
 
 		ms := &drivers.MemoryStats{
 			RSS:      uint64(containerStats.Mem_usage),
