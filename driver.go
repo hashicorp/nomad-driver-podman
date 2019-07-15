@@ -305,6 +305,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	args := []string{driverConfig.Image}
 	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
+	cpuShares := cfg.Resources.LinuxResources.CPUShares
 
 	allocMounts := []string{
 		fmt.Sprintf("type=bind,source=%s,target=/nomad/alloc", cfg.TaskDir().SharedAllocDir),
@@ -316,6 +317,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Name:   &containerName,
 		Mount:  &allocMounts,
 		Memory: &memoryLimit,
+		MemorySwap: &memoryLimit,
+		CpuShares: &cpuShares,
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(varlinkConnection, createOpts)
