@@ -41,9 +41,13 @@ For now you can:
 * use the jobs driver config to define the image for your container
 * start/stop containers. 
 * use nomad alloc data in the container. It's bind mounted to /nomad
-* monitor the memory consuption but not yet the cpu
+* monitor the memory consuption
+* monitor CPU usage (might be buggy)
+* container memory is limited to configured value
+* task config cpu value is used to populate podman CpuShares
 
-Example job:
+
+## Example job
 
 ```
 job "redis" {
