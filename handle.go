@@ -140,7 +140,7 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 			timer.Reset(interval)
 		}
 
-		containerStats, err := iopodman.GetContainerStats().Call(varlinkConnection, h.containerID)
+		containerStats, err := iopodman.GetContainerStats().Call(h.driver.ctx, varlinkConnection, h.containerID)
 		if err != nil {
 			h.logger.Error("Could not get container stats", "err", err)
 			// maybe varlink connection was lost, we should check and try to reconnect
@@ -198,9 +198,9 @@ func (h *TaskHandle) shutdown(timeout time.Duration) error {
 
 	h.driver.logger.Debug("Stopping podman container", "container", h.containerID)
 	// TODO: we should respect the "signal" parameter here
-	if _, err := iopodman.StopContainer().Call(varlinkConnection, h.containerID, int64(timeout)); err != nil {
+	if _, err := iopodman.StopContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, int64(timeout)); err != nil {
 		h.driver.logger.Warn("Could not stop container gracefully, killing it now", "containerID", h.containerID, "err", err)
-		if _, err := iopodman.KillContainer().Call(varlinkConnection, h.containerID, 9); err != nil {
+		if _, err := iopodman.KillContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, 9); err != nil {
 			h.driver.logger.Error("Could not kill container", "containerID", h.containerID, "err", err)
 			return fmt.Errorf("Could not kill container: %v", err)
 		}

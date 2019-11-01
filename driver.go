@@ -221,7 +221,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		} else {
 			defer varlinkConnection.Close()
 			//  see if we get the system info from podman
-			info, err := iopodman.GetInfo().Call(varlinkConnection)
+			info, err := iopodman.GetInfo().Call(d.ctx, varlinkConnection)
 			if err == nil {
 				// yay! we can enable the driver
 				health = drivers.HealthStateHealthy
@@ -267,7 +267,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	psOpts := iopodman.PsOpts{
 		Filters: &filters,
 	}
-	psContainers, err := iopodman.Ps().Call(varlinkConnection, psOpts)
+	psContainers, err := iopodman.Ps().Call(d.ctx, varlinkConnection, psOpts)
 	if err != nil {
 		return fmt.Errorf("failt to recover task, could not get container info: %v", err)
 	}
@@ -329,15 +329,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		fmt.Sprintf("type=bind,source=%s,target=/nomad/secrets", cfg.TaskDir().SecretsDir),
 	}
 	createOpts := iopodman.Create{
-		Args:   args,
-		Name:   &containerName,
-		Mount:  &allocMounts,
-		Memory: &memoryLimit,
+		Args:       args,
+		Name:       &containerName,
+		Mount:      &allocMounts,
+		Memory:     &memoryLimit,
 		MemorySwap: &memoryLimit,
-		CpuShares: &cpuShares,
+		CpuShares:  &cpuShares,
 	}
 
-	containerID, err := iopodman.CreateContainer().Call(varlinkConnection, createOpts)
+	containerID, err := iopodman.CreateContainer().Call(d.ctx, varlinkConnection, createOpts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failt to start task, could not create container: %v", err)
 	}
@@ -345,12 +345,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
-		if _, err := iopodman.RemoveContainer().Call(varlinkConnection, containerID, true, true); err != nil {
+		if _, err := iopodman.RemoveContainer().Call(d.ctx, varlinkConnection, containerID, true, true); err != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
 
-	_, err = iopodman.StartContainer().Call(varlinkConnection, containerID)
+	_, err = iopodman.StartContainer().Call(d.ctx, varlinkConnection, containerID)
 	if err != nil {
 		cleanup()
 		return nil, nil, fmt.Errorf("failt to start task, could not start container: %v", err)
@@ -360,7 +360,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// FIXME: there is some podman race condition to end up in a deadlock here
 	//
 	d.logger.Info("inspecting container", "containerId", containerID)
-	inspectJSON, err := iopodman.InspectContainer().Call(varlinkConnection, containerID)
+	inspectJSON, err := iopodman.InspectContainer().Call(d.ctx, varlinkConnection, containerID)
 	if err != nil {
 		d.logger.Error("failt to inspect container", "err", err)
 		cleanup()
@@ -522,6 +522,6 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 
 func (d *Driver) getConnection() (*varlink.Connection, error) {
 	// FIXME: a parameter for the socket would be nice
-	varlinkConnection, err := varlink.NewConnection("unix://run/podman/io.podman")
+	varlinkConnection, err := varlink.NewConnection(d.ctx, "unix://run/podman/io.podman")
 	return varlinkConnection, err
 }
