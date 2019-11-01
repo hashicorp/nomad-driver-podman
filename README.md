@@ -35,7 +35,7 @@ Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject
 
 ## Using the driver
 
-The featureset is very limit. 
+The featureset is very limited. 
 For now you can:
 
 * use the jobs driver config to define the image for your container
