@@ -18,7 +18,7 @@ require (
 	github.com/mitchellh/hashstructure v1.0.0 // indirect
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
 	github.com/ugorji/go v0.0.0-20170620060102-0053ebfd9d0e
-	github.com/varlink/go v0.0.0-20190502142041-0f1d566d194b
+	github.com/varlink/go v0.0.0-20191018142704-4ecdbb8a36c2
 	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4 // indirect
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/sys v0.0.0-20190626150813-e07cf5db2756 // indirect
