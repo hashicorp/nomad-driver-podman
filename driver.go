@@ -67,7 +67,9 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"image": hclspec.NewAttr("image", "string", true),
+		"image":   hclspec.NewAttr("image", "string", true),
+		"command": hclspec.NewAttr("command", "string", false),
+		"args":    hclspec.NewAttr("args", "list(string)", false),
 	})
 
 	// capabilities is returned by the Capabilities RPC and indicates what
@@ -113,7 +115,9 @@ type Config struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Image string `codec:"image"`
+	Image   string   `codec:"image"`
+	Command string   `codec:"command"`
+	Args    []string `codec:"args"`
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -318,7 +322,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	defer varlinkConnection.Close()
 
-	args := []string{driverConfig.Image}
+	allArgs := []string{driverConfig.Image}
+	if driverConfig.Command != "" {
+		allArgs = append(allArgs, driverConfig.Command)
+	}
+	allArgs = append(allArgs, driverConfig.Args...)
 	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
@@ -329,7 +337,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		fmt.Sprintf("type=bind,source=%s,target=/nomad/secrets", cfg.TaskDir().SecretsDir),
 	}
 	createOpts := iopodman.Create{
-		Args:       args,
+		Args:       allArgs,
 		Name:       &containerName,
 		Mount:      &allocMounts,
 		Memory:     &memoryLimit,

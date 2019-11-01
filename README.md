@@ -47,6 +47,35 @@ For now you can:
 * task config cpu value is used to populate podman CpuShares
 
 
+### Task Configuration
+
+* **image** - The image to run, 
+
+```
+config {
+  image = "docker://redis"
+}
+```
+
+* **command** - (Optional) The command to run when starting the container.
+
+```
+config {
+  command = "some-command"
+}
+```
+
+* **args** - (Optional) A list of arguments to the optional command. If no *command* is specified, the arguments are passed directly to the container.
+
+```
+config {
+  args = [
+    "arg1",
+    "arg2",
+  ]
+}
+```
+
 ## Example job
 
 ```
@@ -59,7 +88,7 @@ job "redis" {
       driver = "podman"
 
         config {
-                image = "docker://redis"
+          image = "docker://redis"
         }
 
       resources {
