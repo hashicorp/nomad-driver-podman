@@ -7,8 +7,7 @@ type Volume (
   labels: [string]string,
   mountPoint: string,
   driver: string,
-  options: [string]string,
-  scope: string
+  options: [string]string
 )
 
 type NotImplemented (
@@ -59,7 +58,8 @@ type VolumeRemoveOpts (
 
 type Image (
   id: string,
-  digest:   string,
+  digest: string,
+  digests: []string,
   parentId: string,
   repoTags: []string,
   repoDigests: []string,
@@ -69,7 +69,8 @@ type Image (
   containers: int,
   labels: [string]string,
   isParent: bool,
-  topLayer: string
+  topLayer: string,
+  readOnly: bool
 )
 
 # ImageHistory describes the returned structure from ImageHistory.
@@ -144,10 +145,11 @@ type PsOpts (
     last: ?int,
     latest: ?bool,
     noTrunc: ?bool,
-	pod: ?bool,
-	quiet: ?bool,
-	sort: ?string,
-	sync: ?bool
+    pod: ?bool,
+    quiet: ?bool,
+    size: ?bool,
+    sort: ?string,
+    sync: ?bool
 )
 
 type PsContainer (
@@ -226,7 +228,8 @@ type InfoHost (
     hostname: string,
     kernel: string,
     os: string,
-    uptime: string
+    uptime: string,
+    eventlogger: string
 )
 
 # InfoGraphStatus describes the detailed status of the storage driver
@@ -247,7 +250,7 @@ type InfoStore (
     run_root: string
 )
 
-# InfoPodman provides details on the podman binary
+# InfoPodman provides details on the Podman binary
 type InfoPodmanBinary (
     compiler: string,
     go_version: string,
@@ -272,6 +275,8 @@ type Sockets(
 )
 
 # Create is an input structure for creating containers.
+# args[0] is the image name or id
+# args[1-] are the new commands if changed
 type Create (
     args: []string,
     addHost: ?[]string,
@@ -338,12 +343,15 @@ type Create (
     noHosts: ?bool,
     oomKillDisable: ?bool,
     oomScoreAdj: ?int,
+    overrideArch: ?string,
+    overrideOS: ?string,
     pid: ?string,
     pidsLimit: ?int,
     pod: ?string,
     privileged: ?bool,
     publish: ?[]string,
     publishAll: ?bool,
+    pull: ?string,
     quiet: ?bool,
     readonly: ?bool,
     readonlytmpfs: ?bool,
@@ -358,7 +366,7 @@ type Create (
     subuidname: ?string,
     subgidname: ?string,
     sysctl: ?[]string,
-    systemd: ?bool,
+    systemd: ?string,
     tmpfs: ?[]string,
     tty: ?bool,
     uidmap: ?[]string,
@@ -498,6 +506,25 @@ type DiffInfo(
     changeType: string
 )
 
+type ExecOpts(
+    # container name or id
+    name: string,
+    # Create pseudo tty
+    tty: bool,
+    # privileged access in container
+    privileged: bool,
+    # command to execute in container
+    cmd: []string,
+    # user to use in container
+    user: ?string,
+    # workdir to run command in container
+    workdir: ?string,
+    # slice of keyword=value environment variables
+    env: ?[]string,
+    # string of detach keys
+    detachKeys: ?string
+)
+
 # GetVersion returns version and build information of the podman service
 method GetVersion() -> (
     version: string,
@@ -521,6 +548,10 @@ method Ps(opts: PsOpts) -> (containers: []PsContainer)
 method GetContainersByStatus(status: []string) -> (containerS: []Container)
 
 method Top (nameOrID: string, descriptors: []string) -> (top: []string)
+
+# HealthCheckRun executes defined container's healthcheck command
+# and returns the container's health status.
+method HealthCheckRun (nameOrID: string) -> (healthCheckStatus: string)
 
 # GetContainer returns information about a single container.  If a container
 # with the given id doesn't exist, a [ContainerNotFound](#ContainerNotFound)
@@ -699,10 +730,12 @@ method GetAttachSockets(name: string) -> (sockets: Sockets)
 # or name, a [ContainerNotFound](#ContainerNotFound) error is returned.
 method WaitContainer(name: string, interval: int) -> (exitcode: int)
 
-# RemoveContainer requires the name or ID of container as well a boolean representing whether a running container can be stopped and removed, and a boolean
+# RemoveContainer requires the name or ID of a container as well as a boolean that
+# indicates whether a container should be forcefully removed (e.g., by stopping it), and a boolean
 # indicating whether to remove builtin volumes. Upon successful removal of the
 # container, its ID is returned.  If the
 # container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
+# See also [EvictContainer](EvictContainer).
 # #### Example
 # ~~~
 # $ varlink call -m unix:/run/podman/io.podman/io.podman.RemoveContainer '{"name": "62f4fd98cb57"}'
@@ -711,6 +744,20 @@ method WaitContainer(name: string, interval: int) -> (exitcode: int)
 # }
 # ~~~
 method RemoveContainer(name: string, force: bool, removeVolumes: bool) -> (container: string)
+
+# EvictContainer requires the name or ID of a container as well as a boolean that
+# indicates to remove builtin volumes. Upon successful eviction of the container,
+# its ID is returned.  If the container cannot be found by name or ID,
+# a [ContainerNotFound](#ContainerNotFound) error will be returned.
+# See also [RemoveContainer](RemoveContainer).
+# #### Example
+# ~~~
+# $ varlink call -m unix:/run/podman/io.podman/io.podman.EvictContainer '{"name": "62f4fd98cb57"}'
+# {
+#   "container": "62f4fd98cb57f529831e8f90610e54bba74bd6f02920ffb485e15376ed365c20"
+# }
+# ~~~
+method EvictContainer(name: string, removeVolumes: bool) -> (container: string)
 
 # DeleteStoppedContainers will delete all containers that are not running. It will return a list the deleted
 # container IDs.  See also [RemoveContainer](RemoveContainer).
@@ -737,8 +784,43 @@ method ListImages() -> (images: []Image)
 method GetImage(id: string) -> (image: Image)
 
 # BuildImage takes a [BuildInfo](#BuildInfo) structure and builds an image.  At a minimum, you must provide the
-# 'dockerfile' and 'tags' options in the BuildInfo structure. It will return a [MoreResponse](#MoreResponse) structure
+# contextDir tarball path, the 'dockerfiles' path, and 'output' option in the BuildInfo structure.  The 'output'
+# options is the name of the of the resulting build. It will return a [MoreResponse](#MoreResponse) structure
 # that contains the build logs and resulting image ID.
+# #### Example
+# ~~~
+# $ sudo varlink call -m unix:///run/podman/io.podman/io.podman.BuildImage '{"build":{"contextDir":"/tmp/t/context.tar","dockerfiles":["Dockerfile"], "output":"foobar"}}'
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "STEP 1: FROM alpine\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "STEP 2: COMMIT foobar\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9",
+#    "logs": []
+#  }
+# }
+# ~~~
 method BuildImage(build: BuildInfo) -> (image: MoreResponse)
 
 # This function is not implemented yet.
@@ -1098,6 +1180,9 @@ method ContainerRestore(name: string, keep: bool, tcpEstablished: bool) -> (id: 
 # ContainerRunlabel runs executes a command as described by a given container image label.
 method ContainerRunlabel(runlabel: Runlabel) -> ()
 
+# ExecContainer executes a command in the given container.
+method ExecContainer(opts: ExecOpts) -> ()
+
 # ListContainerMounts gathers all the mounted container mount points and returns them as an array
 # of strings
 # #### Example
@@ -1181,10 +1266,14 @@ method ReceiveFile(path: string, delete: bool) -> (len: int)
 method VolumeCreate(options: VolumeCreateOpts) -> (volumeName: string)
 
 # VolumeRemove removes a volume on a remote host
-method VolumeRemove(options: VolumeRemoveOpts) -> (volumeNames: []string)
+method VolumeRemove(options: VolumeRemoveOpts) -> (successes: []string, failures: [string]string)
 
 # GetVolumes gets slice of the volumes on a remote host
 method GetVolumes(args: []string, all: bool) -> (volumes: []Volume)
+
+# InspectVolume inspects a single volume. Returns inspect JSON in the form of a
+# string.
+method InspectVolume(name: string) -> (volume: string)
 
 # VolumesPrune removes unused volumes on the host
 method VolumesPrune() -> (prunedNames: []string, prunedErrors: []string)
@@ -1211,8 +1300,6 @@ method GetLayersMapWithImageInfo() -> (layerMap: string)
 
 # BuildImageHierarchyMap is for the development of Podman and should not be used.
 method BuildImageHierarchyMap(name: string) -> (imageInfo: string)
-
-method GenerateSystemd(name: string, restart: string, timeout: int, useName: bool) -> (unit: string)
 
 # ImageNotFound means the image could not be found by the provided name or ID in local storage.
 error ImageNotFound (id: string, reason: string)
@@ -1252,3 +1339,6 @@ error WantsMoreRequired (reason: string)
 
 # Container is already stopped
 error ErrCtrStopped (id: string)
+
+# This function requires CGroupsV2 to run in rootless mode.
+error ErrRequiresCgroupsV2ForRootless(reason: string)

@@ -19,7 +19,6 @@ type Volume struct {
 	MountPoint string            `json:"mountPoint"`
 	Driver     string            `json:"driver"`
 	Options    map[string]string `json:"options"`
-	Scope      string            `json:"scope"`
 }
 
 type NotImplemented struct {
@@ -71,6 +70,7 @@ type VolumeRemoveOpts struct {
 type Image struct {
 	Id          string            `json:"id"`
 	Digest      string            `json:"digest"`
+	Digests     []string          `json:"digests"`
 	ParentId    string            `json:"parentId"`
 	RepoTags    []string          `json:"repoTags"`
 	RepoDigests []string          `json:"repoDigests"`
@@ -81,6 +81,7 @@ type Image struct {
 	Labels      map[string]string `json:"labels"`
 	IsParent    bool              `json:"isParent"`
 	TopLayer    string            `json:"topLayer"`
+	ReadOnly    bool              `json:"readOnly"`
 }
 
 // ImageHistory describes the returned structure from ImageHistory.
@@ -157,6 +158,7 @@ type PsOpts struct {
 	NoTrunc *bool     `json:"noTrunc,omitempty"`
 	Pod     *bool     `json:"pod,omitempty"`
 	Quiet   *bool     `json:"quiet,omitempty"`
+	Size    *bool     `json:"size,omitempty"`
 	Sort    *string   `json:"sort,omitempty"`
 	Sync    *bool     `json:"sync,omitempty"`
 }
@@ -238,6 +240,7 @@ type InfoHost struct {
 	Kernel          string           `json:"kernel"`
 	Os              string           `json:"os"`
 	Uptime          string           `json:"uptime"`
+	Eventlogger     string           `json:"eventlogger"`
 }
 
 // InfoGraphStatus describes the detailed status of the storage driver
@@ -258,7 +261,7 @@ type InfoStore struct {
 	Run_root             string          `json:"run_root"`
 }
 
-// InfoPodman provides details on the podman binary
+// InfoPodman provides details on the Podman binary
 type InfoPodmanBinary struct {
 	Compiler       string `json:"compiler"`
 	Go_version     string `json:"go_version"`
@@ -283,6 +286,8 @@ type Sockets struct {
 }
 
 // Create is an input structure for creating containers.
+// args[0] is the image name or id
+// args[1-] are the new commands if changed
 type Create struct {
 	Args                   []string  `json:"args"`
 	AddHost                *[]string `json:"addHost,omitempty"`
@@ -349,12 +354,15 @@ type Create struct {
 	NoHosts                *bool     `json:"noHosts,omitempty"`
 	OomKillDisable         *bool     `json:"oomKillDisable,omitempty"`
 	OomScoreAdj            *int64    `json:"oomScoreAdj,omitempty"`
+	OverrideArch           *string   `json:"overrideArch,omitempty"`
+	OverrideOS             *string   `json:"overrideOS,omitempty"`
 	Pid                    *string   `json:"pid,omitempty"`
 	PidsLimit              *int64    `json:"pidsLimit,omitempty"`
 	Pod                    *string   `json:"pod,omitempty"`
 	Privileged             *bool     `json:"privileged,omitempty"`
 	Publish                *[]string `json:"publish,omitempty"`
 	PublishAll             *bool     `json:"publishAll,omitempty"`
+	Pull                   *string   `json:"pull,omitempty"`
 	Quiet                  *bool     `json:"quiet,omitempty"`
 	Readonly               *bool     `json:"readonly,omitempty"`
 	Readonlytmpfs          *bool     `json:"readonlytmpfs,omitempty"`
@@ -369,7 +377,7 @@ type Create struct {
 	Subuidname             *string   `json:"subuidname,omitempty"`
 	Subgidname             *string   `json:"subgidname,omitempty"`
 	Sysctl                 *[]string `json:"sysctl,omitempty"`
-	Systemd                *bool     `json:"systemd,omitempty"`
+	Systemd                *string   `json:"systemd,omitempty"`
 	Tmpfs                  *[]string `json:"tmpfs,omitempty"`
 	Tty                    *bool     `json:"tty,omitempty"`
 	Uidmap                 *[]string `json:"uidmap,omitempty"`
@@ -498,6 +506,17 @@ type Event struct {
 type DiffInfo struct {
 	Path       string `json:"path"`
 	ChangeType string `json:"changeType"`
+}
+
+type ExecOpts struct {
+	Name       string    `json:"name"`
+	Tty        bool      `json:"tty"`
+	Privileged bool      `json:"privileged"`
+	Cmd        []string  `json:"cmd"`
+	User       *string   `json:"user,omitempty"`
+	Workdir    *string   `json:"workdir,omitempty"`
+	Env        *[]string `json:"env,omitempty"`
+	DetachKeys *string   `json:"detachKeys,omitempty"`
 }
 
 // ImageNotFound means the image could not be found by the provided name or ID in local storage.
@@ -638,6 +657,17 @@ func (e ErrCtrStopped) Error() string {
 	return s
 }
 
+// This function requires CGroupsV2 to run in rootless mode.
+type ErrRequiresCgroupsV2ForRootless struct {
+	Reason string `json:"reason"`
+}
+
+func (e ErrRequiresCgroupsV2ForRootless) Error() string {
+	s := "io.podman.ErrRequiresCgroupsV2ForRootless"
+	s += fmt.Sprintf("(Reason: %v)", e.Reason)
+	return s
+}
+
 func Dispatch_Error(err error) error {
 	if e, ok := err.(*varlink.Error); ok {
 		switch e.Name {
@@ -768,6 +798,17 @@ func Dispatch_Error(err error) error {
 				return e
 			}
 			var param ErrCtrStopped
+			err := json.Unmarshal(*errorRawParameters, &param)
+			if err != nil {
+				return e
+			}
+			return &param
+		case "io.podman.ErrRequiresCgroupsV2ForRootless":
+			errorRawParameters := e.Parameters.(*json.RawMessage)
+			if errorRawParameters == nil {
+				return e
+			}
+			var param ErrRequiresCgroupsV2ForRootless
 			err := json.Unmarshal(*errorRawParameters, &param)
 			if err != nil {
 				return e
@@ -997,6 +1038,44 @@ func (m Top_methods) Send(ctx context.Context, c *varlink.Connection, flags uint
 			return
 		}
 		top_out_ = []string(out.Top)
+		return
+	}, nil
+}
+
+// HealthCheckRun executes defined container's healthcheck command
+// and returns the container's health status.
+type HealthCheckRun_methods struct{}
+
+func HealthCheckRun() HealthCheckRun_methods { return HealthCheckRun_methods{} }
+
+func (m HealthCheckRun_methods) Call(ctx context.Context, c *varlink.Connection, nameOrID_in_ string) (healthCheckStatus_out_ string, err_ error) {
+	receive, err_ := m.Send(ctx, c, 0, nameOrID_in_)
+	if err_ != nil {
+		return
+	}
+	healthCheckStatus_out_, _, err_ = receive(ctx)
+	return
+}
+
+func (m HealthCheckRun_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, nameOrID_in_ string) (func(ctx context.Context) (string, uint64, error), error) {
+	var in struct {
+		NameOrID string `json:"nameOrID"`
+	}
+	in.NameOrID = nameOrID_in_
+	receive, err := c.Send(ctx, "io.podman.HealthCheckRun", in, flags)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (healthCheckStatus_out_ string, flags uint64, err error) {
+		var out struct {
+			HealthCheckStatus string `json:"healthCheckStatus"`
+		}
+		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		healthCheckStatus_out_ = out.HealthCheckStatus
 		return
 	}, nil
 }
@@ -1941,10 +2020,12 @@ func (m WaitContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 	}, nil
 }
 
-// RemoveContainer requires the name or ID of container as well a boolean representing whether a running container can be stopped and removed, and a boolean
+// RemoveContainer requires the name or ID of a container as well as a boolean that
+// indicates whether a container should be forcefully removed (e.g., by stopping it), and a boolean
 // indicating whether to remove builtin volumes. Upon successful removal of the
 // container, its ID is returned.  If the
 // container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
+// See also [EvictContainer](EvictContainer).
 // #### Example
 // ~~~
 // $ varlink call -m unix:/run/podman/io.podman/io.podman.RemoveContainer '{"name": "62f4fd98cb57"}'
@@ -1975,6 +2056,56 @@ func (m RemoveContainer_methods) Send(ctx context.Context, c *varlink.Connection
 	in.Force = force_in_
 	in.RemoveVolumes = removeVolumes_in_
 	receive, err := c.Send(ctx, "io.podman.RemoveContainer", in, flags)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+// EvictContainer requires the name or ID of a container as well as a boolean that
+// indicates to remove builtin volumes. Upon successful eviction of the container,
+// its ID is returned.  If the container cannot be found by name or ID,
+// a [ContainerNotFound](#ContainerNotFound) error will be returned.
+// See also [RemoveContainer](RemoveContainer).
+// #### Example
+// ~~~
+// $ varlink call -m unix:/run/podman/io.podman/io.podman.EvictContainer '{"name": "62f4fd98cb57"}'
+// {
+//   "container": "62f4fd98cb57f529831e8f90610e54bba74bd6f02920ffb485e15376ed365c20"
+// }
+// ~~~
+type EvictContainer_methods struct{}
+
+func EvictContainer() EvictContainer_methods { return EvictContainer_methods{} }
+
+func (m EvictContainer_methods) Call(ctx context.Context, c *varlink.Connection, name_in_ string, removeVolumes_in_ bool) (container_out_ string, err_ error) {
+	receive, err_ := m.Send(ctx, c, 0, name_in_, removeVolumes_in_)
+	if err_ != nil {
+		return
+	}
+	container_out_, _, err_ = receive(ctx)
+	return
+}
+
+func (m EvictContainer_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, name_in_ string, removeVolumes_in_ bool) (func(ctx context.Context) (string, uint64, error), error) {
+	var in struct {
+		Name          string `json:"name"`
+		RemoveVolumes bool   `json:"removeVolumes"`
+	}
+	in.Name = name_in_
+	in.RemoveVolumes = removeVolumes_in_
+	receive, err := c.Send(ctx, "io.podman.EvictContainer", in, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -2113,8 +2244,43 @@ func (m GetImage_methods) Send(ctx context.Context, c *varlink.Connection, flags
 }
 
 // BuildImage takes a [BuildInfo](#BuildInfo) structure and builds an image.  At a minimum, you must provide the
-// 'dockerfile' and 'tags' options in the BuildInfo structure. It will return a [MoreResponse](#MoreResponse) structure
+// contextDir tarball path, the 'dockerfiles' path, and 'output' option in the BuildInfo structure.  The 'output'
+// options is the name of the of the resulting build. It will return a [MoreResponse](#MoreResponse) structure
 // that contains the build logs and resulting image ID.
+// #### Example
+// ~~~
+// $ sudo varlink call -m unix:///run/podman/io.podman/io.podman.BuildImage '{"build":{"contextDir":"/tmp/t/context.tar","dockerfiles":["Dockerfile"], "output":"foobar"}}'
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "STEP 1: FROM alpine\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "STEP 2: COMMIT foobar\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9",
+//    "logs": []
+//  }
+// }
+// ~~~
 type BuildImage_methods struct{}
 
 func BuildImage() BuildImage_methods { return BuildImage_methods{} }
@@ -3575,6 +3741,39 @@ func (m ContainerRunlabel_methods) Send(ctx context.Context, c *varlink.Connecti
 	}, nil
 }
 
+// ExecContainer executes a command in the given container.
+type ExecContainer_methods struct{}
+
+func ExecContainer() ExecContainer_methods { return ExecContainer_methods{} }
+
+func (m ExecContainer_methods) Call(ctx context.Context, c *varlink.Connection, opts_in_ ExecOpts) (err_ error) {
+	receive, err_ := m.Send(ctx, c, 0, opts_in_)
+	if err_ != nil {
+		return
+	}
+	_, err_ = receive(ctx)
+	return
+}
+
+func (m ExecContainer_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, opts_in_ ExecOpts) (func(ctx context.Context) (uint64, error), error) {
+	var in struct {
+		Opts ExecOpts `json:"opts"`
+	}
+	in.Opts = opts_in_
+	receive, err := c.Send(ctx, "io.podman.ExecContainer", in, flags)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, err error) {
+		flags, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
 // ListContainerMounts gathers all the mounted container mount points and returns them as an array
 // of strings
 // #### Example
@@ -4169,16 +4368,16 @@ type VolumeRemove_methods struct{}
 
 func VolumeRemove() VolumeRemove_methods { return VolumeRemove_methods{} }
 
-func (m VolumeRemove_methods) Call(ctx context.Context, c *varlink.Connection, options_in_ VolumeRemoveOpts) (volumeNames_out_ []string, err_ error) {
+func (m VolumeRemove_methods) Call(ctx context.Context, c *varlink.Connection, options_in_ VolumeRemoveOpts) (successes_out_ []string, failures_out_ map[string]string, err_ error) {
 	receive, err_ := m.Send(ctx, c, 0, options_in_)
 	if err_ != nil {
 		return
 	}
-	volumeNames_out_, _, err_ = receive(ctx)
+	successes_out_, failures_out_, _, err_ = receive(ctx)
 	return
 }
 
-func (m VolumeRemove_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, options_in_ VolumeRemoveOpts) (func(ctx context.Context) ([]string, uint64, error), error) {
+func (m VolumeRemove_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, options_in_ VolumeRemoveOpts) (func(ctx context.Context) ([]string, map[string]string, uint64, error), error) {
 	var in struct {
 		Options VolumeRemoveOpts `json:"options"`
 	}
@@ -4187,16 +4386,18 @@ func (m VolumeRemove_methods) Send(ctx context.Context, c *varlink.Connection, f
 	if err != nil {
 		return nil, err
 	}
-	return func(context.Context) (volumeNames_out_ []string, flags uint64, err error) {
+	return func(context.Context) (successes_out_ []string, failures_out_ map[string]string, flags uint64, err error) {
 		var out struct {
-			VolumeNames []string `json:"volumeNames"`
+			Successes []string          `json:"successes"`
+			Failures  map[string]string `json:"failures"`
 		}
 		flags, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
 		}
-		volumeNames_out_ = []string(out.VolumeNames)
+		successes_out_ = []string(out.Successes)
+		failures_out_ = map[string]string(out.Failures)
 		return
 	}, nil
 }
@@ -4236,6 +4437,44 @@ func (m GetVolumes_methods) Send(ctx context.Context, c *varlink.Connection, fla
 			return
 		}
 		volumes_out_ = []Volume(out.Volumes)
+		return
+	}, nil
+}
+
+// InspectVolume inspects a single volume. Returns inspect JSON in the form of a
+// string.
+type InspectVolume_methods struct{}
+
+func InspectVolume() InspectVolume_methods { return InspectVolume_methods{} }
+
+func (m InspectVolume_methods) Call(ctx context.Context, c *varlink.Connection, name_in_ string) (volume_out_ string, err_ error) {
+	receive, err_ := m.Send(ctx, c, 0, name_in_)
+	if err_ != nil {
+		return
+	}
+	volume_out_, _, err_ = receive(ctx)
+	return
+}
+
+func (m InspectVolume_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, name_in_ string) (func(ctx context.Context) (string, uint64, error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Send(ctx, "io.podman.InspectVolume", in, flags)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (volume_out_ string, flags uint64, err error) {
+		var out struct {
+			Volume string `json:"volume"`
+		}
+		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		volume_out_ = out.Volume
 		return
 	}, nil
 }
@@ -4548,48 +4787,6 @@ func (m BuildImageHierarchyMap_methods) Send(ctx context.Context, c *varlink.Con
 	}, nil
 }
 
-type GenerateSystemd_methods struct{}
-
-func GenerateSystemd() GenerateSystemd_methods { return GenerateSystemd_methods{} }
-
-func (m GenerateSystemd_methods) Call(ctx context.Context, c *varlink.Connection, name_in_ string, restart_in_ string, timeout_in_ int64, useName_in_ bool) (unit_out_ string, err_ error) {
-	receive, err_ := m.Send(ctx, c, 0, name_in_, restart_in_, timeout_in_, useName_in_)
-	if err_ != nil {
-		return
-	}
-	unit_out_, _, err_ = receive(ctx)
-	return
-}
-
-func (m GenerateSystemd_methods) Send(ctx context.Context, c *varlink.Connection, flags uint64, name_in_ string, restart_in_ string, timeout_in_ int64, useName_in_ bool) (func(ctx context.Context) (string, uint64, error), error) {
-	var in struct {
-		Name    string `json:"name"`
-		Restart string `json:"restart"`
-		Timeout int64  `json:"timeout"`
-		UseName bool   `json:"useName"`
-	}
-	in.Name = name_in_
-	in.Restart = restart_in_
-	in.Timeout = timeout_in_
-	in.UseName = useName_in_
-	receive, err := c.Send(ctx, "io.podman.GenerateSystemd", in, flags)
-	if err != nil {
-		return nil, err
-	}
-	return func(context.Context) (unit_out_ string, flags uint64, err error) {
-		var out struct {
-			Unit string `json:"unit"`
-		}
-		flags, err = receive(ctx, &out)
-		if err != nil {
-			err = Dispatch_Error(err)
-			return
-		}
-		unit_out_ = out.Unit
-		return
-	}, nil
-}
-
 // Generated service interface with all methods
 
 type iopodmanInterface interface {
@@ -4599,6 +4796,7 @@ type iopodmanInterface interface {
 	Ps(ctx context.Context, c VarlinkCall, opts_ PsOpts) error
 	GetContainersByStatus(ctx context.Context, c VarlinkCall, status_ []string) error
 	Top(ctx context.Context, c VarlinkCall, nameOrID_ string, descriptors_ []string) error
+	HealthCheckRun(ctx context.Context, c VarlinkCall, nameOrID_ string) error
 	GetContainer(ctx context.Context, c VarlinkCall, id_ string) error
 	GetContainersByContext(ctx context.Context, c VarlinkCall, all_ bool, latest_ bool, args_ []string) error
 	CreateContainer(ctx context.Context, c VarlinkCall, create_ Create) error
@@ -4622,6 +4820,7 @@ type iopodmanInterface interface {
 	GetAttachSockets(ctx context.Context, c VarlinkCall, name_ string) error
 	WaitContainer(ctx context.Context, c VarlinkCall, name_ string, interval_ int64) error
 	RemoveContainer(ctx context.Context, c VarlinkCall, name_ string, force_ bool, removeVolumes_ bool) error
+	EvictContainer(ctx context.Context, c VarlinkCall, name_ string, removeVolumes_ bool) error
 	DeleteStoppedContainers(ctx context.Context, c VarlinkCall) error
 	ListImages(ctx context.Context, c VarlinkCall) error
 	GetImage(ctx context.Context, c VarlinkCall, id_ string) error
@@ -4656,6 +4855,7 @@ type iopodmanInterface interface {
 	ContainerCheckpoint(ctx context.Context, c VarlinkCall, name_ string, keep_ bool, leaveRunning_ bool, tcpEstablished_ bool) error
 	ContainerRestore(ctx context.Context, c VarlinkCall, name_ string, keep_ bool, tcpEstablished_ bool) error
 	ContainerRunlabel(ctx context.Context, c VarlinkCall, runlabel_ Runlabel) error
+	ExecContainer(ctx context.Context, c VarlinkCall, opts_ ExecOpts) error
 	ListContainerMounts(ctx context.Context, c VarlinkCall) error
 	MountContainer(ctx context.Context, c VarlinkCall, name_ string) error
 	UnmountContainer(ctx context.Context, c VarlinkCall, name_ string, force_ bool) error
@@ -4673,6 +4873,7 @@ type iopodmanInterface interface {
 	VolumeCreate(ctx context.Context, c VarlinkCall, options_ VolumeCreateOpts) error
 	VolumeRemove(ctx context.Context, c VarlinkCall, options_ VolumeRemoveOpts) error
 	GetVolumes(ctx context.Context, c VarlinkCall, args_ []string, all_ bool) error
+	InspectVolume(ctx context.Context, c VarlinkCall, name_ string) error
 	VolumesPrune(ctx context.Context, c VarlinkCall) error
 	ImageSave(ctx context.Context, c VarlinkCall, options_ ImageSaveOptions) error
 	GetPodsByContext(ctx context.Context, c VarlinkCall, all_ bool, latest_ bool, args_ []string) error
@@ -4681,7 +4882,6 @@ type iopodmanInterface interface {
 	Diff(ctx context.Context, c VarlinkCall, name_ string) error
 	GetLayersMapWithImageInfo(ctx context.Context, c VarlinkCall) error
 	BuildImageHierarchyMap(ctx context.Context, c VarlinkCall, name_ string) error
-	GenerateSystemd(ctx context.Context, c VarlinkCall, name_ string, restart_ string, timeout_ int64, useName_ bool) error
 }
 
 // Generated service object with all methods
@@ -4782,6 +4982,13 @@ func (c *VarlinkCall) ReplyErrCtrStopped(ctx context.Context, id_ string) error 
 	return c.ReplyError(ctx, "io.podman.ErrCtrStopped", &out)
 }
 
+// This function requires CGroupsV2 to run in rootless mode.
+func (c *VarlinkCall) ReplyErrRequiresCgroupsV2ForRootless(ctx context.Context, reason_ string) error {
+	var out ErrRequiresCgroupsV2ForRootless
+	out.Reason = reason_
+	return c.ReplyError(ctx, "io.podman.ErrRequiresCgroupsV2ForRootless", &out)
+}
+
 // Generated reply methods for all varlink methods
 
 func (c *VarlinkCall) ReplyGetVersion(ctx context.Context, version_ string, go_version_ string, git_commit_ string, built_ string, os_arch_ string, remote_api_version_ int64) error {
@@ -4839,6 +5046,14 @@ func (c *VarlinkCall) ReplyTop(ctx context.Context, top_ []string) error {
 		Top []string `json:"top"`
 	}
 	out.Top = []string(top_)
+	return c.Reply(ctx, &out)
+}
+
+func (c *VarlinkCall) ReplyHealthCheckRun(ctx context.Context, healthCheckStatus_ string) error {
+	var out struct {
+		HealthCheckStatus string `json:"healthCheckStatus"`
+	}
+	out.HealthCheckStatus = healthCheckStatus_
 	return c.Reply(ctx, &out)
 }
 
@@ -5011,6 +5226,14 @@ func (c *VarlinkCall) ReplyWaitContainer(ctx context.Context, exitcode_ int64) e
 }
 
 func (c *VarlinkCall) ReplyRemoveContainer(ctx context.Context, container_ string) error {
+	var out struct {
+		Container string `json:"container"`
+	}
+	out.Container = container_
+	return c.Reply(ctx, &out)
+}
+
+func (c *VarlinkCall) ReplyEvictContainer(ctx context.Context, container_ string) error {
 	var out struct {
 		Container string `json:"container"`
 	}
@@ -5288,6 +5511,10 @@ func (c *VarlinkCall) ReplyContainerRunlabel(ctx context.Context) error {
 	return c.Reply(ctx, nil)
 }
 
+func (c *VarlinkCall) ReplyExecContainer(ctx context.Context) error {
+	return c.Reply(ctx, nil)
+}
+
 func (c *VarlinkCall) ReplyListContainerMounts(ctx context.Context, mounts_ map[string]string) error {
 	var out struct {
 		Mounts map[string]string `json:"mounts"`
@@ -5404,11 +5631,13 @@ func (c *VarlinkCall) ReplyVolumeCreate(ctx context.Context, volumeName_ string)
 	return c.Reply(ctx, &out)
 }
 
-func (c *VarlinkCall) ReplyVolumeRemove(ctx context.Context, volumeNames_ []string) error {
+func (c *VarlinkCall) ReplyVolumeRemove(ctx context.Context, successes_ []string, failures_ map[string]string) error {
 	var out struct {
-		VolumeNames []string `json:"volumeNames"`
+		Successes []string          `json:"successes"`
+		Failures  map[string]string `json:"failures"`
 	}
-	out.VolumeNames = []string(volumeNames_)
+	out.Successes = []string(successes_)
+	out.Failures = map[string]string(failures_)
 	return c.Reply(ctx, &out)
 }
 
@@ -5417,6 +5646,14 @@ func (c *VarlinkCall) ReplyGetVolumes(ctx context.Context, volumes_ []Volume) er
 		Volumes []Volume `json:"volumes"`
 	}
 	out.Volumes = []Volume(volumes_)
+	return c.Reply(ctx, &out)
+}
+
+func (c *VarlinkCall) ReplyInspectVolume(ctx context.Context, volume_ string) error {
+	var out struct {
+		Volume string `json:"volume"`
+	}
+	out.Volume = volume_
 	return c.Reply(ctx, &out)
 }
 
@@ -5486,14 +5723,6 @@ func (c *VarlinkCall) ReplyBuildImageHierarchyMap(ctx context.Context, imageInfo
 	return c.Reply(ctx, &out)
 }
 
-func (c *VarlinkCall) ReplyGenerateSystemd(ctx context.Context, unit_ string) error {
-	var out struct {
-		Unit string `json:"unit"`
-	}
-	out.Unit = unit_
-	return c.Reply(ctx, &out)
-}
-
 // Generated dummy implementations for all varlink methods
 
 // GetVersion returns version and build information of the podman service
@@ -5523,6 +5752,12 @@ func (s *VarlinkInterface) GetContainersByStatus(ctx context.Context, c VarlinkC
 
 func (s *VarlinkInterface) Top(ctx context.Context, c VarlinkCall, nameOrID_ string, descriptors_ []string) error {
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.Top")
+}
+
+// HealthCheckRun executes defined container's healthcheck command
+// and returns the container's health status.
+func (s *VarlinkInterface) HealthCheckRun(ctx context.Context, c VarlinkCall, nameOrID_ string) error {
+	return c.ReplyMethodNotImplemented(ctx, "io.podman.HealthCheckRun")
 }
 
 // GetContainer returns information about a single container.  If a container
@@ -5737,10 +5972,12 @@ func (s *VarlinkInterface) WaitContainer(ctx context.Context, c VarlinkCall, nam
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.WaitContainer")
 }
 
-// RemoveContainer requires the name or ID of container as well a boolean representing whether a running container can be stopped and removed, and a boolean
+// RemoveContainer requires the name or ID of a container as well as a boolean that
+// indicates whether a container should be forcefully removed (e.g., by stopping it), and a boolean
 // indicating whether to remove builtin volumes. Upon successful removal of the
 // container, its ID is returned.  If the
 // container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
+// See also [EvictContainer](EvictContainer).
 // #### Example
 // ~~~
 // $ varlink call -m unix:/run/podman/io.podman/io.podman.RemoveContainer '{"name": "62f4fd98cb57"}'
@@ -5750,6 +5987,22 @@ func (s *VarlinkInterface) WaitContainer(ctx context.Context, c VarlinkCall, nam
 // ~~~
 func (s *VarlinkInterface) RemoveContainer(ctx context.Context, c VarlinkCall, name_ string, force_ bool, removeVolumes_ bool) error {
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.RemoveContainer")
+}
+
+// EvictContainer requires the name or ID of a container as well as a boolean that
+// indicates to remove builtin volumes. Upon successful eviction of the container,
+// its ID is returned.  If the container cannot be found by name or ID,
+// a [ContainerNotFound](#ContainerNotFound) error will be returned.
+// See also [RemoveContainer](RemoveContainer).
+// #### Example
+// ~~~
+// $ varlink call -m unix:/run/podman/io.podman/io.podman.EvictContainer '{"name": "62f4fd98cb57"}'
+// {
+//   "container": "62f4fd98cb57f529831e8f90610e54bba74bd6f02920ffb485e15376ed365c20"
+// }
+// ~~~
+func (s *VarlinkInterface) EvictContainer(ctx context.Context, c VarlinkCall, name_ string, removeVolumes_ bool) error {
+	return c.ReplyMethodNotImplemented(ctx, "io.podman.EvictContainer")
 }
 
 // DeleteStoppedContainers will delete all containers that are not running. It will return a list the deleted
@@ -5783,8 +6036,43 @@ func (s *VarlinkInterface) GetImage(ctx context.Context, c VarlinkCall, id_ stri
 }
 
 // BuildImage takes a [BuildInfo](#BuildInfo) structure and builds an image.  At a minimum, you must provide the
-// 'dockerfile' and 'tags' options in the BuildInfo structure. It will return a [MoreResponse](#MoreResponse) structure
+// contextDir tarball path, the 'dockerfiles' path, and 'output' option in the BuildInfo structure.  The 'output'
+// options is the name of the of the resulting build. It will return a [MoreResponse](#MoreResponse) structure
 // that contains the build logs and resulting image ID.
+// #### Example
+// ~~~
+// $ sudo varlink call -m unix:///run/podman/io.podman/io.podman.BuildImage '{"build":{"contextDir":"/tmp/t/context.tar","dockerfiles":["Dockerfile"], "output":"foobar"}}'
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "STEP 1: FROM alpine\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "STEP 2: COMMIT foobar\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "",
+//    "logs": [
+//      "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9\n"
+//    ]
+//  }
+// }
+// {
+//  "image": {
+//    "id": "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9",
+//    "logs": []
+//  }
+// }
+// ~~~
 func (s *VarlinkInterface) BuildImage(ctx context.Context, c VarlinkCall, build_ BuildInfo) error {
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.BuildImage")
 }
@@ -6199,6 +6487,11 @@ func (s *VarlinkInterface) ContainerRunlabel(ctx context.Context, c VarlinkCall,
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.ContainerRunlabel")
 }
 
+// ExecContainer executes a command in the given container.
+func (s *VarlinkInterface) ExecContainer(ctx context.Context, c VarlinkCall, opts_ ExecOpts) error {
+	return c.ReplyMethodNotImplemented(ctx, "io.podman.ExecContainer")
+}
+
 // ListContainerMounts gathers all the mounted container mount points and returns them as an array
 // of strings
 // #### Example
@@ -6314,6 +6607,12 @@ func (s *VarlinkInterface) GetVolumes(ctx context.Context, c VarlinkCall, args_ 
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.GetVolumes")
 }
 
+// InspectVolume inspects a single volume. Returns inspect JSON in the form of a
+// string.
+func (s *VarlinkInterface) InspectVolume(ctx context.Context, c VarlinkCall, name_ string) error {
+	return c.ReplyMethodNotImplemented(ctx, "io.podman.InspectVolume")
+}
+
 // VolumesPrune removes unused volumes on the host
 func (s *VarlinkInterface) VolumesPrune(ctx context.Context, c VarlinkCall) error {
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.VolumesPrune")
@@ -6354,10 +6653,6 @@ func (s *VarlinkInterface) GetLayersMapWithImageInfo(ctx context.Context, c Varl
 // BuildImageHierarchyMap is for the development of Podman and should not be used.
 func (s *VarlinkInterface) BuildImageHierarchyMap(ctx context.Context, c VarlinkCall, name_ string) error {
 	return c.ReplyMethodNotImplemented(ctx, "io.podman.BuildImageHierarchyMap")
-}
-
-func (s *VarlinkInterface) GenerateSystemd(ctx context.Context, c VarlinkCall, name_ string, restart_ string, timeout_ int64, useName_ bool) error {
-	return c.ReplyMethodNotImplemented(ctx, "io.podman.GenerateSystemd")
 }
 
 // Generated method call dispatcher
@@ -6403,6 +6698,16 @@ func (s *VarlinkInterface) VarlinkDispatch(ctx context.Context, call varlink.Cal
 			return call.ReplyInvalidParameter(ctx, "parameters")
 		}
 		return s.iopodmanInterface.Top(ctx, VarlinkCall{call}, in.NameOrID, []string(in.Descriptors))
+
+	case "HealthCheckRun":
+		var in struct {
+			NameOrID string `json:"nameOrID"`
+		}
+		err := call.GetParameters(&in)
+		if err != nil {
+			return call.ReplyInvalidParameter(ctx, "parameters")
+		}
+		return s.iopodmanInterface.HealthCheckRun(ctx, VarlinkCall{call}, in.NameOrID)
 
 	case "GetContainer":
 		var in struct {
@@ -6650,6 +6955,17 @@ func (s *VarlinkInterface) VarlinkDispatch(ctx context.Context, call varlink.Cal
 			return call.ReplyInvalidParameter(ctx, "parameters")
 		}
 		return s.iopodmanInterface.RemoveContainer(ctx, VarlinkCall{call}, in.Name, in.Force, in.RemoveVolumes)
+
+	case "EvictContainer":
+		var in struct {
+			Name          string `json:"name"`
+			RemoveVolumes bool   `json:"removeVolumes"`
+		}
+		err := call.GetParameters(&in)
+		if err != nil {
+			return call.ReplyInvalidParameter(ctx, "parameters")
+		}
+		return s.iopodmanInterface.EvictContainer(ctx, VarlinkCall{call}, in.Name, in.RemoveVolumes)
 
 	case "DeleteStoppedContainers":
 		return s.iopodmanInterface.DeleteStoppedContainers(ctx, VarlinkCall{call})
@@ -6995,6 +7311,16 @@ func (s *VarlinkInterface) VarlinkDispatch(ctx context.Context, call varlink.Cal
 		}
 		return s.iopodmanInterface.ContainerRunlabel(ctx, VarlinkCall{call}, in.Runlabel)
 
+	case "ExecContainer":
+		var in struct {
+			Opts ExecOpts `json:"opts"`
+		}
+		err := call.GetParameters(&in)
+		if err != nil {
+			return call.ReplyInvalidParameter(ctx, "parameters")
+		}
+		return s.iopodmanInterface.ExecContainer(ctx, VarlinkCall{call}, in.Opts)
+
 	case "ListContainerMounts":
 		return s.iopodmanInterface.ListContainerMounts(ctx, VarlinkCall{call})
 
@@ -7165,6 +7491,16 @@ func (s *VarlinkInterface) VarlinkDispatch(ctx context.Context, call varlink.Cal
 		}
 		return s.iopodmanInterface.GetVolumes(ctx, VarlinkCall{call}, []string(in.Args), in.All)
 
+	case "InspectVolume":
+		var in struct {
+			Name string `json:"name"`
+		}
+		err := call.GetParameters(&in)
+		if err != nil {
+			return call.ReplyInvalidParameter(ctx, "parameters")
+		}
+		return s.iopodmanInterface.InspectVolume(ctx, VarlinkCall{call}, in.Name)
+
 	case "VolumesPrune":
 		return s.iopodmanInterface.VolumesPrune(ctx, VarlinkCall{call})
 
@@ -7238,19 +7574,6 @@ func (s *VarlinkInterface) VarlinkDispatch(ctx context.Context, call varlink.Cal
 		}
 		return s.iopodmanInterface.BuildImageHierarchyMap(ctx, VarlinkCall{call}, in.Name)
 
-	case "GenerateSystemd":
-		var in struct {
-			Name    string `json:"name"`
-			Restart string `json:"restart"`
-			Timeout int64  `json:"timeout"`
-			UseName bool   `json:"useName"`
-		}
-		err := call.GetParameters(&in)
-		if err != nil {
-			return call.ReplyInvalidParameter(ctx, "parameters")
-		}
-		return s.iopodmanInterface.GenerateSystemd(ctx, VarlinkCall{call}, in.Name, in.Restart, in.Timeout, in.UseName)
-
 	default:
 		return call.ReplyMethodNotFound(ctx, methodname)
 	}
@@ -7274,8 +7597,7 @@ type Volume (
   labels: [string]string,
   mountPoint: string,
   driver: string,
-  options: [string]string,
-  scope: string
+  options: [string]string
 )
 
 type NotImplemented (
@@ -7326,7 +7648,8 @@ type VolumeRemoveOpts (
 
 type Image (
   id: string,
-  digest:   string,
+  digest: string,
+  digests: []string,
   parentId: string,
   repoTags: []string,
   repoDigests: []string,
@@ -7336,7 +7659,8 @@ type Image (
   containers: int,
   labels: [string]string,
   isParent: bool,
-  topLayer: string
+  topLayer: string,
+  readOnly: bool
 )
 
 # ImageHistory describes the returned structure from ImageHistory.
@@ -7411,10 +7735,11 @@ type PsOpts (
     last: ?int,
     latest: ?bool,
     noTrunc: ?bool,
-	pod: ?bool,
-	quiet: ?bool,
-	sort: ?string,
-	sync: ?bool
+    pod: ?bool,
+    quiet: ?bool,
+    size: ?bool,
+    sort: ?string,
+    sync: ?bool
 )
 
 type PsContainer (
@@ -7493,7 +7818,8 @@ type InfoHost (
     hostname: string,
     kernel: string,
     os: string,
-    uptime: string
+    uptime: string,
+    eventlogger: string
 )
 
 # InfoGraphStatus describes the detailed status of the storage driver
@@ -7514,7 +7840,7 @@ type InfoStore (
     run_root: string
 )
 
-# InfoPodman provides details on the podman binary
+# InfoPodman provides details on the Podman binary
 type InfoPodmanBinary (
     compiler: string,
     go_version: string,
@@ -7539,6 +7865,8 @@ type Sockets(
 )
 
 # Create is an input structure for creating containers.
+# args[0] is the image name or id
+# args[1-] are the new commands if changed
 type Create (
     args: []string,
     addHost: ?[]string,
@@ -7605,12 +7933,15 @@ type Create (
     noHosts: ?bool,
     oomKillDisable: ?bool,
     oomScoreAdj: ?int,
+    overrideArch: ?string,
+    overrideOS: ?string,
     pid: ?string,
     pidsLimit: ?int,
     pod: ?string,
     privileged: ?bool,
     publish: ?[]string,
     publishAll: ?bool,
+    pull: ?string,
     quiet: ?bool,
     readonly: ?bool,
     readonlytmpfs: ?bool,
@@ -7625,7 +7956,7 @@ type Create (
     subuidname: ?string,
     subgidname: ?string,
     sysctl: ?[]string,
-    systemd: ?bool,
+    systemd: ?string,
     tmpfs: ?[]string,
     tty: ?bool,
     uidmap: ?[]string,
@@ -7765,6 +8096,25 @@ type DiffInfo(
     changeType: string
 )
 
+type ExecOpts(
+    # container name or id
+    name: string,
+    # Create pseudo tty
+    tty: bool,
+    # privileged access in container
+    privileged: bool,
+    # command to execute in container
+    cmd: []string,
+    # user to use in container
+    user: ?string,
+    # workdir to run command in container
+    workdir: ?string,
+    # slice of keyword=value environment variables
+    env: ?[]string,
+    # string of detach keys
+    detachKeys: ?string
+)
+
 # GetVersion returns version and build information of the podman service
 method GetVersion() -> (
     version: string,
@@ -7788,6 +8138,10 @@ method Ps(opts: PsOpts) -> (containers: []PsContainer)
 method GetContainersByStatus(status: []string) -> (containerS: []Container)
 
 method Top (nameOrID: string, descriptors: []string) -> (top: []string)
+
+# HealthCheckRun executes defined container's healthcheck command
+# and returns the container's health status.
+method HealthCheckRun (nameOrID: string) -> (healthCheckStatus: string)
 
 # GetContainer returns information about a single container.  If a container
 # with the given id doesn't exist, a [ContainerNotFound](#ContainerNotFound)
@@ -7966,10 +8320,12 @@ method GetAttachSockets(name: string) -> (sockets: Sockets)
 # or name, a [ContainerNotFound](#ContainerNotFound) error is returned.
 method WaitContainer(name: string, interval: int) -> (exitcode: int)
 
-# RemoveContainer requires the name or ID of container as well a boolean representing whether a running container can be stopped and removed, and a boolean
+# RemoveContainer requires the name or ID of a container as well as a boolean that
+# indicates whether a container should be forcefully removed (e.g., by stopping it), and a boolean
 # indicating whether to remove builtin volumes. Upon successful removal of the
 # container, its ID is returned.  If the
 # container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
+# See also [EvictContainer](EvictContainer).
 # #### Example
 # ~~~
 # $ varlink call -m unix:/run/podman/io.podman/io.podman.RemoveContainer '{"name": "62f4fd98cb57"}'
@@ -7978,6 +8334,20 @@ method WaitContainer(name: string, interval: int) -> (exitcode: int)
 # }
 # ~~~
 method RemoveContainer(name: string, force: bool, removeVolumes: bool) -> (container: string)
+
+# EvictContainer requires the name or ID of a container as well as a boolean that
+# indicates to remove builtin volumes. Upon successful eviction of the container,
+# its ID is returned.  If the container cannot be found by name or ID,
+# a [ContainerNotFound](#ContainerNotFound) error will be returned.
+# See also [RemoveContainer](RemoveContainer).
+# #### Example
+# ~~~
+# $ varlink call -m unix:/run/podman/io.podman/io.podman.EvictContainer '{"name": "62f4fd98cb57"}'
+# {
+#   "container": "62f4fd98cb57f529831e8f90610e54bba74bd6f02920ffb485e15376ed365c20"
+# }
+# ~~~
+method EvictContainer(name: string, removeVolumes: bool) -> (container: string)
 
 # DeleteStoppedContainers will delete all containers that are not running. It will return a list the deleted
 # container IDs.  See also [RemoveContainer](RemoveContainer).
@@ -8004,8 +8374,43 @@ method ListImages() -> (images: []Image)
 method GetImage(id: string) -> (image: Image)
 
 # BuildImage takes a [BuildInfo](#BuildInfo) structure and builds an image.  At a minimum, you must provide the
-# 'dockerfile' and 'tags' options in the BuildInfo structure. It will return a [MoreResponse](#MoreResponse) structure
+# contextDir tarball path, the 'dockerfiles' path, and 'output' option in the BuildInfo structure.  The 'output'
+# options is the name of the of the resulting build. It will return a [MoreResponse](#MoreResponse) structure
 # that contains the build logs and resulting image ID.
+# #### Example
+# ~~~
+# $ sudo varlink call -m unix:///run/podman/io.podman/io.podman.BuildImage '{"build":{"contextDir":"/tmp/t/context.tar","dockerfiles":["Dockerfile"], "output":"foobar"}}'
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "STEP 1: FROM alpine\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "STEP 2: COMMIT foobar\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "",
+#    "logs": [
+#      "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9\n"
+#    ]
+#  }
+# }
+# {
+#  "image": {
+#    "id": "b7b28af77ffec6054d13378df4fdf02725830086c7444d9c278af25312aa39b9",
+#    "logs": []
+#  }
+# }
+# ~~~
 method BuildImage(build: BuildInfo) -> (image: MoreResponse)
 
 # This function is not implemented yet.
@@ -8365,6 +8770,9 @@ method ContainerRestore(name: string, keep: bool, tcpEstablished: bool) -> (id: 
 # ContainerRunlabel runs executes a command as described by a given container image label.
 method ContainerRunlabel(runlabel: Runlabel) -> ()
 
+# ExecContainer executes a command in the given container.
+method ExecContainer(opts: ExecOpts) -> ()
+
 # ListContainerMounts gathers all the mounted container mount points and returns them as an array
 # of strings
 # #### Example
@@ -8448,10 +8856,14 @@ method ReceiveFile(path: string, delete: bool) -> (len: int)
 method VolumeCreate(options: VolumeCreateOpts) -> (volumeName: string)
 
 # VolumeRemove removes a volume on a remote host
-method VolumeRemove(options: VolumeRemoveOpts) -> (volumeNames: []string)
+method VolumeRemove(options: VolumeRemoveOpts) -> (successes: []string, failures: [string]string)
 
 # GetVolumes gets slice of the volumes on a remote host
 method GetVolumes(args: []string, all: bool) -> (volumes: []Volume)
+
+# InspectVolume inspects a single volume. Returns inspect JSON in the form of a
+# string.
+method InspectVolume(name: string) -> (volume: string)
 
 # VolumesPrune removes unused volumes on the host
 method VolumesPrune() -> (prunedNames: []string, prunedErrors: []string)
@@ -8478,8 +8890,6 @@ method GetLayersMapWithImageInfo() -> (layerMap: string)
 
 # BuildImageHierarchyMap is for the development of Podman and should not be used.
 method BuildImageHierarchyMap(name: string) -> (imageInfo: string)
-
-method GenerateSystemd(name: string, restart: string, timeout: int, useName: bool) -> (unit: string)
 
 # ImageNotFound means the image could not be found by the provided name or ID in local storage.
 error ImageNotFound (id: string, reason: string)
@@ -8519,6 +8929,9 @@ error WantsMoreRequired (reason: string)
 
 # Container is already stopped
 error ErrCtrStopped (id: string)
+
+# This function requires CGroupsV2 to run in rootless mode.
+error ErrRequiresCgroupsV2ForRootless(reason: string)
 `
 }
 
