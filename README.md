@@ -46,6 +46,23 @@ For now you can:
 * container memory is limited to configured value
 * task config cpu value is used to populate podman CpuShares
 
+### Driver Configuration
+
+* volumes stanza:
+
+  * enabled - Defaults to true. Allows tasks to bind host paths (volumes) inside their container. 
+  * selinuxlabel - Allows the operator to set a SELinux label to the allocation and task local bind-mounts to containers. If used with _volumes.enabled_ set to false, the labels will still be applied to the standard binds in the container.
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    volumes {
+      enabled      = true
+      selinuxlabel = "z"
+    }
+  }
+}
+```
 
 ### Task Configuration
 

@@ -58,10 +58,14 @@ var (
 
 	// configSpec is the hcl specification returned by the ConfigSchema RPC
 	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"enabled": hclspec.NewDefault(
-			hclspec.NewAttr("enabled", "bool", false),
-			hclspec.NewLiteral("true"),
-		),
+		// volume options
+		"volumes": hclspec.NewDefault(hclspec.NewBlock("volumes", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"enabled": hclspec.NewDefault(
+				hclspec.NewAttr("enabled", "bool", false),
+				hclspec.NewLiteral("true"),
+			),
+			"selinuxlabel": hclspec.NewAttr("selinuxlabel", "string", false),
+		})), hclspec.NewLiteral("{ enabled = true }")),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -88,7 +92,7 @@ type Driver struct {
 	eventer *eventer.Eventer
 
 	// config is the driver configuration set by the SetConfig RPC
-	config *Config
+	config *PluginConfig
 
 	// nomadConfig is the client config from nomad
 	nomadConfig *base.ClientDriverConfig
@@ -108,9 +112,15 @@ type Driver struct {
 	logger hclog.Logger
 }
 
-// Config is the driver configuration set by the SetConfig RPC call
-type Config struct {
-	Enabled bool `codec:"enabled"`
+// VolumeConfig
+type VolumeConfig struct {
+	Enabled      bool   `codec:"enabled"`
+	SelinuxLabel string `codec:"selinuxlabel"`
+}
+
+// PluginConfig is the driver configuration set by the SetConfig RPC call
+type PluginConfig struct {
+	Volumes         VolumeConfig `codec:"volumes"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
@@ -136,7 +146,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	logger = logger.Named(pluginName)
 	return &Driver{
 		eventer:        eventer.NewEventer(ctx, logger),
-		config:         &Config{},
+		config:         &PluginConfig{},
 		tasks:          newTaskStore(),
 		ctx:            ctx,
 		signalShutdown: cancel,
@@ -153,7 +163,7 @@ func (d *Driver) ConfigSchema() (*hclspec.Spec, error) {
 }
 
 func (d *Driver) SetConfig(cfg *base.Config) error {
-	var config Config
+	var config PluginConfig
 	if len(cfg.PluginConfig) != 0 {
 		if err := base.MsgPackDecode(cfg.PluginConfig, &config); err != nil {
 			return err
@@ -217,25 +227,23 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	health = drivers.HealthStateUndetected
 	desc = "disabled"
 
-	// try to connect if the driver is enabled
-	if d.config.Enabled {
-		varlinkConnection, err := d.getConnection()
-		if err != nil {
-			d.logger.Error("Could not connect to podman", "err", err)
+	// try to connect and get version info
+	varlinkConnection, err := d.getConnection()
+	if err != nil {
+		d.logger.Error("Could not connect to podman", "err", err)
+	} else {
+		defer varlinkConnection.Close()
+		//  see if we get the system info from podman
+		info, err := iopodman.GetInfo().Call(d.ctx, varlinkConnection)
+		if err == nil {
+			// yay! we can enable the driver
+			health = drivers.HealthStateHealthy
+			desc = "ready"
+			// TODO: we would have more data here... maybe we can return more details to nomad
+			attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+			attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Podman.Podman_version)
 		} else {
-			defer varlinkConnection.Close()
-			//  see if we get the system info from podman
-			info, err := iopodman.GetInfo().Call(d.ctx, varlinkConnection)
-			if err == nil {
-				// yay! we can enable the driver
-				health = drivers.HealthStateHealthy
-				desc = "ready"
-				// TODO: we would have more data here... maybe we can return more details to nomad
-				attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-				attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Podman.Podman_version)
-			} else {
-				d.logger.Error("Cound not get podman info", "err", err)
-			}
+			d.logger.Error("Cound not get podman info", "err", err)
 		}
 	}
 
@@ -332,14 +340,22 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 
 	allocMounts := []string{
-		fmt.Sprintf("type=bind,source=%s,target=/nomad/alloc", cfg.TaskDir().SharedAllocDir),
-		fmt.Sprintf("type=bind,source=%s,target=/nomad/local", cfg.TaskDir().LocalDir),
-		fmt.Sprintf("type=bind,source=%s,target=/nomad/secrets", cfg.TaskDir().SecretsDir),
+		fmt.Sprintf("%s:/nomad/alloc", cfg.TaskDir().SharedAllocDir),
+		fmt.Sprintf("%s:/nomad/local", cfg.TaskDir().LocalDir),
+		fmt.Sprintf("%s:/nomad/secrets", cfg.TaskDir().SecretsDir),
 	}
+
+	// Apply SELinux Label to each volume
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+		for i := range allocMounts {
+			allocMounts[i] = fmt.Sprintf("%s:%s", allocMounts[i], selinuxLabel)
+		}
+	}
+
 	createOpts := iopodman.Create{
 		Args:       allArgs,
 		Name:       &containerName,
-		Mount:      &allocMounts,
+		Volume:     &allocMounts,
 		Memory:     &memoryLimit,
 		MemorySwap: &memoryLimit,
 		CpuShares:  &cpuShares,
