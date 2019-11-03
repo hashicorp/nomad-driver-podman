@@ -39,8 +39,9 @@ The featureset is very limited.
 For now you can:
 
 * use the jobs driver config to define the image for your container
-* start/stop containers. 
+* start/stop containers with default or customer entrypoint and arguments
 * use nomad alloc data in the container. It's bind mounted to /nomad
+* bind mount custome volumes into the container
 * monitor the memory consuption
 * monitor CPU usage (might be buggy)
 * container memory is limited to configured value
