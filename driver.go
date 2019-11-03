@@ -56,26 +56,6 @@ var (
 		Name:              pluginName,
 	}
 
-	// configSpec is the hcl specification returned by the ConfigSchema RPC
-	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		// volume options
-		"volumes": hclspec.NewDefault(hclspec.NewBlock("volumes", false, hclspec.NewObject(map[string]*hclspec.Spec{
-			"enabled": hclspec.NewDefault(
-				hclspec.NewAttr("enabled", "bool", false),
-				hclspec.NewLiteral("true"),
-			),
-			"selinuxlabel": hclspec.NewAttr("selinuxlabel", "string", false),
-		})), hclspec.NewLiteral("{ enabled = true }")),
-	})
-
-	// taskConfigSpec is the hcl specification for the driver config section of
-	// a task within a job. It is returned in the TaskConfigSchema RPC
-	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"image":   hclspec.NewAttr("image", "string", true),
-		"command": hclspec.NewAttr("command", "string", false),
-		"args":    hclspec.NewAttr("args", "list(string)", false),
-	})
-
 	// capabilities is returned by the Capabilities RPC and indicates what
 	// optional features this driver supports
 	capabilities = &drivers.Capabilities{
@@ -110,24 +90,6 @@ type Driver struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
-}
-
-// VolumeConfig
-type VolumeConfig struct {
-	Enabled      bool   `codec:"enabled"`
-	SelinuxLabel string `codec:"selinuxlabel"`
-}
-
-// PluginConfig is the driver configuration set by the SetConfig RPC call
-type PluginConfig struct {
-	Volumes         VolumeConfig `codec:"volumes"`
-}
-
-// TaskConfig is the driver configuration of a task within a job
-type TaskConfig struct {
-	Image   string   `codec:"image"`
-	Command string   `codec:"command"`
-	Args    []string `codec:"args"`
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -339,23 +301,29 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 
-	allocMounts := []string{
+	// ensure to mount nomad alloc dirs into the container
+	allVolumes := []string{
 		fmt.Sprintf("%s:/nomad/alloc", cfg.TaskDir().SharedAllocDir),
 		fmt.Sprintf("%s:/nomad/local", cfg.TaskDir().LocalDir),
 		fmt.Sprintf("%s:/nomad/secrets", cfg.TaskDir().SecretsDir),
 	}
 
+	if d.config.Volumes.Enabled {
+		// add task specific volumes, if enabled
+		allVolumes = append(allVolumes, driverConfig.Volumes...)
+	}
+
 	// Apply SELinux Label to each volume
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
-		for i := range allocMounts {
-			allocMounts[i] = fmt.Sprintf("%s:%s", allocMounts[i], selinuxLabel)
+		for i := range allVolumes {
+			allVolumes[i] = fmt.Sprintf("%s:%s", allVolumes[i], selinuxLabel)
 		}
 	}
 
 	createOpts := iopodman.Create{
 		Args:       allArgs,
 		Name:       &containerName,
-		Volume:     &allocMounts,
+		Volume:     &allVolumes,
 		Memory:     &memoryLimit,
 		MemorySwap: &memoryLimit,
 		CpuShares:  &cpuShares,

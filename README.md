@@ -93,6 +93,16 @@ config {
 }
 ```
 
+* **volumes** - (Optional) A list of host_path:container_path strings to bind host paths to container paths. 
+
+```
+config {
+  volumes = [
+    "/some/host/data:/container/data"
+  ]
+}
+```
+
 ## Example job
 
 ```
