@@ -292,6 +292,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	defer varlinkConnection.Close()
 
+	if driverConfig.Image == "" {
+		return nil, nil, fmt.Errorf("image name required")
+	}
+
 	allArgs := []string{driverConfig.Image}
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
