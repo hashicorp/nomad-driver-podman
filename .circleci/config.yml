@@ -12,3 +12,9 @@ jobs:
       - store_artifacts:
           path: nomad-driver-podman
           destination: nomad-driver-podman
+      - run:
+          name: test
+          command: |
+            sudo -E build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
+      - store_test_results:
+          path: build/test/

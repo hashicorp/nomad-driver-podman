@@ -29,4 +29,5 @@ require (
 	github.com/stretchr/testify v1.3.0
 	github.com/ugorji/go v0.0.0-20170620060102-0053ebfd9d0e // indirect
 	github.com/varlink/go v0.0.0-20191018142704-4ecdbb8a36c2
+	gotest.tools/gotestsum v0.4.0 // indirect
 )
