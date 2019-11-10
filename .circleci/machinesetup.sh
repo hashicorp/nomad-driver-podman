@@ -11,9 +11,43 @@ apt-get update || true
 # install podman for running the test suite
 apt-get install -y podman wget ca-certificates
 
-cd /usr/local
+# enable varlink socket (not included in ubuntu package)
+cat > /etc/systemd/system/io.podman.service << EOF
+[Unit]
+Description=Podman Remote API Service
+Requires=io.podman.socket
+After=io.podman.socket
+Documentation=man:podman-varlink(1)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman varlink unix:%t/podman/io.podman --timeout=60000
+TimeoutStopSec=30
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+Also=io.podman.socket
+EOF
+
+cat > /etc/systemd/system/io.podman.socket << EOF
+[Unit]
+Description=Podman Remote API Socket
+Documentation=man:podman-varlink(1)
+
+[Socket]
+ListenStream=%t/podman/io.podman
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.targett
+EOF
+
+systemctl daemon-reload
+
 
 # remove default circleci go
+cd /usr/local
 rm -rf go
 
 # setup go 1.12.x, instead
