@@ -115,7 +115,7 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 
 func newTaskConfig(variant string, command []string) TaskConfig {
 	// busyboxImageID is the ID stored in busybox.tar
-	busyboxImageID := "busybox"
+	busyboxImageID := "docker://busybox"
 	// busyboxImageID := "busybox:1.29.3"
 
 	image := busyboxImageID

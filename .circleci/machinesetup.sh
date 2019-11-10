@@ -11,6 +11,10 @@ apt-get update || true
 # install podman for running the test suite
 apt-get install -y podman wget ca-certificates
 
+echo "====== Installed podman:"
+# ensure to remember the used version when checking a build log
+podman info
+
 # enable varlink socket (not included in ubuntu package)
 cat > /etc/systemd/system/io.podman.service << EOF
 [Unit]
@@ -46,6 +50,8 @@ EOF
 systemctl daemon-reload
 systemctl start io.podman
 
+echo "====== Enabled podman socket:"
+systemctl status io.podman
 
 # remove default circleci go
 cd /usr/local
@@ -54,3 +60,6 @@ rm -rf go
 # setup go 1.12.x, instead
 wget -O- https://storage.googleapis.com/golang/go1.12.13.linux-amd64.tar.gz| tar xfz -
 ln -s /usr/local/go/bin/go /usr/bin/go
+
+echo "====== Installed go:"
+go version
