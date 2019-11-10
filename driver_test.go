@@ -19,7 +19,7 @@ var (
 	basicResources = &drivers.Resources{
 		NomadResources: &structs.AllocatedTaskResources{
 			Memory: structs.AllocatedMemoryResources{
-				MemoryMB: 256,
+				// MemoryMB: 256,
 			},
 			Cpu: structs.AllocatedCpuResources{
 				CpuShares: 250,
