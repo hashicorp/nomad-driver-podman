@@ -1,10 +1,14 @@
 version: 2
 jobs:
   build:
-    docker:
-      - image: circleci/golang:1.12
+    machine:
+      image: ubuntu-1604:201903-01
     steps:
       - checkout
+      - run:
+          name: prepare machine
+          command: |
+            sudo -E ./.circleci/machinesetup.sh
       - run:
           name: compile driver
           command: |
