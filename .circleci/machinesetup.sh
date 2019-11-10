@@ -51,7 +51,7 @@ systemctl daemon-reload
 systemctl start io.podman
 
 echo "====== Enabled podman socket:"
-systemctl status io.podman
+TERM=vt100 systemctl status io.podman
 
 # remove default circleci go
 cd /usr/local
