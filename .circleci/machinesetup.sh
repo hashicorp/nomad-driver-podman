@@ -44,6 +44,7 @@ WantedBy=sockets.targett
 EOF
 
 systemctl daemon-reload
+systemctl start io.podman
 
 
 # remove default circleci go
