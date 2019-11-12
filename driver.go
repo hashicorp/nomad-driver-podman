@@ -30,6 +30,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	"github.com/pascomnet/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad/client/taskenv"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	"github.com/varlink/go/varlink"
@@ -305,11 +306,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 
+	allEnv := cfg.EnvList()
+
 	// ensure to mount nomad alloc dirs into the container
 	allVolumes := []string{
-		fmt.Sprintf("%s:/nomad/alloc", cfg.TaskDir().SharedAllocDir),
-		fmt.Sprintf("%s:/nomad/local", cfg.TaskDir().LocalDir),
-		fmt.Sprintf("%s:/nomad/secrets", cfg.TaskDir().SecretsDir),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, cfg.Env[taskenv.AllocDir]),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, cfg.Env[taskenv.TaskLocalDir]),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, cfg.Env[taskenv.SecretsDir]),
 	}
 
 	if d.config.Volumes.Enabled {
@@ -326,6 +329,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := iopodman.Create{
 		Args:       allArgs,
+		Env: 		&allEnv,
 		Name:       &containerName,
 		Volume:     &allVolumes,
 		Memory:     &memoryLimit,
