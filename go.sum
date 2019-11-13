@@ -812,6 +812,8 @@ github.com/varlink/go v0.0.0-20190502142041-0f1d566d194b h1:hdDRrn9OP/roL8a/e/5Z
 github.com/varlink/go v0.0.0-20190502142041-0f1d566d194b/go.mod h1:YHaw8N660ESgMgLOZfLQqT1htFItynAUxMesFBho52s=
 github.com/varlink/go v0.0.0-20191018142704-4ecdbb8a36c2 h1:KcTzc0lm6PuIl9sAz5GMSGQyDhbJOa9NC3u69PVIc7Y=
 github.com/varlink/go v0.0.0-20191018142704-4ecdbb8a36c2/go.mod h1:DKg9Y2ctoNkesREGAEak58l+jOC6JU2aqZvUYs5DynU=
+github.com/varlink/go v0.3.0 h1:7IDKK8X3W9qqgw7oisE2RgtdTOxBxDwX5RDm2qVoKT8=
+github.com/varlink/go v0.3.0/go.mod h1:DKg9Y2ctoNkesREGAEak58l+jOC6JU2aqZvUYs5DynU=
 github.com/vmihailenco/msgpack v3.3.3+incompatible h1:wapg9xDUZDzGCNFlwc5SqI1rvcciqcxEHac4CYj89xI=
 github.com/vmihailenco/msgpack v3.3.3+incompatible/go.mod h1:fy3FlTQTDXWkZ7Bh6AcGMlsjHatGryHQYUTf1ShIgkk=
 github.com/vmware/govmomi v0.18.0 h1:f7QxSmP7meCtoAmiKZogvVbLInT+CZx6Px6K5rYsJZo=
