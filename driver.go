@@ -264,6 +264,8 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
 		systemCpuStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
 	}
 
 	d.tasks.Set(taskState.TaskConfig.ID, h)
@@ -271,6 +273,11 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	go h.run()
 
 	return nil
+}
+
+// BuildContainerName returns the podman container name for a given TaskConfig
+func BuildContainerName(cfg *drivers.TaskConfig) string {
+	return fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
 }
 
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
@@ -302,7 +309,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		allArgs = append(allArgs, driverConfig.Command)
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
-	containerName := fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
+	containerName := BuildContainerName(cfg)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 
@@ -393,6 +400,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
 		systemCpuStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
 	}
 
 	driverState := TaskState{
@@ -482,7 +491,25 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.IsRunning() {
 		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		handle.shutdown(1 * time.Minute)
+		err := handle.shutdown(1 * time.Minute)
+		if err != nil {
+			d.logger.Warn("failed to stop container during destroy", "error", err)
+		}
+	}
+
+	if handle.removeContainerOnExit {
+		varlinkConnection, err := d.getConnection()
+		if err == nil {
+			defer varlinkConnection.Close()
+
+			if _, err := iopodman.RemoveContainer().Call(d.ctx, varlinkConnection, handle.containerID, true, true); err == nil {
+				d.logger.Debug("Removed container", "container", handle.containerID)
+			} else { 
+				d.logger.Warn("Could not remove container", "container", handle.containerID, "error", err)
+			}
+		} else {
+			d.logger.Warn("Could not remove container, error connecting to podman", "container", handle.containerID, "error", err)
+		}
 	}
 
 	d.tasks.Delete(taskID)

@@ -65,6 +65,21 @@ plugin "nomad-driver-podman" {
 }
 ```
 
+* gc stanza:
+
+    * container - Defaults to true. This option can be used to disable Nomad from removing a container when the task exits.
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    gc {
+      container = false
+    }
+  }
+}
+```
+
+
 ### Task Configuration
 
 * **image** - The image to run, 

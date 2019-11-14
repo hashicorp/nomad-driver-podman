@@ -864,6 +864,35 @@ func (m GetVersion_methods) Send(ctx context.Context, c *varlink.Connection, fla
 	}, nil
 }
 
+func (m GetVersion_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (version_out_ string, go_version_out_ string, git_commit_out_ string, built_out_ string, os_arch_out_ string, remote_api_version_out_ int64, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.GetVersion", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (version_out_ string, go_version_out_ string, git_commit_out_ string, built_out_ string, os_arch_out_ string, remote_api_version_out_ int64, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Version            string `json:"version"`
+			Go_version         string `json:"go_version"`
+			Git_commit         string `json:"git_commit"`
+			Built              string `json:"built"`
+			Os_arch            string `json:"os_arch"`
+			Remote_api_version int64  `json:"remote_api_version"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		version_out_ = out.Version
+		go_version_out_ = out.Go_version
+		git_commit_out_ = out.Git_commit
+		built_out_ = out.Built
+		os_arch_out_ = out.Os_arch
+		remote_api_version_out_ = out.Remote_api_version
+		return
+	}, nil
+}
+
 // GetInfo returns a [PodmanInfo](#PodmanInfo) struct that describes podman and its host such as storage stats,
 // build information of Podman, and system-wide registries.
 type GetInfo_methods struct{}
@@ -898,6 +927,25 @@ func (m GetInfo_methods) Send(ctx context.Context, c *varlink.Connection, flags 
 	}, nil
 }
 
+func (m GetInfo_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (info_out_ PodmanInfo, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.GetInfo", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (info_out_ PodmanInfo, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Info PodmanInfo `json:"info"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		info_out_ = out.Info
+		return
+	}, nil
+}
+
 // ListContainers returns information about all containers.
 // See also [GetContainer](#GetContainer).
 type ListContainers_methods struct{}
@@ -923,6 +971,25 @@ func (m ListContainers_methods) Send(ctx context.Context, c *varlink.Connection,
 			Containers []Container `json:"containers"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		containers_out_ = []Container(out.Containers)
+		return
+	}, nil
+}
+
+func (m ListContainers_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (containers_out_ []Container, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.ListContainers", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (containers_out_ []Container, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Containers []Container `json:"containers"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -968,6 +1035,29 @@ func (m Ps_methods) Send(ctx context.Context, c *varlink.Connection, flags uint6
 	}, nil
 }
 
+func (m Ps_methods) Upgrade(ctx context.Context, c *varlink.Connection, opts_in_ PsOpts) (func(ctx context.Context) (containers_out_ []PsContainer, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Opts PsOpts `json:"opts"`
+	}
+	in.Opts = opts_in_
+	receive, err := c.Upgrade(ctx, "io.podman.Ps", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (containers_out_ []PsContainer, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Containers []PsContainer `json:"containers"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		containers_out_ = []PsContainer(out.Containers)
+		return
+	}, nil
+}
+
 type GetContainersByStatus_methods struct{}
 
 func GetContainersByStatus() GetContainersByStatus_methods { return GetContainersByStatus_methods{} }
@@ -995,6 +1085,29 @@ func (m GetContainersByStatus_methods) Send(ctx context.Context, c *varlink.Conn
 			ContainerS []Container `json:"containerS"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		containerS_out_ = []Container(out.ContainerS)
+		return
+	}, nil
+}
+
+func (m GetContainersByStatus_methods) Upgrade(ctx context.Context, c *varlink.Connection, status_in_ []string) (func(ctx context.Context) (containerS_out_ []Container, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Status []string `json:"status"`
+	}
+	in.Status = []string(status_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainersByStatus", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (containerS_out_ []Container, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			ContainerS []Container `json:"containerS"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1042,6 +1155,31 @@ func (m Top_methods) Send(ctx context.Context, c *varlink.Connection, flags uint
 	}, nil
 }
 
+func (m Top_methods) Upgrade(ctx context.Context, c *varlink.Connection, nameOrID_in_ string, descriptors_in_ []string) (func(ctx context.Context) (top_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		NameOrID    string   `json:"nameOrID"`
+		Descriptors []string `json:"descriptors"`
+	}
+	in.NameOrID = nameOrID_in_
+	in.Descriptors = []string(descriptors_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.Top", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (top_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Top []string `json:"top"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		top_out_ = []string(out.Top)
+		return
+	}, nil
+}
+
 // HealthCheckRun executes defined container's healthcheck command
 // and returns the container's health status.
 type HealthCheckRun_methods struct{}
@@ -1071,6 +1209,29 @@ func (m HealthCheckRun_methods) Send(ctx context.Context, c *varlink.Connection,
 			HealthCheckStatus string `json:"healthCheckStatus"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		healthCheckStatus_out_ = out.HealthCheckStatus
+		return
+	}, nil
+}
+
+func (m HealthCheckRun_methods) Upgrade(ctx context.Context, c *varlink.Connection, nameOrID_in_ string) (func(ctx context.Context) (healthCheckStatus_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		NameOrID string `json:"nameOrID"`
+	}
+	in.NameOrID = nameOrID_in_
+	receive, err := c.Upgrade(ctx, "io.podman.HealthCheckRun", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (healthCheckStatus_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			HealthCheckStatus string `json:"healthCheckStatus"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1111,6 +1272,29 @@ func (m GetContainer_methods) Send(ctx context.Context, c *varlink.Connection, f
 			Container Container `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m GetContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, id_in_ string) (func(ctx context.Context) (container_out_ Container, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Id string `json:"id"`
+	}
+	in.Id = id_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ Container, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container Container `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1163,6 +1347,33 @@ func (m GetContainersByContext_methods) Send(ctx context.Context, c *varlink.Con
 	}, nil
 }
 
+func (m GetContainersByContext_methods) Upgrade(ctx context.Context, c *varlink.Connection, all_in_ bool, latest_in_ bool, args_in_ []string) (func(ctx context.Context) (containers_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		All    bool     `json:"all"`
+		Latest bool     `json:"latest"`
+		Args   []string `json:"args"`
+	}
+	in.All = all_in_
+	in.Latest = latest_in_
+	in.Args = []string(args_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainersByContext", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (containers_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Containers []string `json:"containers"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		containers_out_ = []string(out.Containers)
+		return
+	}, nil
+}
+
 // CreateContainer creates a new container from an image.  It uses a [Create](#Create) type for input.
 type CreateContainer_methods struct{}
 
@@ -1191,6 +1402,29 @@ func (m CreateContainer_methods) Send(ctx context.Context, c *varlink.Connection
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m CreateContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, create_in_ Create) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Create Create `json:"create"`
+	}
+	in.Create = create_in_
+	receive, err := c.Upgrade(ctx, "io.podman.CreateContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1230,6 +1464,29 @@ func (m InspectContainer_methods) Send(ctx context.Context, c *varlink.Connectio
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m InspectContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.InspectContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1293,6 +1550,31 @@ func (m ListContainerProcesses_methods) Send(ctx context.Context, c *varlink.Con
 	}, nil
 }
 
+func (m ListContainerProcesses_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, opts_in_ []string) (func(ctx context.Context) (container_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string   `json:"name"`
+		Opts []string `json:"opts"`
+	}
+	in.Name = name_in_
+	in.Opts = []string(opts_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.ListContainerProcesses", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container []string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = []string(out.Container)
+		return
+	}, nil
+}
+
 // GetContainerLogs takes a name or ID of a container and returns the logs of that container.
 // If the container cannot be found, a [ContainerNotFound](#ContainerNotFound) error will be returned.
 // The container logs are returned as an array of strings.  GetContainerLogs will honor the streaming
@@ -1324,6 +1606,29 @@ func (m GetContainerLogs_methods) Send(ctx context.Context, c *varlink.Connectio
 			Container []string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = []string(out.Container)
+		return
+	}, nil
+}
+
+func (m GetContainerLogs_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainerLogs", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container []string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1379,6 +1684,39 @@ func (m GetContainersLogs_methods) Send(ctx context.Context, c *varlink.Connecti
 	}, nil
 }
 
+func (m GetContainersLogs_methods) Upgrade(ctx context.Context, c *varlink.Connection, names_in_ []string, follow_in_ bool, latest_in_ bool, since_in_ string, tail_in_ int64, timestamps_in_ bool) (func(ctx context.Context) (log_out_ LogLine, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Names      []string `json:"names"`
+		Follow     bool     `json:"follow"`
+		Latest     bool     `json:"latest"`
+		Since      string   `json:"since"`
+		Tail       int64    `json:"tail"`
+		Timestamps bool     `json:"timestamps"`
+	}
+	in.Names = []string(names_in_)
+	in.Follow = follow_in_
+	in.Latest = latest_in_
+	in.Since = since_in_
+	in.Tail = tail_in_
+	in.Timestamps = timestamps_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainersLogs", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (log_out_ LogLine, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Log LogLine `json:"log"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		log_out_ = out.Log
+		return
+	}, nil
+}
+
 // ListContainerChanges takes a name or ID of a container and returns changes between the container and
 // its base image. It returns a struct of changed, deleted, and added path names.
 type ListContainerChanges_methods struct{}
@@ -1408,6 +1746,29 @@ func (m ListContainerChanges_methods) Send(ctx context.Context, c *varlink.Conne
 			Container ContainerChanges `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m ListContainerChanges_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ ContainerChanges, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ListContainerChanges", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ ContainerChanges, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container ContainerChanges `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1457,6 +1818,31 @@ func (m ExportContainer_methods) Send(ctx context.Context, c *varlink.Connection
 			Tarfile string `json:"tarfile"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		tarfile_out_ = out.Tarfile
+		return
+	}, nil
+}
+
+func (m ExportContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, path_in_ string) (func(ctx context.Context) (tarfile_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	in.Name = name_in_
+	in.Path = path_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ExportContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (tarfile_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Tarfile string `json:"tarfile"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1527,6 +1913,29 @@ func (m GetContainerStats_methods) Send(ctx context.Context, c *varlink.Connecti
 	}, nil
 }
 
+func (m GetContainerStats_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ ContainerStats, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainerStats", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ ContainerStats, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container ContainerStats `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // GetContainerStatsWithHistory takes a previous set of container statistics and uses libpod functions
 // to calculate the containers statistics based on current and previous measurements.
 type GetContainerStatsWithHistory_methods struct{}
@@ -1567,6 +1976,29 @@ func (m GetContainerStatsWithHistory_methods) Send(ctx context.Context, c *varli
 	}, nil
 }
 
+func (m GetContainerStatsWithHistory_methods) Upgrade(ctx context.Context, c *varlink.Connection, previousStats_in_ ContainerStats) (func(ctx context.Context) (container_out_ ContainerStats, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		PreviousStats ContainerStats `json:"previousStats"`
+	}
+	in.PreviousStats = previousStats_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetContainerStatsWithHistory", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ ContainerStats, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container ContainerStats `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // StartContainer starts a created or stopped container. It takes the name or ID of container.  It returns
 // the container ID once started.  If the container cannot be found, a [ContainerNotFound](#ContainerNotFound)
 // error will be returned.  See also [CreateContainer](#CreateContainer).
@@ -1597,6 +2029,29 @@ func (m StartContainer_methods) Send(ctx context.Context, c *varlink.Connection,
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m StartContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.StartContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1655,6 +2110,31 @@ func (m StopContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 	}, nil
 }
 
+func (m StopContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, timeout_in_ int64) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name    string `json:"name"`
+		Timeout int64  `json:"timeout"`
+	}
+	in.Name = name_in_
+	in.Timeout = timeout_in_
+	receive, err := c.Upgrade(ctx, "io.podman.StopContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // InitContainer initializes the given container. It accepts a container name or
 // ID, and will initialize the container matching that ID if possible, and error
 // if not. Containers can only be initialized when they are in the Created or
@@ -1688,6 +2168,29 @@ func (m InitContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m InitContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.InitContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1739,6 +2242,31 @@ func (m RestartContainer_methods) Send(ctx context.Context, c *varlink.Connectio
 	}, nil
 }
 
+func (m RestartContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, timeout_in_ int64) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name    string `json:"name"`
+		Timeout int64  `json:"timeout"`
+	}
+	in.Name = name_in_
+	in.Timeout = timeout_in_
+	receive, err := c.Upgrade(ctx, "io.podman.RestartContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // KillContainer takes the name or ID of a container as well as a signal to be applied to the container.  Once the
 // container has been killed, the container's ID is returned.  If the container cannot be found, a
 // [ContainerNotFound](#ContainerNotFound) error is returned. See also [StopContainer](StopContainer).
@@ -1771,6 +2299,31 @@ func (m KillContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m KillContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, signal_in_ int64) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name   string `json:"name"`
+		Signal int64  `json:"signal"`
+	}
+	in.Name = name_in_
+	in.Signal = signal_in_
+	receive, err := c.Upgrade(ctx, "io.podman.KillContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1819,6 +2372,29 @@ func (m PauseContainer_methods) Send(ctx context.Context, c *varlink.Connection,
 	}, nil
 }
 
+func (m PauseContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.PauseContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // UnpauseContainer takes the name or ID of container and unpauses a paused container.  If the container cannot be
 // found, a [ContainerNotFound](#ContainerNotFound) error will be returned; otherwise the ID of the container is returned.
 // See also [PauseContainer](#PauseContainer).
@@ -1849,6 +2425,29 @@ func (m UnpauseContainer_methods) Send(ctx context.Context, c *varlink.Connectio
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m UnpauseContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.UnpauseContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1896,6 +2495,29 @@ func (m Attach_methods) Send(ctx context.Context, c *varlink.Connection, flags u
 	}, nil
 }
 
+func (m Attach_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, detachKeys_in_ string, start_in_ bool) (func(ctx context.Context) (flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name       string `json:"name"`
+		DetachKeys string `json:"detachKeys"`
+		Start      bool   `json:"start"`
+	}
+	in.Name = name_in_
+	in.DetachKeys = detachKeys_in_
+	in.Start = start_in_
+	receive, err := c.Upgrade(ctx, "io.podman.Attach", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, conn varlink.ReadWriterContext, err error) {
+		flags, conn, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
 type AttachControl_methods struct{}
 
 func AttachControl() AttachControl_methods { return AttachControl_methods{} }
@@ -1920,6 +2542,25 @@ func (m AttachControl_methods) Send(ctx context.Context, c *varlink.Connection, 
 	}
 	return func(context.Context) (flags uint64, err error) {
 		flags, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
+func (m AttachControl_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.AttachControl", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, conn varlink.ReadWriterContext, err error) {
+		flags, conn, err = receive(ctx, nil)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -1979,6 +2620,29 @@ func (m GetAttachSockets_methods) Send(ctx context.Context, c *varlink.Connectio
 	}, nil
 }
 
+func (m GetAttachSockets_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (sockets_out_ Sockets, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetAttachSockets", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (sockets_out_ Sockets, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Sockets Sockets `json:"sockets"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		sockets_out_ = out.Sockets
+		return
+	}, nil
+}
+
 // WaitContainer takes the name or ID of a container and waits the given interval in milliseconds until the container
 // stops.  Upon stopping, the return code of the container is returned. If the container container cannot be found by ID
 // or name, a [ContainerNotFound](#ContainerNotFound) error is returned.
@@ -2011,6 +2675,31 @@ func (m WaitContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 			Exitcode int64 `json:"exitcode"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		exitcode_out_ = out.Exitcode
+		return
+	}, nil
+}
+
+func (m WaitContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, interval_in_ int64) (func(ctx context.Context) (exitcode_out_ int64, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name     string `json:"name"`
+		Interval int64  `json:"interval"`
+	}
+	in.Name = name_in_
+	in.Interval = interval_in_
+	receive, err := c.Upgrade(ctx, "io.podman.WaitContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (exitcode_out_ int64, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Exitcode int64 `json:"exitcode"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2073,6 +2762,33 @@ func (m RemoveContainer_methods) Send(ctx context.Context, c *varlink.Connection
 	}, nil
 }
 
+func (m RemoveContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, force_in_ bool, removeVolumes_in_ bool) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name          string `json:"name"`
+		Force         bool   `json:"force"`
+		RemoveVolumes bool   `json:"removeVolumes"`
+	}
+	in.Name = name_in_
+	in.Force = force_in_
+	in.RemoveVolumes = removeVolumes_in_
+	receive, err := c.Upgrade(ctx, "io.podman.RemoveContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
 // EvictContainer requires the name or ID of a container as well as a boolean that
 // indicates to remove builtin volumes. Upon successful eviction of the container,
 // its ID is returned.  If the container cannot be found by name or ID,
@@ -2114,6 +2830,31 @@ func (m EvictContainer_methods) Send(ctx context.Context, c *varlink.Connection,
 			Container string `json:"container"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		container_out_ = out.Container
+		return
+	}, nil
+}
+
+func (m EvictContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, removeVolumes_in_ bool) (func(ctx context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name          string `json:"name"`
+		RemoveVolumes bool   `json:"removeVolumes"`
+	}
+	in.Name = name_in_
+	in.RemoveVolumes = removeVolumes_in_
+	receive, err := c.Upgrade(ctx, "io.podman.EvictContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (container_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Container string `json:"container"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2171,6 +2912,25 @@ func (m DeleteStoppedContainers_methods) Send(ctx context.Context, c *varlink.Co
 	}, nil
 }
 
+func (m DeleteStoppedContainers_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (containers_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.DeleteStoppedContainers", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (containers_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Containers []string `json:"containers"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		containers_out_ = []string(out.Containers)
+		return
+	}, nil
+}
+
 // ListImages returns information about the images that are currently in storage.
 // See also [InspectImage](#InspectImage).
 type ListImages_methods struct{}
@@ -2196,6 +2956,25 @@ func (m ListImages_methods) Send(ctx context.Context, c *varlink.Connection, fla
 			Images []Image `json:"images"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		images_out_ = []Image(out.Images)
+		return
+	}, nil
+}
+
+func (m ListImages_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (images_out_ []Image, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.ListImages", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (images_out_ []Image, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Images []Image `json:"images"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2234,6 +3013,29 @@ func (m GetImage_methods) Send(ctx context.Context, c *varlink.Connection, flags
 			Image Image `json:"image"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
+func (m GetImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, id_in_ string) (func(ctx context.Context) (image_out_ Image, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Id string `json:"id"`
+	}
+	in.Id = id_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ Image, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image Image `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2317,6 +3119,29 @@ func (m BuildImage_methods) Send(ctx context.Context, c *varlink.Connection, fla
 	}, nil
 }
 
+func (m BuildImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, build_in_ BuildInfo) (func(ctx context.Context) (image_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Build BuildInfo `json:"build"`
+	}
+	in.Build = build_in_
+	receive, err := c.Upgrade(ctx, "io.podman.BuildImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image MoreResponse `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
 // InspectImage takes the name or ID of an image and returns a string representation of data associated with the
 // mage.  You must serialize the string into JSON to use it further.  An [ImageNotFound](#ImageNotFound) error will
 // be returned if the image cannot be found.
@@ -2356,6 +3181,29 @@ func (m InspectImage_methods) Send(ctx context.Context, c *varlink.Connection, f
 	}, nil
 }
 
+func (m InspectImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.InspectImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image string `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
 // HistoryImage takes the name or ID of an image and returns information about its history and layers.  The returned
 // history is in the form of an array of ImageHistory structures.  If the image cannot be found, an
 // [ImageNotFound](#ImageNotFound) error is returned.
@@ -2386,6 +3234,29 @@ func (m HistoryImage_methods) Send(ctx context.Context, c *varlink.Connection, f
 			History []ImageHistory `json:"history"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		history_out_ = []ImageHistory(out.History)
+		return
+	}, nil
+}
+
+func (m HistoryImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (history_out_ []ImageHistory, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.HistoryImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (history_out_ []ImageHistory, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			History []ImageHistory `json:"history"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2444,6 +3315,39 @@ func (m PushImage_methods) Send(ctx context.Context, c *varlink.Connection, flag
 	}, nil
 }
 
+func (m PushImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, tag_in_ string, compress_in_ bool, format_in_ string, removeSignatures_in_ bool, signBy_in_ string) (func(ctx context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name             string `json:"name"`
+		Tag              string `json:"tag"`
+		Compress         bool   `json:"compress"`
+		Format           string `json:"format"`
+		RemoveSignatures bool   `json:"removeSignatures"`
+		SignBy           string `json:"signBy"`
+	}
+	in.Name = name_in_
+	in.Tag = tag_in_
+	in.Compress = compress_in_
+	in.Format = format_in_
+	in.RemoveSignatures = removeSignatures_in_
+	in.SignBy = signBy_in_
+	receive, err := c.Upgrade(ctx, "io.podman.PushImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Reply MoreResponse `json:"reply"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		reply_out_ = out.Reply
+		return
+	}, nil
+}
+
 // TagImage takes the name or ID of an image in local storage as well as the desired tag name.  If the image cannot
 // be found, an [ImageNotFound](#ImageNotFound) error will be returned; otherwise, the ID of the image is returned on success.
 type TagImage_methods struct{}
@@ -2475,6 +3379,31 @@ func (m TagImage_methods) Send(ctx context.Context, c *varlink.Connection, flags
 			Image string `json:"image"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
+func (m TagImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, tagged_in_ string) (func(ctx context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name   string `json:"name"`
+		Tagged string `json:"tagged"`
+	}
+	in.Name = name_in_
+	in.Tagged = tagged_in_
+	receive, err := c.Upgrade(ctx, "io.podman.TagImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image string `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2532,6 +3461,31 @@ func (m RemoveImage_methods) Send(ctx context.Context, c *varlink.Connection, fl
 	}, nil
 }
 
+func (m RemoveImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, force_in_ bool) (func(ctx context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name  string `json:"name"`
+		Force bool   `json:"force"`
+	}
+	in.Name = name_in_
+	in.Force = force_in_
+	receive, err := c.Upgrade(ctx, "io.podman.RemoveImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image string `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
 // SearchImages searches available registries for images that contain the
 // contents of "query" in their name. If "limit" is given, limits the amount of
 // search results per registry.
@@ -2566,6 +3520,33 @@ func (m SearchImages_methods) Send(ctx context.Context, c *varlink.Connection, f
 			Results []ImageSearchResult `json:"results"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		results_out_ = []ImageSearchResult(out.Results)
+		return
+	}, nil
+}
+
+func (m SearchImages_methods) Upgrade(ctx context.Context, c *varlink.Connection, query_in_ string, limit_in_ *int64, filter_in_ ImageSearchFilter) (func(ctx context.Context) (results_out_ []ImageSearchResult, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Query  string            `json:"query"`
+		Limit  *int64            `json:"limit,omitempty"`
+		Filter ImageSearchFilter `json:"filter"`
+	}
+	in.Query = query_in_
+	in.Limit = limit_in_
+	in.Filter = filter_in_
+	receive, err := c.Upgrade(ctx, "io.podman.SearchImages", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (results_out_ []ImageSearchResult, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Results []ImageSearchResult `json:"results"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2612,6 +3593,25 @@ func (m DeleteUnusedImages_methods) Send(ctx context.Context, c *varlink.Connect
 			Images []string `json:"images"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		images_out_ = []string(out.Images)
+		return
+	}, nil
+}
+
+func (m DeleteUnusedImages_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (images_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.DeleteUnusedImages", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (images_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Images []string `json:"images"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2676,6 +3676,41 @@ func (m Commit_methods) Send(ctx context.Context, c *varlink.Connection, flags u
 	}, nil
 }
 
+func (m Commit_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, image_name_in_ string, changes_in_ []string, author_in_ string, message_in_ string, pause_in_ bool, manifestType_in_ string) (func(ctx context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name         string   `json:"name"`
+		Image_name   string   `json:"image_name"`
+		Changes      []string `json:"changes"`
+		Author       string   `json:"author"`
+		Message      string   `json:"message"`
+		Pause        bool     `json:"pause"`
+		ManifestType string   `json:"manifestType"`
+	}
+	in.Name = name_in_
+	in.Image_name = image_name_in_
+	in.Changes = []string(changes_in_)
+	in.Author = author_in_
+	in.Message = message_in_
+	in.Pause = pause_in_
+	in.ManifestType = manifestType_in_
+	receive, err := c.Upgrade(ctx, "io.podman.Commit", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Reply MoreResponse `json:"reply"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		reply_out_ = out.Reply
+		return
+	}, nil
+}
+
 // ImportImage imports an image from a source (like tarball) into local storage.  The image can have additional
 // descriptions added to it using the message and changes options. See also [ExportImage](ExportImage).
 type ImportImage_methods struct{}
@@ -2713,6 +3748,37 @@ func (m ImportImage_methods) Send(ctx context.Context, c *varlink.Connection, fl
 			Image string `json:"image"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
+func (m ImportImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, source_in_ string, reference_in_ string, message_in_ string, changes_in_ []string, delete_in_ bool) (func(ctx context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Source    string   `json:"source"`
+		Reference string   `json:"reference"`
+		Message   string   `json:"message"`
+		Changes   []string `json:"changes"`
+		Delete    bool     `json:"delete"`
+	}
+	in.Source = source_in_
+	in.Reference = reference_in_
+	in.Message = message_in_
+	in.Changes = []string(changes_in_)
+	in.Delete = delete_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ImportImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image string `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2769,6 +3835,35 @@ func (m ExportImage_methods) Send(ctx context.Context, c *varlink.Connection, fl
 	}, nil
 }
 
+func (m ExportImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, destination_in_ string, compress_in_ bool, tags_in_ []string) (func(ctx context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name        string   `json:"name"`
+		Destination string   `json:"destination"`
+		Compress    bool     `json:"compress"`
+		Tags        []string `json:"tags"`
+	}
+	in.Name = name_in_
+	in.Destination = destination_in_
+	in.Compress = compress_in_
+	in.Tags = []string(tags_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.ExportImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (image_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Image string `json:"image"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		image_out_ = out.Image
+		return
+	}, nil
+}
+
 // PullImage pulls an image from a repository to local storage.  After a successful pull, the image id and logs
 // are returned as a [MoreResponse](#MoreResponse).  This connection also will handle a WantsMores request to send
 // status as it occurs.
@@ -2799,6 +3894,29 @@ func (m PullImage_methods) Send(ctx context.Context, c *varlink.Connection, flag
 			Reply MoreResponse `json:"reply"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		reply_out_ = out.Reply
+		return
+	}, nil
+}
+
+func (m PullImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.PullImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Reply MoreResponse `json:"reply"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2848,6 +3966,29 @@ func (m CreatePod_methods) Send(ctx context.Context, c *varlink.Connection, flag
 			Pod string `json:"pod"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
+func (m CreatePod_methods) Upgrade(ctx context.Context, c *varlink.Connection, create_in_ PodCreate) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Create PodCreate `json:"create"`
+	}
+	in.Create = create_in_
+	receive, err := c.Upgrade(ctx, "io.podman.CreatePod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -2934,6 +4075,25 @@ func (m ListPods_methods) Send(ctx context.Context, c *varlink.Connection, flags
 	}, nil
 }
 
+func (m ListPods_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (pods_out_ []ListPodData, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.ListPods", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pods_out_ []ListPodData, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pods []ListPodData `json:"pods"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pods_out_ = []ListPodData(out.Pods)
+		return
+	}, nil
+}
+
 // GetPod takes a name or ID of a pod and returns single [ListPodData](#ListPodData)
 // structure.  A [PodNotFound](#PodNotFound) error will be returned if the pod cannot be found.
 // See also [ListPods](ListPods).
@@ -2999,6 +4159,29 @@ func (m GetPod_methods) Send(ctx context.Context, c *varlink.Connection, flags u
 	}, nil
 }
 
+func (m GetPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ ListPodData, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ ListPodData, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod ListPodData `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 // InspectPod takes the name or ID of an image and returns a string representation of data associated with the
 // pod.  You must serialize the string into JSON to use it further.  A [PodNotFound](#PodNotFound) error will
 // be returned if the pod cannot be found.
@@ -3029,6 +4212,29 @@ func (m InspectPod_methods) Send(ctx context.Context, c *varlink.Connection, fla
 			Pod string `json:"pod"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
+func (m InspectPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.InspectPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3077,6 +4283,29 @@ func (m StartPod_methods) Send(ctx context.Context, c *varlink.Connection, flags
 			Pod string `json:"pod"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
+func (m StartPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.StartPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3137,6 +4366,31 @@ func (m StopPod_methods) Send(ctx context.Context, c *varlink.Connection, flags 
 	}, nil
 }
 
+func (m StopPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, timeout_in_ int64) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name    string `json:"name"`
+		Timeout int64  `json:"timeout"`
+	}
+	in.Name = name_in_
+	in.Timeout = timeout_in_
+	receive, err := c.Upgrade(ctx, "io.podman.StopPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 // RestartPod will restart containers in a pod given a pod name or ID. Containers in
 // the pod that are running will be stopped, then all stopped containers will be run.
 // If the pod cannot be found by name or ID, a [PodNotFound](#PodNotFound) error will be returned.
@@ -3177,6 +4431,29 @@ func (m RestartPod_methods) Send(ctx context.Context, c *varlink.Connection, fla
 			Pod string `json:"pod"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
+func (m RestartPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.RestartPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3237,6 +4514,31 @@ func (m KillPod_methods) Send(ctx context.Context, c *varlink.Connection, flags 
 	}, nil
 }
 
+func (m KillPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, signal_in_ int64) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name   string `json:"name"`
+		Signal int64  `json:"signal"`
+	}
+	in.Name = name_in_
+	in.Signal = signal_in_
+	receive, err := c.Upgrade(ctx, "io.podman.KillPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 // PausePod takes the name or ID of a pod and pauses the running containers associated with it.  If the pod cannot be found,
 // a [PodNotFound](#PodNotFound) error will be returned.
 // Containers in a pod are paused independently. If there is an error pausing one container, the ID of those containers
@@ -3286,6 +4588,29 @@ func (m PausePod_methods) Send(ctx context.Context, c *varlink.Connection, flags
 	}, nil
 }
 
+func (m PausePod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.PausePod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 // UnpausePod takes the name or ID of a pod and unpauses the paused containers associated with it.  If the pod cannot be
 // found, a [PodNotFound](#PodNotFound) error will be returned.
 // Containers in a pod are unpaused independently. If there is an error unpausing one container, the ID of those containers
@@ -3326,6 +4651,29 @@ func (m UnpausePod_methods) Send(ctx context.Context, c *varlink.Connection, fla
 			Pod string `json:"pod"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
+func (m UnpausePod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.UnpausePod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3387,6 +4735,31 @@ func (m RemovePod_methods) Send(ctx context.Context, c *varlink.Connection, flag
 	}, nil
 }
 
+func (m RemovePod_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, force_in_ bool) (func(ctx context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name  string `json:"name"`
+		Force bool   `json:"force"`
+	}
+	in.Name = name_in_
+	in.Force = force_in_
+	receive, err := c.Upgrade(ctx, "io.podman.RemovePod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod string `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 type TopPod_methods struct{}
 
 func TopPod() TopPod_methods { return TopPod_methods{} }
@@ -3418,6 +4791,33 @@ func (m TopPod_methods) Send(ctx context.Context, c *varlink.Connection, flags u
 			Stats []string `json:"stats"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		stats_out_ = []string(out.Stats)
+		return
+	}, nil
+}
+
+func (m TopPod_methods) Upgrade(ctx context.Context, c *varlink.Connection, pod_in_ string, latest_in_ bool, descriptors_in_ []string) (func(ctx context.Context) (stats_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Pod         string   `json:"pod"`
+		Latest      bool     `json:"latest"`
+		Descriptors []string `json:"descriptors"`
+	}
+	in.Pod = pod_in_
+	in.Latest = latest_in_
+	in.Descriptors = []string(descriptors_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.TopPod", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (stats_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Stats []string `json:"stats"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3493,6 +4893,31 @@ func (m GetPodStats_methods) Send(ctx context.Context, c *varlink.Connection, fl
 	}, nil
 }
 
+func (m GetPodStats_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (pod_out_ string, containers_out_ []ContainerStats, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetPodStats", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ string, containers_out_ []ContainerStats, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod        string           `json:"pod"`
+			Containers []ContainerStats `json:"containers"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		containers_out_ = []ContainerStats(out.Containers)
+		return
+	}, nil
+}
+
 // GetPodsByStatus searches for pods whose status is included in statuses
 type GetPodsByStatus_methods struct{}
 
@@ -3521,6 +4946,29 @@ func (m GetPodsByStatus_methods) Send(ctx context.Context, c *varlink.Connection
 			Pods []string `json:"pods"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pods_out_ = []string(out.Pods)
+		return
+	}, nil
+}
+
+func (m GetPodsByStatus_methods) Upgrade(ctx context.Context, c *varlink.Connection, statuses_in_ []string) (func(ctx context.Context) (pods_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Statuses []string `json:"statuses"`
+	}
+	in.Statuses = []string(statuses_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.GetPodsByStatus", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pods_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pods []string `json:"pods"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3576,6 +5024,29 @@ func (m ImageExists_methods) Send(ctx context.Context, c *varlink.Connection, fl
 	}, nil
 }
 
+func (m ImageExists_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (exists_out_ int64, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ImageExists", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (exists_out_ int64, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Exists int64 `json:"exists"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		exists_out_ = out.Exists
+		return
+	}, nil
+}
+
 // ContainerExists takes a full or partial container ID or name and returns an int as to
 // whether the container exists in local storage.  A result of 0 means the container does
 // exists; whereas a result of 1 means it could not be found.
@@ -3612,6 +5083,29 @@ func (m ContainerExists_methods) Send(ctx context.Context, c *varlink.Connection
 			Exists int64 `json:"exists"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		exists_out_ = out.Exists
+		return
+	}, nil
+}
+
+func (m ContainerExists_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (exists_out_ int64, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerExists", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (exists_out_ int64, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Exists int64 `json:"exists"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3665,6 +5159,35 @@ func (m ContainerCheckpoint_methods) Send(ctx context.Context, c *varlink.Connec
 	}, nil
 }
 
+func (m ContainerCheckpoint_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, keep_in_ bool, leaveRunning_in_ bool, tcpEstablished_in_ bool) (func(ctx context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name           string `json:"name"`
+		Keep           bool   `json:"keep"`
+		LeaveRunning   bool   `json:"leaveRunning"`
+		TcpEstablished bool   `json:"tcpEstablished"`
+	}
+	in.Name = name_in_
+	in.Keep = keep_in_
+	in.LeaveRunning = leaveRunning_in_
+	in.TcpEstablished = tcpEstablished_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerCheckpoint", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Id string `json:"id"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		id_out_ = out.Id
+		return
+	}, nil
+}
+
 // ContainerRestore restores a container that has been checkpointed.  The container to be restored can
 // be identified by its name or full/partial container ID.  A successful restore will result in the return
 // of the container's ID.
@@ -3708,6 +5231,33 @@ func (m ContainerRestore_methods) Send(ctx context.Context, c *varlink.Connectio
 	}, nil
 }
 
+func (m ContainerRestore_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, keep_in_ bool, tcpEstablished_in_ bool) (func(ctx context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name           string `json:"name"`
+		Keep           bool   `json:"keep"`
+		TcpEstablished bool   `json:"tcpEstablished"`
+	}
+	in.Name = name_in_
+	in.Keep = keep_in_
+	in.TcpEstablished = tcpEstablished_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerRestore", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Id string `json:"id"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		id_out_ = out.Id
+		return
+	}, nil
+}
+
 // ContainerRunlabel runs executes a command as described by a given container image label.
 type ContainerRunlabel_methods struct{}
 
@@ -3741,6 +5291,25 @@ func (m ContainerRunlabel_methods) Send(ctx context.Context, c *varlink.Connecti
 	}, nil
 }
 
+func (m ContainerRunlabel_methods) Upgrade(ctx context.Context, c *varlink.Connection, runlabel_in_ Runlabel) (func(ctx context.Context) (flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Runlabel Runlabel `json:"runlabel"`
+	}
+	in.Runlabel = runlabel_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerRunlabel", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, conn varlink.ReadWriterContext, err error) {
+		flags, conn, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
 // ExecContainer executes a command in the given container.
 type ExecContainer_methods struct{}
 
@@ -3766,6 +5335,25 @@ func (m ExecContainer_methods) Send(ctx context.Context, c *varlink.Connection, 
 	}
 	return func(context.Context) (flags uint64, err error) {
 		flags, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
+func (m ExecContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, opts_in_ ExecOpts) (func(ctx context.Context) (flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Opts ExecOpts `json:"opts"`
+	}
+	in.Opts = opts_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ExecContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, conn varlink.ReadWriterContext, err error) {
+		flags, conn, err = receive(ctx, nil)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3809,6 +5397,25 @@ func (m ListContainerMounts_methods) Send(ctx context.Context, c *varlink.Connec
 			Mounts map[string]string `json:"mounts"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		mounts_out_ = map[string]string(out.Mounts)
+		return
+	}, nil
+}
+
+func (m ListContainerMounts_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (mounts_out_ map[string]string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.ListContainerMounts", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (mounts_out_ map[string]string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Mounts map[string]string `json:"mounts"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3862,6 +5469,29 @@ func (m MountContainer_methods) Send(ctx context.Context, c *varlink.Connection,
 	}, nil
 }
 
+func (m MountContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (path_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.MountContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (path_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Path string `json:"path"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		path_out_ = out.Path
+		return
+	}, nil
+}
+
 // UnmountContainer umounts a container by its name or full/partial container ID.
 // #### Example
 // ~~~
@@ -3902,6 +5532,27 @@ func (m UnmountContainer_methods) Send(ctx context.Context, c *varlink.Connectio
 	}, nil
 }
 
+func (m UnmountContainer_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, force_in_ bool) (func(ctx context.Context) (flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name  string `json:"name"`
+		Force bool   `json:"force"`
+	}
+	in.Name = name_in_
+	in.Force = force_in_
+	receive, err := c.Upgrade(ctx, "io.podman.UnmountContainer", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (flags uint64, conn varlink.ReadWriterContext, err error) {
+		flags, conn, err = receive(ctx, nil)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		return
+	}, nil
+}
+
 // ImagesPrune removes all unused images from the local store.  Upon successful pruning,
 // the IDs of the removed images are returned.
 type ImagesPrune_methods struct{}
@@ -3931,6 +5582,29 @@ func (m ImagesPrune_methods) Send(ctx context.Context, c *varlink.Connection, fl
 			Pruned []string `json:"pruned"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pruned_out_ = []string(out.Pruned)
+		return
+	}, nil
+}
+
+func (m ImagesPrune_methods) Upgrade(ctx context.Context, c *varlink.Connection, all_in_ bool) (func(ctx context.Context) (pruned_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		All bool `json:"all"`
+	}
+	in.All = all_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ImagesPrune", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pruned_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pruned []string `json:"pruned"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -3980,6 +5654,31 @@ func (m GenerateKube_methods) Send(ctx context.Context, c *varlink.Connection, f
 	}, nil
 }
 
+func (m GenerateKube_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, service_in_ bool) (func(ctx context.Context) (pod_out_ KubePodService, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name    string `json:"name"`
+		Service bool   `json:"service"`
+	}
+	in.Name = name_in_
+	in.Service = service_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GenerateKube", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pod_out_ KubePodService, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pod KubePodService `json:"pod"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pod_out_ = out.Pod
+		return
+	}, nil
+}
+
 // ContainerConfig returns a container's config in string form. This call is for
 // development of Podman only and generally should not be used.
 type ContainerConfig_methods struct{}
@@ -4009,6 +5708,29 @@ func (m ContainerConfig_methods) Send(ctx context.Context, c *varlink.Connection
 			Config string `json:"config"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
+func (m ContainerConfig_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerConfig", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4058,6 +5780,31 @@ func (m ContainerArtifacts_methods) Send(ctx context.Context, c *varlink.Connect
 	}, nil
 }
 
+func (m ContainerArtifacts_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, artifactName_in_ string) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name         string `json:"name"`
+		ArtifactName string `json:"artifactName"`
+	}
+	in.Name = name_in_
+	in.ArtifactName = artifactName_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerArtifacts", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
 // ContainerInspectData returns a container's inspect data in string form.  This call is for
 // development of Podman only and generally should not be used.
 type ContainerInspectData_methods struct{}
@@ -4089,6 +5836,31 @@ func (m ContainerInspectData_methods) Send(ctx context.Context, c *varlink.Conne
 			Config string `json:"config"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
+func (m ContainerInspectData_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, size_in_ bool) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+		Size bool   `json:"size"`
+	}
+	in.Name = name_in_
+	in.Size = size_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerInspectData", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4136,6 +5908,29 @@ func (m ContainerStateData_methods) Send(ctx context.Context, c *varlink.Connect
 	}, nil
 }
 
+func (m ContainerStateData_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ContainerStateData", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
 // PodStateData returns inspectr level information of a given pod in string form.  This call is for
 // development of Podman only and generally should not be used.
 type PodStateData_methods struct{}
@@ -4165,6 +5960,29 @@ func (m PodStateData_methods) Send(ctx context.Context, c *varlink.Connection, f
 			Config string `json:"config"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
+func (m PodStateData_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.PodStateData", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4211,6 +6029,29 @@ func (m CreateFromCC_methods) Send(ctx context.Context, c *varlink.Connection, f
 	}, nil
 }
 
+func (m CreateFromCC_methods) Upgrade(ctx context.Context, c *varlink.Connection, in_in_ []string) (func(ctx context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		In []string `json:"in"`
+	}
+	in.In = []string(in_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.CreateFromCC", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (id_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Id string `json:"id"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		id_out_ = out.Id
+		return
+	}, nil
+}
+
 // Spec returns the oci spec for a container.  This call is for development of Podman only and generally should not be used.
 type Spec_methods struct{}
 
@@ -4239,6 +6080,29 @@ func (m Spec_methods) Send(ctx context.Context, c *varlink.Connection, flags uin
 			Config string `json:"config"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		config_out_ = out.Config
+		return
+	}, nil
+}
+
+func (m Spec_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.Spec", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (config_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Config string `json:"config"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4287,6 +6151,31 @@ func (m SendFile_methods) Send(ctx context.Context, c *varlink.Connection, flags
 	}, nil
 }
 
+func (m SendFile_methods) Upgrade(ctx context.Context, c *varlink.Connection, type_in_ string, length_in_ int64) (func(ctx context.Context) (file_handle_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Type   string `json:"type"`
+		Length int64  `json:"length"`
+	}
+	in.Type = type_in_
+	in.Length = length_in_
+	receive, err := c.Upgrade(ctx, "io.podman.SendFile", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (file_handle_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			File_handle string `json:"file_handle"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		file_handle_out_ = out.File_handle
+		return
+	}, nil
+}
+
 // ReceiveFile allows the host to send a remote client a file
 type ReceiveFile_methods struct{}
 
@@ -4317,6 +6206,31 @@ func (m ReceiveFile_methods) Send(ctx context.Context, c *varlink.Connection, fl
 			Len int64 `json:"len"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		len_out_ = out.Len
+		return
+	}, nil
+}
+
+func (m ReceiveFile_methods) Upgrade(ctx context.Context, c *varlink.Connection, path_in_ string, delete_in_ bool) (func(ctx context.Context) (len_out_ int64, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Path   string `json:"path"`
+		Delete bool   `json:"delete"`
+	}
+	in.Path = path_in_
+	in.Delete = delete_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ReceiveFile", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (len_out_ int64, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Len int64 `json:"len"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4363,6 +6277,29 @@ func (m VolumeCreate_methods) Send(ctx context.Context, c *varlink.Connection, f
 	}, nil
 }
 
+func (m VolumeCreate_methods) Upgrade(ctx context.Context, c *varlink.Connection, options_in_ VolumeCreateOpts) (func(ctx context.Context) (volumeName_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Options VolumeCreateOpts `json:"options"`
+	}
+	in.Options = options_in_
+	receive, err := c.Upgrade(ctx, "io.podman.VolumeCreate", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (volumeName_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			VolumeName string `json:"volumeName"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		volumeName_out_ = out.VolumeName
+		return
+	}, nil
+}
+
 // VolumeRemove removes a volume on a remote host
 type VolumeRemove_methods struct{}
 
@@ -4392,6 +6329,31 @@ func (m VolumeRemove_methods) Send(ctx context.Context, c *varlink.Connection, f
 			Failures  map[string]string `json:"failures"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		successes_out_ = []string(out.Successes)
+		failures_out_ = map[string]string(out.Failures)
+		return
+	}, nil
+}
+
+func (m VolumeRemove_methods) Upgrade(ctx context.Context, c *varlink.Connection, options_in_ VolumeRemoveOpts) (func(ctx context.Context) (successes_out_ []string, failures_out_ map[string]string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Options VolumeRemoveOpts `json:"options"`
+	}
+	in.Options = options_in_
+	receive, err := c.Upgrade(ctx, "io.podman.VolumeRemove", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (successes_out_ []string, failures_out_ map[string]string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Successes []string          `json:"successes"`
+			Failures  map[string]string `json:"failures"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4441,6 +6403,31 @@ func (m GetVolumes_methods) Send(ctx context.Context, c *varlink.Connection, fla
 	}, nil
 }
 
+func (m GetVolumes_methods) Upgrade(ctx context.Context, c *varlink.Connection, args_in_ []string, all_in_ bool) (func(ctx context.Context) (volumes_out_ []Volume, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Args []string `json:"args"`
+		All  bool     `json:"all"`
+	}
+	in.Args = []string(args_in_)
+	in.All = all_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetVolumes", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (volumes_out_ []Volume, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Volumes []Volume `json:"volumes"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		volumes_out_ = []Volume(out.Volumes)
+		return
+	}, nil
+}
+
 // InspectVolume inspects a single volume. Returns inspect JSON in the form of a
 // string.
 type InspectVolume_methods struct{}
@@ -4470,6 +6457,29 @@ func (m InspectVolume_methods) Send(ctx context.Context, c *varlink.Connection, 
 			Volume string `json:"volume"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		volume_out_ = out.Volume
+		return
+	}, nil
+}
+
+func (m InspectVolume_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (volume_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.InspectVolume", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (volume_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Volume string `json:"volume"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4514,6 +6524,27 @@ func (m VolumesPrune_methods) Send(ctx context.Context, c *varlink.Connection, f
 	}, nil
 }
 
+func (m VolumesPrune_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (prunedNames_out_ []string, prunedErrors_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.VolumesPrune", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (prunedNames_out_ []string, prunedErrors_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			PrunedNames  []string `json:"prunedNames"`
+			PrunedErrors []string `json:"prunedErrors"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		prunedNames_out_ = []string(out.PrunedNames)
+		prunedErrors_out_ = []string(out.PrunedErrors)
+		return
+	}, nil
+}
+
 // ImageSave allows you to save an image from the local image storage to a tarball
 type ImageSave_methods struct{}
 
@@ -4542,6 +6573,29 @@ func (m ImageSave_methods) Send(ctx context.Context, c *varlink.Connection, flag
 			Reply MoreResponse `json:"reply"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		reply_out_ = out.Reply
+		return
+	}, nil
+}
+
+func (m ImageSave_methods) Upgrade(ctx context.Context, c *varlink.Connection, options_in_ ImageSaveOptions) (func(ctx context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Options ImageSaveOptions `json:"options"`
+	}
+	in.Options = options_in_
+	receive, err := c.Upgrade(ctx, "io.podman.ImageSave", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Reply MoreResponse `json:"reply"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4594,6 +6648,33 @@ func (m GetPodsByContext_methods) Send(ctx context.Context, c *varlink.Connectio
 	}, nil
 }
 
+func (m GetPodsByContext_methods) Upgrade(ctx context.Context, c *varlink.Connection, all_in_ bool, latest_in_ bool, args_in_ []string) (func(ctx context.Context) (pods_out_ []string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		All    bool     `json:"all"`
+		Latest bool     `json:"latest"`
+		Args   []string `json:"args"`
+	}
+	in.All = all_in_
+	in.Latest = latest_in_
+	in.Args = []string(args_in_)
+	receive, err := c.Upgrade(ctx, "io.podman.GetPodsByContext", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (pods_out_ []string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Pods []string `json:"pods"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		pods_out_ = []string(out.Pods)
+		return
+	}, nil
+}
+
 // LoadImage allows you to load an image into local storage from a tarball.
 type LoadImage_methods struct{}
 
@@ -4628,6 +6709,35 @@ func (m LoadImage_methods) Send(ctx context.Context, c *varlink.Connection, flag
 			Reply MoreResponse `json:"reply"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		reply_out_ = out.Reply
+		return
+	}, nil
+}
+
+func (m LoadImage_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string, inputFile_in_ string, quiet_in_ bool, deleteFile_in_ bool) (func(ctx context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name       string `json:"name"`
+		InputFile  string `json:"inputFile"`
+		Quiet      bool   `json:"quiet"`
+		DeleteFile bool   `json:"deleteFile"`
+	}
+	in.Name = name_in_
+	in.InputFile = inputFile_in_
+	in.Quiet = quiet_in_
+	in.DeleteFile = deleteFile_in_
+	receive, err := c.Upgrade(ctx, "io.podman.LoadImage", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (reply_out_ MoreResponse, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Reply MoreResponse `json:"reply"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4678,6 +6788,33 @@ func (m GetEvents_methods) Send(ctx context.Context, c *varlink.Connection, flag
 	}, nil
 }
 
+func (m GetEvents_methods) Upgrade(ctx context.Context, c *varlink.Connection, filter_in_ []string, since_in_ string, until_in_ string) (func(ctx context.Context) (events_out_ Event, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Filter []string `json:"filter"`
+		Since  string   `json:"since"`
+		Until  string   `json:"until"`
+	}
+	in.Filter = []string(filter_in_)
+	in.Since = since_in_
+	in.Until = until_in_
+	receive, err := c.Upgrade(ctx, "io.podman.GetEvents", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (events_out_ Event, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Events Event `json:"events"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		events_out_ = out.Events
+		return
+	}, nil
+}
+
 // Diff returns a diff between libpod objects
 type Diff_methods struct{}
 
@@ -4706,6 +6843,29 @@ func (m Diff_methods) Send(ctx context.Context, c *varlink.Connection, flags uin
 			Diffs []DiffInfo `json:"diffs"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		diffs_out_ = []DiffInfo(out.Diffs)
+		return
+	}, nil
+}
+
+func (m Diff_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (diffs_out_ []DiffInfo, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.Diff", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (diffs_out_ []DiffInfo, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			Diffs []DiffInfo `json:"diffs"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return
@@ -4750,6 +6910,25 @@ func (m GetLayersMapWithImageInfo_methods) Send(ctx context.Context, c *varlink.
 	}, nil
 }
 
+func (m GetLayersMapWithImageInfo_methods) Upgrade(ctx context.Context, c *varlink.Connection) (func(ctx context.Context) (layerMap_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	receive, err := c.Upgrade(ctx, "io.podman.GetLayersMapWithImageInfo", nil)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (layerMap_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			LayerMap string `json:"layerMap"`
+		}
+		flags, conn, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		layerMap_out_ = out.LayerMap
+		return
+	}, nil
+}
+
 // BuildImageHierarchyMap is for the development of Podman and should not be used.
 type BuildImageHierarchyMap_methods struct{}
 
@@ -4778,6 +6957,29 @@ func (m BuildImageHierarchyMap_methods) Send(ctx context.Context, c *varlink.Con
 			ImageInfo string `json:"imageInfo"`
 		}
 		flags, err = receive(ctx, &out)
+		if err != nil {
+			err = Dispatch_Error(err)
+			return
+		}
+		imageInfo_out_ = out.ImageInfo
+		return
+	}, nil
+}
+
+func (m BuildImageHierarchyMap_methods) Upgrade(ctx context.Context, c *varlink.Connection, name_in_ string) (func(ctx context.Context) (imageInfo_out_ string, flags uint64, conn varlink.ReadWriterContext, err_ error), error) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	in.Name = name_in_
+	receive, err := c.Upgrade(ctx, "io.podman.BuildImageHierarchyMap", in)
+	if err != nil {
+		return nil, err
+	}
+	return func(context.Context) (imageInfo_out_ string, flags uint64, conn varlink.ReadWriterContext, err error) {
+		var out struct {
+			ImageInfo string `json:"imageInfo"`
+		}
+		flags, conn, err = receive(ctx, &out)
 		if err != nil {
 			err = Dispatch_Error(err)
 			return

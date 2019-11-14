@@ -35,6 +35,7 @@ import (
 	tu "github.com/hashicorp/nomad/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/varlink/go/varlink"
+	"github.com/pascomnet/nomad-driver-podman/iopodman"
 )
 
 var (
@@ -69,6 +70,12 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 		if string(enforce) == "1" {
 			d.logger.Info("Enabling SelinuxLabel")
 			d.config.Volumes.SelinuxLabel = "z"
+		}
+	}
+	d.config.GC.Container = true
+	if v, ok := cfg["GC.Container"]; ok {
+		if bv, ok := v.(bool); ok {
+			d.config.GC.Container = bv
 		}
 	}
 
@@ -287,6 +294,112 @@ func TestDockerDriver_Start_Wait_AllocDir(t *testing.T) {
 	if !reflect.DeepEqual(act, exp) {
 		t.Fatalf("Command outputted %v; want %v", act, exp)
 	}
+}
+
+// check if container is destroyed if gc.container=true
+func TestPodmanDriver_GC_Container_on(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "gc_container_on",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+	}
+
+	d.DestroyTask(task.ID, true)
+
+	ctx := context.Background()
+	varlinkConnection, err := getPodmanConnection(ctx)
+	require.NoError(t, err)
+
+	defer varlinkConnection.Close()
+
+	// ... 1 means container could not be found (is deleted)
+	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
+	require.NoError(t, err)
+	require.Equal(t, 1, int(exists))
+}
+
+// check if container is destroyed if gc.container=false
+func TestPodmanDriver_GC_Container_off(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "gc_container_off",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	opts := make(map[string]interface{})
+	opts["GC.Container"] = false
+
+	d := podmanDriverHarness(t, opts)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+	}
+
+	d.DestroyTask(task.ID, true)
+
+	ctx := context.Background()
+	varlinkConnection, err := getPodmanConnection(ctx)
+	require.NoError(t, err)
+
+	defer varlinkConnection.Close()
+
+	// ... 0 means container could be found (still exists)
+	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
+	require.NoError(t, err)
+	require.Equal(t, 0, int(exists))
+
+	// and cleanup after ourself
+	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true ,true)
 }
 
 func newTaskConfig(variant string, command []string) TaskConfig {

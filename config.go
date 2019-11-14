@@ -31,6 +31,17 @@ var (
 			),
 			"selinuxlabel": hclspec.NewAttr("selinuxlabel", "string", false),
 		})), hclspec.NewLiteral("{ enabled = true }")),
+		// garbage collection options
+		// default needed for both if the gc {...} block is not set and
+		// if the default fields are missing
+		"gc": hclspec.NewDefault(hclspec.NewBlock("gc", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"container": hclspec.NewDefault(
+				hclspec.NewAttr("container", "bool", false),
+				hclspec.NewLiteral("true"),
+			),
+		})), hclspec.NewLiteral(`{
+			container = true
+		}`)),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -43,6 +54,11 @@ var (
 	})
 )
 
+// GCConfig is the driver GarbageCollection configuration
+type GCConfig struct {
+	Container bool `codec:"container"`
+}
+
 // VolumeConfig
 type VolumeConfig struct {
 	Enabled      bool   `codec:"enabled"`
@@ -52,6 +68,7 @@ type VolumeConfig struct {
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
 	Volumes VolumeConfig `codec:"volumes"`
+	GC      GCConfig     `codec:"gc"`
 }
 
 // TaskConfig is the driver configuration of a task within a job

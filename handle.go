@@ -60,6 +60,8 @@ type TaskHandle struct {
 	startedAt   time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
+
+	removeContainerOnExit bool
 }
 
 func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
