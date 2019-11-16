@@ -49,14 +49,3 @@ EOF
 
 systemctl daemon-reload
 systemctl start io.podman
-
-# remove default circleci go
-cd /usr/local
-rm -rf go
-
-# setup go 1.12.x, instead
-wget -O- https://storage.googleapis.com/golang/go1.12.13.linux-amd64.tar.gz| tar xfz -
-ln -s /usr/local/go/bin/go /usr/bin/go
-
-echo "====== Installed go:"
-go version

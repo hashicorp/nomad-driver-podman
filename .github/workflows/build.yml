@@ -1,0 +1,36 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-18.04
+
+    env:
+      GOPATH: ${{ runner.workspace }}/build
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+    - name: Prepare machine
+      run: sudo bash -e .github/machinesetup.sh
+
+    - name: Compile driver
+      run: ./build.sh
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v1
+      with:
+        name: nomad-driver-podman
+        path: nomad-driver-podman
+
+    - name: Test
+      run: sudo -E build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
+    - name: Archive test result
+      uses: actions/upload-artifact@v1
+      with:
+        name: test-result
+        path: build/test/result.xml
