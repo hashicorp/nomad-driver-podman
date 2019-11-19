@@ -251,7 +251,7 @@ func TestDockerDriver_Start_Wait_AllocDir(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		fmt.Sprintf(`sleep 1; echo -n %s > $%s/%s`,
+		fmt.Sprintf(`echo -n %s > $%s/%s; sleep 1`,
 			string(exp), taskenv.AllocDir, file),
 	})
 	task := &drivers.TaskConfig{
@@ -400,6 +400,56 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 	// and cleanup after ourself
 	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true ,true)
+}
+
+// Check stdout/stderr logging
+func TestPodmanDriver_Stdout(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	check := uuid.Generate()
+
+	taskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"echo "+check,
+	})
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "stdout",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+
+	logfile := filepath.Join(filepath.Dir(task.StdoutPath),fmt.Sprintf("%s.stdout.0",task.Name))
+	t.Logf("LOG PATH %s", logfile)
+	// Get the stdout of the process and assert that it's not empty
+	stdout, err := ioutil.ReadFile(logfile)
+	require.NoError(t, err)
+	require.Contains(t,string(stdout), check)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+	}
+
 }
 
 func newTaskConfig(variant string, command []string) TaskConfig {

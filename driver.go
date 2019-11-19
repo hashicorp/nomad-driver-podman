@@ -312,6 +312,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	containerName := BuildContainerName(cfg)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
+	logOpts := []string{
+		fmt.Sprintf("path=%s",cfg.StdoutPath),
+	}
 
 	allEnv := cfg.EnvList()
 
@@ -342,6 +345,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Memory:     &memoryLimit,
 		MemorySwap: &memoryLimit,
 		CpuShares:  &cpuShares,
+		LogOpt:     &logOpts,
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(d.ctx, varlinkConnection, createOpts)
@@ -526,7 +530,7 @@ func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 }
 
 func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
-	d.logger.Error("TaskStats called")
+	d.logger.Debug("TaskStats called")
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound

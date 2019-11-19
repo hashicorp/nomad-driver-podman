@@ -39,12 +39,14 @@ For now you can:
 
 * use the jobs driver config to define the image for your container
 * start/stop containers with default or customer entrypoint and arguments
-* use nomad alloc data in the container. It's bind mounted to /nomad
-* bind mount custome volumes into the container
+* [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
+* use nomad alloc data in the container.
+* bind mount custom volumes into the container
 * monitor the memory consuption
 * monitor CPU usage (might be buggy)
 * container memory is limited to configured value
 * task config cpu value is used to populate podman CpuShares
+* podman log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
 
 ### Driver Configuration
 
