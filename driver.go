@@ -24,13 +24,13 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
+	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	"github.com/pascomnet/nomad-driver-podman/iopodman"
-	"github.com/hashicorp/nomad/client/taskenv"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	"github.com/varlink/go/varlink"
@@ -313,7 +313,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 	logOpts := []string{
-		fmt.Sprintf("path=%s",cfg.StdoutPath),
+		fmt.Sprintf("path=%s", cfg.StdoutPath),
 	}
 
 	allEnv := cfg.EnvList()
@@ -339,13 +339,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := iopodman.Create{
 		Args:       allArgs,
-		Env: 		&allEnv,
+		Env:        &allEnv,
 		Name:       &containerName,
 		Volume:     &allVolumes,
 		Memory:     &memoryLimit,
 		MemorySwap: &memoryLimit,
 		CpuShares:  &cpuShares,
 		LogOpt:     &logOpts,
+		Hostname:   &driverConfig.Hostname,
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(d.ctx, varlinkConnection, createOpts)
@@ -508,7 +509,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 
 			if _, err := iopodman.RemoveContainer().Call(d.ctx, varlinkConnection, handle.containerID, true, true); err == nil {
 				d.logger.Debug("Removed container", "container", handle.containerID)
-			} else { 
+			} else {
 				d.logger.Warn("Could not remove container", "container", handle.containerID, "error", err)
 			}
 		} else {

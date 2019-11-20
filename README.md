@@ -34,7 +34,7 @@ Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject
 
 ## Using the driver
 
-The featureset is very limited. 
+The featureset is limited. 
 For now you can:
 
 * use the jobs driver config to define the image for your container
@@ -42,11 +42,11 @@ For now you can:
 * [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
 * use nomad alloc data in the container.
 * bind mount custom volumes into the container
-* monitor the memory consuption
+* monitor the memory consumption
 * monitor CPU usage (might be buggy)
 * container memory is limited to configured value
 * task config cpu value is used to populate podman CpuShares
-* podman log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
+* Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
 
 ### Driver Configuration
 
@@ -119,6 +119,8 @@ config {
   ]
 }
 ```
+
+* **hostname** -  (Optional) The hostname to assign to the container. When launching more than one of a task (using count) with this option set, every container the task starts will have the same hostname.
 
 ## Example job
 

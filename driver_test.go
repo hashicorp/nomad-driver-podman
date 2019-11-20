@@ -33,9 +33,9 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
+	"github.com/pascomnet/nomad-driver-podman/iopodman"
 	"github.com/stretchr/testify/require"
 	"github.com/varlink/go/varlink"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
 )
 
 var (
@@ -66,7 +66,7 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 
 	d := NewPodmanDriver(testlog.HCLogger(t)).(*Driver)
 	d.config.Volumes.Enabled = true
-	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err ==nil {
+	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
 			d.logger.Info("Enabling SelinuxLabel")
 			d.config.Volumes.SelinuxLabel = "z"
@@ -399,7 +399,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	require.Equal(t, 0, int(exists))
 
 	// and cleanup after ourself
-	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true ,true)
+	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true, true)
 }
 
 // Check stdout/stderr logging
@@ -413,7 +413,7 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		"echo "+check,
+		"echo " + check,
 	})
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
@@ -432,13 +432,8 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-
-	logfile := filepath.Join(filepath.Dir(task.StdoutPath),fmt.Sprintf("%s.stdout.0",task.Name))
-	t.Logf("LOG PATH %s", logfile)
-	// Get the stdout of the process and assert that it's not empty
-	stdout, err := ioutil.ReadFile(logfile)
-	require.NoError(t, err)
-	require.Contains(t,string(stdout), check)
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, check)
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -450,6 +445,63 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
 	}
 
+}
+
+// check hostname task config options
+func TestPodmanDriver_Hostname(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print hostname to stdout
+		"hostname",
+	})
+	shouldHaveHostname := "host_" + uuid.Generate()
+
+	// populate Hostname option in task configuration
+	taskCfg.Hostname = shouldHaveHostname
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "stdout",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// check if the hostname was visible in the container
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, shouldHaveHostname)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+	}
+
+}
+
+// read a tasks logfile into a string, fail on error
+func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
+	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
+	// Get the stdout of the process and assert that it's not empty
+	stdout, err := ioutil.ReadFile(logfile)
+	require.NoError(t, err)
+	return string(stdout)
 }
 
 func newTaskConfig(variant string, command []string) TaskConfig {

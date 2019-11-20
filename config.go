@@ -47,10 +47,11 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"image":   hclspec.NewAttr("image", "string", true),
-		"command": hclspec.NewAttr("command", "string", false),
-		"args":    hclspec.NewAttr("args", "list(string)", false),
-		"volumes": hclspec.NewAttr("volumes", "list(string)", false),
+		"image":    hclspec.NewAttr("image", "string", true),
+		"command":  hclspec.NewAttr("command", "string", false),
+		"hostname": hclspec.NewAttr("hostname", "string", false),
+		"args":     hclspec.NewAttr("args", "list(string)", false),
+		"volumes":  hclspec.NewAttr("volumes", "list(string)", false),
 	})
 )
 
@@ -73,8 +74,9 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Image   string   `codec:"image"`
-	Command string   `codec:"command"`
-	Args    []string `codec:"args"`
-	Volumes []string `codec:"volumes"`
+	Image    string   `codec:"image"`
+	Command  string   `codec:"command"`
+	Args     []string `codec:"args"`
+	Volumes  []string `codec:"volumes"`
+	Hostname string   `codec:"hostname"`
 }
