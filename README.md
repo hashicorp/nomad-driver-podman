@@ -42,6 +42,7 @@ For now you can:
 * [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
 * use nomad alloc data in the container.
 * bind mount custom volumes into the container
+* publish ports
 * monitor the memory consumption
 * monitor CPU usage (might be buggy)
 * container memory is limited to configured value
@@ -137,11 +138,18 @@ job "redis" {
 
         config {
           image = "docker://redis"
+          port_map {
+              redis = 6379
+          }
         }
 
       resources {
         cpu    = 500
         memory = 256
+        network {
+          mbits = 20
+          port "redis" {}
+        }
       }
     }
   }
