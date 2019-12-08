@@ -18,13 +18,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/hashicorp/consul/lib/freeport"
 	"github.com/hashicorp/nomad/client/taskenv"
 	ctestutil "github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/testlog"
@@ -495,6 +498,89 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 }
 
+// check port_map feature
+func TestPodmanDriver_PortMap(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	ports := freeport.GetT(t, 2)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+
+	taskCfg.PortMap = map[string]int{
+		"main":  8888,
+		"REDIS": 6379,
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "portmap",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
+		{
+			IP:            "127.0.0.1",
+			ReservedPorts: []structs.Port{{Label: "main", Value: ports[0]}},
+			DynamicPorts:  []structs.Port{{Label: "REDIS", Value: ports[1]}},
+		},
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	inspectJSON := inspectContainer(t, containerName)
+	var inspectData iopodman.InspectContainerData
+	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
+
+	// Verify that the port environment variables are set
+	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
+	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
+
+	// Verify that the correct ports are bound
+	expectedPortBindings := map[string][]iopodman.InspectHostPort{
+		"8888/tcp": []iopodman.InspectHostPort{
+			iopodman.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[0]),
+			},
+		},
+		"8888/udp": []iopodman.InspectHostPort{
+			iopodman.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[0]),
+			},
+		},
+		"6379/tcp": []iopodman.InspectHostPort{
+			iopodman.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[1]),
+			},
+		},
+		"6379/udp": []iopodman.InspectHostPort{
+			iopodman.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[1]),
+			},
+		},
+		// FIXME: REDIS UDP
+	}
+
+	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
+
+	// fmt.Printf("Inspect %v",inspectData.HostConfig.PortBindings)
+
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
@@ -510,11 +596,6 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 	// busyboxImageID := "busybox:1.29.3"
 
 	image := busyboxImageID
-	// loadImage := "busybox.tar"
-	// if variant != "" {
-	// 	image = fmt.Sprintf("%s-%s", busyboxImageID, variant)
-	// 	loadImage = fmt.Sprintf("busybox_%s.tar", variant)
-	// }
 
 	return TaskConfig{
 		Image: image,
@@ -522,6 +603,32 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 		Command: command[0],
 		Args:    command[1:],
 	}
+}
+
+func inspectContainer(t *testing.T, containerName string) string {
+	ctx := context.Background()
+	varlinkConnection, err := getPodmanConnection(ctx)
+	require.NoError(t, err)
+
+	defer varlinkConnection.Close()
+
+	inspectJSON, err := iopodman.InspectContainer().Call(ctx, varlinkConnection, containerName)
+	require.NoError(t, err)
+
+	return inspectJSON
+}
+
+func getContainer(t *testing.T, containerName string) iopodman.Container {
+	ctx := context.Background()
+	varlinkConnection, err := getPodmanConnection(ctx)
+	require.NoError(t, err)
+
+	defer varlinkConnection.Close()
+
+	container, err := iopodman.GetContainer().Call(ctx, varlinkConnection, containerName)
+	require.NoError(t, err)
+
+	return container
 }
 
 func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {

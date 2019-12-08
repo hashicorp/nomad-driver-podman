@@ -18,6 +18,7 @@ package main
 
 import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
+	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
 )
 
 var (
@@ -52,6 +53,7 @@ var (
 		"hostname": hclspec.NewAttr("hostname", "string", false),
 		"args":     hclspec.NewAttr("args", "list(string)", false),
 		"volumes":  hclspec.NewAttr("volumes", "list(string)", false),
+		"port_map": hclspec.NewAttr("port_map", "list(map(number))", false),
 	})
 )
 
@@ -74,9 +76,10 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Image    string   `codec:"image"`
-	Command  string   `codec:"command"`
-	Args     []string `codec:"args"`
-	Volumes  []string `codec:"volumes"`
-	Hostname string   `codec:"hostname"`
+	Image    string             `codec:"image"`
+	Command  string             `codec:"command"`
+	Args     []string           `codec:"args"`
+	Volumes  []string           `codec:"volumes"`
+	Hostname string             `codec:"hostname"`
+	PortMap  hclutils.MapStrInt `codec:"port_map"`
 }

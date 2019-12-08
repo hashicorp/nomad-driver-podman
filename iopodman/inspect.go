@@ -1,3 +1,19 @@
+/*
+Copyright 2019 Thomas Weber
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package iopodman
 
 import (
@@ -36,15 +52,16 @@ type InspectContainerData struct {
 	BoundingCaps    []string               `json:"BoundingCaps"`
 	ExecIDs         []string               `json:"ExecIDs"`
 	// GraphDriver     *driver.Data            `json:"GraphDriver"`
-	SizeRw          int64                   `json:"SizeRw,omitempty"`
-	SizeRootFs      int64                   `json:"SizeRootFs,omitempty"`
-	Mounts          []InspectMount          `json:"Mounts"`
-	Dependencies    []string                `json:"Dependencies"`
-	NetworkSettings *InspectNetworkSettings `json:"NetworkSettings"` //TODO
-	ExitCommand     []string                `json:"ExitCommand"`
-	Namespace       string                  `json:"Namespace"`
-	IsInfra         bool                    `json:"IsInfra"`
-	Config          *InspectContainerConfig `json:"Config"`
+	SizeRw          int64                       `json:"SizeRw,omitempty"`
+	SizeRootFs      int64                       `json:"SizeRootFs,omitempty"`
+	Mounts          []InspectMount              `json:"Mounts"`
+	Dependencies    []string                    `json:"Dependencies"`
+	NetworkSettings *InspectNetworkSettings     `json:"NetworkSettings"` //TODO
+	ExitCommand     []string                    `json:"ExitCommand"`
+	Namespace       string                      `json:"Namespace"`
+	IsInfra         bool                        `json:"IsInfra"`
+	Config          *InspectContainerConfig     `json:"Config"`
+	HostConfig      *InspectContainerHostConfig `json:"HostConfig"`
 }
 
 // InspectContainerConfig holds further data about how a container was initially
@@ -122,6 +139,17 @@ type InspectMount struct {
 	Propagation string `json:"Propagation"`
 }
 
+// InspectHostPort provides information on a port on the host that a container's
+// port is bound to.
+type InspectHostPort struct {
+	// IP on the host we are bound to. "" if not specified (binding to all
+	// IPs).
+	HostIP string `json:"HostIp"`
+	// Port on the host we are bound to. No special formatting - just an
+	// integer stuffed into a string.
+	HostPort string `json:"HostPort"`
+}
+
 // InspectContainerState provides a detailed record of a container's current
 // state. It is returned as part of InspectContainerData.
 // As with InspectContainerData, many portions of this struct are matched to
@@ -165,4 +193,31 @@ type InspectNetworkSettings struct {
 	IPPrefixLen            int      `json:"IPPrefixLen"`
 	IPv6Gateway            string   `json:"IPv6Gateway"`
 	MacAddress             string   `json:"MacAddress"`
+}
+
+// InspectContainerHostConfig holds information used when the container was created.
+type InspectContainerHostConfig struct {
+	// Binds contains an array of user-added mounts.
+	// Both volume mounts and named volumes are included.
+	// Tmpfs mounts are NOT included.
+	// In 'docker inspect' this is separated into 'Binds' and 'Mounts' based
+	// on how a mount was added. We do not make this distinction and do not
+	// include a Mounts field in inspect.
+	// Format: <src>:<destination>[:<comma-separated options>]
+	Binds []string `json:"Binds"`
+	// NetworkMode is the configuration of the container's network
+	// namespace.
+	// Populated as follows:
+	// default - A network namespace is being created and configured via CNI
+	// none - A network namespace is being created, not configured via CNI
+	// host - No network namespace created
+	// container:<id> - Using another container's network namespace
+	// ns:<path> - A path to a network namespace has been specified
+	NetworkMode string `json:"NetworkMode"`
+	// PortBindings contains the container's port bindings.
+	// It is formatted as map[string][]InspectHostPort.
+	// The string key here is formatted as <integer port number>/<protocol>
+	// and represents the container port. A single container port may be
+	// bound to multiple host ports (on different IPs).
+	PortBindings map[string][]InspectHostPort `json:"PortBindings"`
 }

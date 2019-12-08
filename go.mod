@@ -13,7 +13,7 @@ require (
 	github.com/TylerBrock/colorjson v0.0.0-20180527164720-95ec53f28296 // indirect
 	github.com/fsouza/go-dockerclient v1.5.0 // indirect
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75 // indirect
-	github.com/hashicorp/consul v1.4.5 // indirect
+	github.com/hashicorp/consul v1.4.5
 	github.com/hashicorp/consul-template v0.20.0 // indirect
 	github.com/hashicorp/go-hclog v0.9.2
 	github.com/hashicorp/hcl2 v0.0.0-20190702185634-5b39d9ff3a9a // indirect

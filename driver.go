@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"github.com/hashicorp/nomad/nomad/structs"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -316,6 +317,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		fmt.Sprintf("path=%s", cfg.StdoutPath),
 	}
 
+	// ensure to include port_map into tasks environment map
+	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
+
+	// convert environment map into a k=v list
 	allEnv := cfg.EnvList()
 
 	// ensure to mount nomad alloc dirs into the container
@@ -347,6 +352,38 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		CpuShares:  &cpuShares,
 		LogOpt:     &logOpts,
 		Hostname:   &driverConfig.Hostname,
+	}
+
+	// Setup port mapping and exposed ports
+	if len(cfg.Resources.NomadResources.Networks) == 0 {
+		d.logger.Debug("no network interfaces are available")
+		if len(driverConfig.PortMap) > 0 {
+			return nil, nil, fmt.Errorf("Trying to map ports but no network interface is available")
+		}
+	} else {
+		publishedPorts := []string{}
+		network := cfg.Resources.NomadResources.Networks[0]
+		allPorts := []structs.Port{}
+		allPorts = append(allPorts, network.ReservedPorts...)
+		allPorts = append(allPorts, network.DynamicPorts...)
+
+		for _, port := range allPorts {
+			hostPort := port.Value
+			// By default we will map the allocated port 1:1 to the container
+			containerPort := port.Value
+
+			// If the user has mapped a port using port_map we'll change it here
+			if mapped, ok := driverConfig.PortMap[port.Label]; ok {
+				containerPort = mapped
+			}
+
+			d.logger.Debug("Publish port", "ip", network.IP, "hostPort", hostPort, "containerPort", containerPort)
+			// we map both udp and tcp ports
+			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/tcp", network.IP, hostPort, containerPort))
+			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/udp", network.IP, hostPort, containerPort))
+		}
+
+		createOpts.Publish = &publishedPorts
 	}
 
 	containerID, err := iopodman.CreateContainer().Call(d.ctx, varlinkConnection, createOpts)
@@ -388,7 +425,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.logger.Debug("Started podman container", "container", containerID, "pid", inspectData.State.Pid, "ip", inspectData.NetworkSettings.IPAddress)
 
 	net := &drivers.DriverNetwork{
-		// 	// PortMap:       driverConfig.PortMap,
+		PortMap:       driverConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
 	}
