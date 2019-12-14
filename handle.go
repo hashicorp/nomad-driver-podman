@@ -133,6 +133,8 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 	}
 	defer varlinkConnection.Close()
 
+	failures := 0
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -144,14 +146,28 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 
 		containerStats, err := iopodman.GetContainerStats().Call(h.driver.ctx, varlinkConnection, h.containerID)
 		if err != nil {
-			h.logger.Error("Could not get container stats", "err", err)
+			h.logger.Debug("Could not get container stats, trying to reconnect", "err", err)
 			// maybe varlink connection was lost, we should check and try to reconnect
-			// FIXME: reconnect
+			varlinkConnection.Close()
+			varlinkConnection, err = h.driver.getConnection()
+			if err != nil {
+				h.logger.Error("failed to reconnect varlink for stats", "err", err)
+				failures ++
+			}
 
-			// try again
-			continue
+			if failures<5 {
+				// try again
+				continue
+			} else {
+				// stop, makes no sense
+				h.logger.Error("too many reconnect errors")
+				return
+			}
+
 		}
 
+		// reset failure count if we successfully got stats
+		failures = 0
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
