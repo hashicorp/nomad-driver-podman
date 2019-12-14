@@ -42,7 +42,13 @@ import (
 )
 
 var (
-	basicResources = &drivers.Resources{
+	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
+	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
+	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
+)
+
+func createBasicResources() *drivers.Resources {
+	res := drivers.Resources{
 		NomadResources: &structs.AllocatedTaskResources{
 			Memory: structs.AllocatedMemoryResources{
 				// MemoryMB: 256,
@@ -56,10 +62,8 @@ var (
 			MemoryLimitBytes: 256 * 1024 * 1024,
 		},
 	}
-	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
-	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
-	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
-)
+	return &res
+}
 
 // podmanDriverHarness wires up everything needed to launch a task with a podman driver.
 // A driver plugin interface and cleanup function is returned
@@ -100,7 +104,7 @@ func TestPodmanDriver_Start_NoImage(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "echo",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -127,7 +131,7 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "start_wait",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -162,7 +166,7 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "start_waitfinish",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -204,7 +208,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "start_stoppedContainer",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -243,7 +247,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 }
 */
 
-func TestDockerDriver_Start_Wait_AllocDir(t *testing.T) {
+func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -261,7 +265,7 @@ func TestDockerDriver_Start_Wait_AllocDir(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "start_wait_allocDir",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -310,7 +314,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "gc_container_on",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -360,7 +364,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "gc_container_off",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -422,7 +426,7 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "stdout",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -469,7 +473,7 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "stdout",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -516,7 +520,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 		ID:        uuid.Generate(),
 		Name:      "portmap",
 		AllocID:   uuid.Generate(),
-		Resources: basicResources,
+		Resources: createBasicResources(),
 	}
 	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
 		{
