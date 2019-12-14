@@ -24,6 +24,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"net"
+	"errors"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -114,6 +116,24 @@ func (h *TaskHandle) run() {
 }
 
 func (h *TaskHandle) stats(ctx context.Context, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
+	
+	// let's see if container exists and if it's running
+	varlinkConnection, err := h.driver.getConnection()
+	if err != nil {
+		h.logger.Error("failed to get varlink connection for stats", "err", err)
+		return nil, err
+	}
+	defer varlinkConnection.Close()
+	container, err := iopodman.GetContainer().Call(h.driver.ctx, varlinkConnection, h.containerID)
+	if err != nil {
+		h.logger.Error("failed to get container status", "err", err)
+		return nil, err
+	}
+	if container.Status != "running" {
+		h.logger.Error("Will not start handleStats, container is not running")
+		return nil, errors.New("Container is not running")
+	}
+
 	ch := make(chan *drivers.TaskResourceUsage)
 	go h.handleStats(ctx, ch, interval)
 	return ch, nil
@@ -146,24 +166,31 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 
 		containerStats, err := iopodman.GetContainerStats().Call(h.driver.ctx, varlinkConnection, h.containerID)
 		if err != nil {
-			h.logger.Debug("Could not get container stats, trying to reconnect", "err", err)
+			failures ++
 			// maybe varlink connection was lost, we should check and try to reconnect
-			varlinkConnection.Close()
-			varlinkConnection, err = h.driver.getConnection()
-			if err != nil {
-				h.logger.Error("failed to reconnect varlink for stats", "err", err)
-				failures ++
-			}
+			if opError, ok := err.(*net.OpError); ok {
+				h.logger.Debug("Could not get container stats, trying to reconnect", "err", opError)
+				varlinkConnection.Close()
+				varlinkConnection, err = h.driver.getConnection()
+				if err != nil {
+					h.logger.Error("failed to reconnect varlink for stats", "err", err)
+				}
 
-			if failures<5 {
-				// try again
-				continue
-			} else {
-				// stop, makes no sense
-				h.logger.Error("too many reconnect errors")
+				if failures>5 {
+					// stop, makes no sense to continue
+					h.logger.Error("too many reconnect errors")
+					return
+				}
+
+			} else if _, ok := err.(*iopodman.NoContainerRunning); ok {
+				h.logger.Debug("Could not get container stats, container is not running anymore")
 				return
+			} else {
+				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			}
-
+			
+			// let's try again
+			continue
 		}
 
 		// reset failure count if we successfully got stats
