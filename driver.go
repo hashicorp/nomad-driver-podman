@@ -17,11 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"github.com/hashicorp/nomad/nomad/structs"
 	"context"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/hashicorp/nomad/nomad/structs"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -352,6 +353,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		CpuShares:  &cpuShares,
 		LogOpt:     &logOpts,
 		Hostname:   &driverConfig.Hostname,
+		Init:       &driverConfig.Init,
+		InitPath:   &driverConfig.InitPath,
 	}
 
 	// Setup port mapping and exposed ports

@@ -17,8 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
+	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 )
 
 var (
@@ -48,12 +48,14 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"image":    hclspec.NewAttr("image", "string", true),
-		"command":  hclspec.NewAttr("command", "string", false),
-		"hostname": hclspec.NewAttr("hostname", "string", false),
-		"args":     hclspec.NewAttr("args", "list(string)", false),
-		"volumes":  hclspec.NewAttr("volumes", "list(string)", false),
-		"port_map": hclspec.NewAttr("port_map", "list(map(number))", false),
+		"image":     hclspec.NewAttr("image", "string", true),
+		"command":   hclspec.NewAttr("command", "string", false),
+		"hostname":  hclspec.NewAttr("hostname", "string", false),
+		"init":      hclspec.NewAttr("init", "bool", false),
+		"init_path": hclspec.NewAttr("init_path", "string", false),
+		"args":      hclspec.NewAttr("args", "list(string)", false),
+		"volumes":   hclspec.NewAttr("volumes", "list(string)", false),
+		"port_map":  hclspec.NewAttr("port_map", "list(map(number))", false),
 	})
 )
 
@@ -81,5 +83,7 @@ type TaskConfig struct {
 	Args     []string           `codec:"args"`
 	Volumes  []string           `codec:"volumes"`
 	Hostname string             `codec:"hostname"`
+	Init     bool               `codec:"init"`
+	InitPath string             `codec:"init_path"`
 	PortMap  hclutils.MapStrInt `codec:"port_map"`
 }

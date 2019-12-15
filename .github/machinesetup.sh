@@ -11,6 +11,13 @@ apt-get update || true
 # install podman for running the test suite
 apt-get install -y podman wget ca-certificates
 
+# get catatonit (to check podman --init switch)
+cd /tmp
+wget https://github.com/openSUSE/catatonit/releases/download/v0.1.4/catatonit.x86_64
+mkdir -p /usr/libexec/podman
+mv catatonit* /usr/libexec/podman/catatonit
+chmod +x /usr/libexec/podman/catatonit
+
 echo "====== Installed podman:"
 # ensure to remember the used version when checking a build log
 podman info

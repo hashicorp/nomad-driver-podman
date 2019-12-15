@@ -34,8 +34,7 @@ Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject
 
 ## Using the driver
 
-The featureset is limited. 
-For now you can:
+Features:
 
 * use the jobs driver config to define the image for your container
 * start/stop containers with default or customer entrypoint and arguments
@@ -48,6 +47,7 @@ For now you can:
 * container memory is limited to configured value
 * task config cpu value is used to populate podman CpuShares
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
+* utilize podmans --init feature
 
 ### Driver Configuration
 
@@ -124,6 +124,23 @@ config {
 * **hostname** -  (Optional) The hostname to assign to the container. When launching more than one of a task (using count) with this option set, every container the task starts will have the same hostname.
 
 * **Forwarding and Exposing Ports** - (Optional) See [Docker Driver Configuration](https://www.nomadproject.io/docs/drivers/docker.html#forwarding-and-exposing-ports) for details.
+
+* **init** - Run an init inside the container that forwards signals and reaps processes.
+
+```
+config {
+  init = true
+}
+```
+
+* **init_path** - Path to the container-init binary.
+
+```
+config {
+  init = true
+  init_path = /usr/libexec/podman/catatonit
+}
+```
 
 ## Example job
 
