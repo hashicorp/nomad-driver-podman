@@ -130,7 +130,7 @@ func (h *TaskHandle) stats(ctx context.Context, interval time.Duration) (<-chan 
 		return nil, err
 	}
 	if container.Status != "running" {
-		h.logger.Error("Will not start handleStats, container is not running")
+		h.logger.Debug("Will not start handleStats, container is not running")
 		return nil, errors.New("Container is not running")
 	}
 
@@ -241,9 +241,8 @@ func (h *TaskHandle) shutdown(timeout time.Duration) error {
 	}
 	defer varlinkConnection.Close()
 
-	h.driver.logger.Debug("Stopping podman container", "container", h.containerID)
-	// TODO: we should respect the "signal" parameter here
-	if _, err := iopodman.StopContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, int64(timeout)); err != nil {
+	h.driver.logger.Debug("Stopping podman container", "container", h.containerID, "timeout", timeout.Seconds())
+	if _, err := iopodman.StopContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, int64(timeout.Seconds())); err != nil {
 		h.driver.logger.Warn("Could not stop container gracefully, killing it now", "containerID", h.containerID, "err", err)
 		if _, err := iopodman.KillContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, 9); err != nil {
 			h.driver.logger.Error("Could not kill container", "containerID", h.containerID, "err", err)
