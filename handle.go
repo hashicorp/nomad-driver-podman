@@ -25,7 +25,6 @@ import (
 	"syscall"
 	"time"
 	"net"
-	"errors"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -116,24 +115,6 @@ func (h *TaskHandle) run() {
 }
 
 func (h *TaskHandle) stats(ctx context.Context, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
-	
-	// let's see if container exists and if it's running
-	varlinkConnection, err := h.driver.getConnection()
-	if err != nil {
-		h.logger.Error("failed to get varlink connection for stats", "err", err)
-		return nil, err
-	}
-	defer varlinkConnection.Close()
-	container, err := iopodman.GetContainer().Call(h.driver.ctx, varlinkConnection, h.containerID)
-	if err != nil {
-		h.logger.Error("failed to get container status", "err", err)
-		return nil, err
-	}
-	if container.Status != "running" {
-		h.logger.Debug("Will not start handleStats, container is not running")
-		return nil, errors.New("Container is not running")
-	}
-
 	ch := make(chan *drivers.TaskResourceUsage)
 	go h.handleStats(ctx, ch, interval)
 	return ch, nil
@@ -158,10 +139,18 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 	for {
 		select {
 		case <-ctx.Done():
+			h.logger.Debug("Stats collector exits", "container", h.containerID)
+			return
+		case <-h.driver.ctx.Done():
+			h.logger.Debug("Stats collector exits", "container", h.containerID)
 			return
 
 		case <-timer.C:
 			timer.Reset(interval)
+		}
+		if h.procState == drivers.TaskStateExited {
+			h.logger.Debug("Stats collector waits for context cleanup", "container", h.containerID)
+			continue
 		}
 
 		containerStats, err := iopodman.GetContainerStats().Call(h.driver.ctx, varlinkConnection, h.containerID)
@@ -184,7 +173,6 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 
 			} else if _, ok := err.(*iopodman.NoContainerRunning); ok {
 				h.logger.Debug("Could not get container stats, container is not running anymore")
-				return
 			} else {
 				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			}
@@ -224,12 +212,9 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 			},
 			Timestamp: t.UTC().UnixNano(),
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case ch <- &taskResUsage:
-		}
+		ch <- &taskResUsage
 	}
+	
 }
 
 // shutdown shuts down the container, with `timeout` grace period
