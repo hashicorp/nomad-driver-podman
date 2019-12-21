@@ -24,7 +24,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"net"
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/stats"
@@ -124,18 +123,6 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 	defer close(ch)
 	timer := time.NewTimer(0)
 
-	// stats are polled relatively often so it should be better
-	// to open a long living varlink connection instead
-	// of re-opening it on each poll cycle in the for-loop.
-	varlinkConnection, err := h.driver.getConnection()
-	if err != nil {
-		h.logger.Error("failed to get varlink connection for stats", "err", err)
-		return
-	}
-	defer varlinkConnection.Close()
-
-	failures := 0
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -148,41 +135,24 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		case <-timer.C:
 			timer.Reset(interval)
 		}
+
 		if h.procState == drivers.TaskStateExited {
 			h.logger.Debug("Stats collector waits for context cleanup", "container", h.containerID)
 			continue
 		}
 
-		containerStats, err := iopodman.GetContainerStats().Call(h.driver.ctx, varlinkConnection, h.containerID)
+		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
 		if err != nil {
-			failures ++
-			// maybe varlink connection was lost, we should check and try to reconnect
-			if opError, ok := err.(*net.OpError); ok {
-				h.logger.Debug("Could not get container stats, trying to reconnect", "err", opError)
-				varlinkConnection.Close()
-				varlinkConnection, err = h.driver.getConnection()
-				if err != nil {
-					h.logger.Error("failed to reconnect varlink for stats", "err", err)
-				}
-
-				if failures>5 {
-					// stop, makes no sense to continue
-					h.logger.Error("too many reconnect errors")
-					return
-				}
-
-			} else if _, ok := err.(*iopodman.NoContainerRunning); ok {
+			if _, ok := err.(*iopodman.NoContainerRunning); ok {
 				h.logger.Debug("Could not get container stats, container is not running anymore")
 			} else {
 				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			}
-			
-			// let's try again
+			// continue and wait for next cycle, it should then
+			// fall into the "TaskStateExited" case
 			continue
 		}
 
-		// reset failure count if we successfully got stats
-		failures = 0
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
@@ -214,27 +184,7 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		}
 		ch <- &taskResUsage
 	}
-	
-}
 
-// shutdown shuts down the container, with `timeout` grace period
-// before killing the container with SIGKILL.
-func (h *TaskHandle) shutdown(timeout time.Duration) error {
-	varlinkConnection, err := h.driver.getConnection()
-	if err != nil {
-		return fmt.Errorf("executor Shutdown failed, could not get podman connection: %v", err)
-	}
-	defer varlinkConnection.Close()
-
-	h.driver.logger.Debug("Stopping podman container", "container", h.containerID, "timeout", timeout.Seconds())
-	if _, err := iopodman.StopContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, int64(timeout.Seconds())); err != nil {
-		h.driver.logger.Warn("Could not stop container gracefully, killing it now", "containerID", h.containerID, "err", err)
-		if _, err := iopodman.KillContainer().Call(h.driver.ctx, varlinkConnection, h.containerID, 9); err != nil {
-			h.driver.logger.Error("Could not kill container", "containerID", h.containerID, "err", err)
-			return fmt.Errorf("Could not kill container: %v", err)
-		}
-	}
-	return nil
 }
 
 // waitTillStopped blocks and returns true when container stops;

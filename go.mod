@@ -11,6 +11,7 @@ replace (
 require (
 	github.com/LK4D4/joincontext v0.0.0-20171026170139-1724345da6d5 // indirect
 	github.com/TylerBrock/colorjson v0.0.0-20180527164720-95ec53f28296 // indirect
+	github.com/avast/retry-go v2.4.3+incompatible
 	github.com/fsouza/go-dockerclient v1.5.0 // indirect
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75 // indirect
 	github.com/hashicorp/consul v1.4.5

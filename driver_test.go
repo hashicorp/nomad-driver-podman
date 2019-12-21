@@ -21,12 +21,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
 	"time"
-	"os"
 
 	"github.com/hashicorp/consul/lib/freeport"
 	"github.com/hashicorp/nomad/client/taskenv"
@@ -594,10 +594,10 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	// only test --init if catatonit is installed
 	_, err := os.Stat("/usr/libexec/podman/catatonit")
-    if os.IsNotExist(err) {
+	if os.IsNotExist(err) {
 		t.Skip("Skipping --init test because catatonit is not installed")
 		return
-    }
+	}
 
 	taskCfg := newTaskConfig("", []string{
 		// print pid 1 filename to stdout

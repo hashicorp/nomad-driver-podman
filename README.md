@@ -8,7 +8,23 @@ Nomad podman Driver
 *THIS IS A PROOF OF CONCEPT PLUGIN*. Do not run it in production!
 Contributions are welcome, of course.
 
-## Building The Driver
+## Features
+
+* use the jobs driver config to define the image for your container
+* start/stop containers with default or customer entrypoint and arguments
+* [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
+* use nomad alloc data in the container.
+* bind mount custom volumes into the container
+* publish ports
+* monitor the memory consumption
+* monitor CPU usage
+* container memory is limited to configured value
+* task config cpu value is used to populate podman CpuShares
+* Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
+* utilize podmans --init feature
+
+
+## Building The Driver from source
 
 This project has a go.mod definition. So you can clone it to whatever directory you want.
 It is not necessary to setup a go path at all.
@@ -32,24 +48,7 @@ do not have to worry about the ssh aspects of podman varlink.
 
 Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
 
-## Using the driver
-
-Features:
-
-* use the jobs driver config to define the image for your container
-* start/stop containers with default or customer entrypoint and arguments
-* [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
-* use nomad alloc data in the container.
-* bind mount custom volumes into the container
-* publish ports
-* monitor the memory consumption
-* monitor CPU usage (might be buggy)
-* container memory is limited to configured value
-* task config cpu value is used to populate podman CpuShares
-* Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
-* utilize podmans --init feature
-
-### Driver Configuration
+## Driver Configuration
 
 * volumes stanza:
 
@@ -82,7 +81,7 @@ plugin "nomad-driver-podman" {
 ```
 
 
-### Task Configuration
+## Task Configuration
 
 * **image** - The image to run, 
 
