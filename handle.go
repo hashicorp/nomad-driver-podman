@@ -19,10 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -43,7 +40,6 @@ var (
 )
 
 type TaskHandle struct {
-	initPid     int
 	containerID string
 	logger      hclog.Logger
 	driver      *Driver
@@ -62,6 +58,9 @@ type TaskHandle struct {
 	exitResult  *drivers.ExitResult
 
 	removeContainerOnExit bool
+
+	exitChannel    chan *drivers.ExitResult
+	containerStats iopodman.ContainerStats
 }
 
 func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
@@ -69,14 +68,14 @@ func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
 	defer h.stateLock.RUnlock()
 
 	return &drivers.TaskStatus{
-		ID:          h.taskConfig.ID,
-		Name:        h.taskConfig.Name,
-		State:       h.procState,
-		StartedAt:   h.startedAt,
-		CompletedAt: h.completedAt,
-		ExitResult:  h.exitResult,
+		ID:               h.taskConfig.ID,
+		Name:             h.taskConfig.Name,
+		State:            h.procState,
+		StartedAt:        h.startedAt,
+		CompletedAt:      h.completedAt,
+		ExitResult:       h.exitResult,
 		DriverAttributes: map[string]string{
-			"pid": strconv.Itoa(h.initPid),
+			// we do not need custom attributes yet
 		},
 	}
 }
@@ -87,82 +86,29 @@ func (h *TaskHandle) IsRunning() bool {
 	return h.procState == drivers.TaskStateRunning
 }
 
-func (h *TaskHandle) run() {
-	h.stateLock.Lock()
-	if h.exitResult == nil {
-		h.exitResult = &drivers.ExitResult{}
-	}
-	h.stateLock.Unlock()
-	h.logger.Debug("Monitoring process", "container", h.containerID, "pid", h.initPid)
-
-	if ok, err := waitTillStopped(h.initPid); !ok {
-		h.logger.Error("failed to find container process", "error", err)
-		return
-	}
-
-	h.logger.Debug("Process stopped", "container", h.containerID, "pid", h.initPid)
-
-	h.stateLock.Lock()
-	defer h.stateLock.Unlock()
-
-	h.procState = drivers.TaskStateExited
-	h.exitResult.ExitCode = 0
-	h.exitResult.Signal = 0
-	h.completedAt = time.Now()
-
-	// TODO: detect if the task OOMed
-}
-
-func (h *TaskHandle) stats(ctx context.Context, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
-	ch := make(chan *drivers.TaskResourceUsage)
-	go h.handleStats(ctx, ch, interval)
-	return ch, nil
-}
-
-func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResourceUsage, interval time.Duration) {
-	defer close(ch)
+func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
 	timer := time.NewTimer(0)
-
+	h.logger.Debug("Starting statsEmitter", "container", h.containerID)
 	for {
 		select {
 		case <-ctx.Done():
-			h.logger.Debug("Stats collector exits", "container", h.containerID)
+			h.logger.Debug("Stopping statsEmitter", "container", h.containerID)
 			return
-		case <-h.driver.ctx.Done():
-			h.logger.Debug("Stats collector exits", "container", h.containerID)
-			return
-
 		case <-timer.C:
 			timer.Reset(interval)
 		}
 
-		if h.procState == drivers.TaskStateExited {
-			h.logger.Debug("Stats collector waits for context cleanup", "container", h.containerID)
-			continue
-		}
-
-		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
-		if err != nil {
-			if _, ok := err.(*iopodman.NoContainerRunning); ok {
-				h.logger.Debug("Could not get container stats, container is not running anymore")
-			} else {
-				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
-			}
-			// continue and wait for next cycle, it should then
-			// fall into the "TaskStateExited" case
-			continue
-		}
-
+		h.stateLock.Lock()
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
 		//available := shelpers.TotalTicksAvailable()
 		//cpus := shelpers.CPUNumCores()
 
-		totalPercent := h.totalCpuStats.Percent(containerStats.Cpu * 10e16)
+		totalPercent := h.totalCpuStats.Percent(h.containerStats.Cpu * 10e16)
 		cs := &drivers.CpuStats{
-			SystemMode: h.systemCpuStats.Percent(float64(containerStats.System_nano)),
-			UserMode:   h.userCpuStats.Percent(float64(containerStats.Cpu_nano)),
+			SystemMode: h.systemCpuStats.Percent(float64(h.containerStats.System_nano)),
+			UserMode:   h.userCpuStats.Percent(float64(h.containerStats.Cpu_nano)),
 			Percent:    totalPercent,
 			TotalTicks: h.systemCpuStats.TicksConsumed(totalPercent),
 			Measured:   MeasuredCpuStats,
@@ -171,36 +117,84 @@ func (h *TaskHandle) handleStats(ctx context.Context, ch chan *drivers.TaskResou
 		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
 
 		ms := &drivers.MemoryStats{
-			RSS:      uint64(containerStats.Mem_usage),
+			RSS:      uint64(h.containerStats.Mem_usage),
 			Measured: MeasuredMemStats,
 		}
+		h.stateLock.Unlock()
 
-		taskResUsage := drivers.TaskResourceUsage{
+		// update uasge
+		usage := drivers.TaskResourceUsage{
 			ResourceUsage: &drivers.ResourceUsage{
 				CpuStats:    cs,
 				MemoryStats: ms,
 			},
 			Timestamp: t.UTC().UnixNano(),
 		}
-		ch <- &taskResUsage
+		// send stats to nomad
+		statsChannel <- &usage
 	}
-
 }
 
-// waitTillStopped blocks and returns true when container stops;
-// returns false with an error message if the container processes cannot be identified.
-//
-func waitTillStopped(pid int) (bool, error) {
-	ps, err := os.FindProcess(pid)
-	if err != nil {
-		return false, err
+func (h *TaskHandle) MonitorContainer() {
+
+	timer := time.NewTimer(0)
+	interval := time.Second * 1
+	h.logger.Debug("Monitoring container", "container", h.containerID)
+
+	cleanup := func() {
+		if h.exitChannel != nil {
+			close(h.exitChannel)
+		}
+		h.logger.Debug("Container monitor exits", "container", h.containerID)
 	}
+	defer cleanup()
 
 	for {
-		if err := ps.Signal(syscall.Signal(0)); err != nil {
-			return true, nil
+		select {
+		case <-h.driver.ctx.Done():
+			return
+
+		case <-timer.C:
+			timer.Reset(interval)
 		}
 
-		time.Sleep(containerMonitorIntv)
+		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
+		if err != nil {
+			if _, ok := err.(*iopodman.NoContainerRunning); ok {
+				h.logger.Debug("Container is not running anymore", "container", h.containerID)
+				// container was stopped, get exit code and other post mortem infos
+				inspectData, err := h.driver.podmanClient.InspectContainer(h.containerID)
+				h.stateLock.Lock()
+				h.procState = drivers.TaskStateExited
+				if err != nil {
+					h.logger.Error("Failt to inspect stopped container, can not get exit code", "err", err)
+					h.exitResult.Signal = 0
+					h.completedAt = time.Now()
+				} else {
+					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
+					h.exitResult.OOMKilled = inspectData.State.OOMKilled
+					h.completedAt = inspectData.State.FinishedAt
+				}
+				if h.exitChannel != nil {
+					h.exitChannel <- h.exitResult
+				} else {
+					// this is bad....
+					h.logger.Error("Can not send exit signal to nomad, channel is empty", "container", h.containerID)
+				}
+				h.stateLock.Unlock()
+				return
+			} else {
+				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
+			}
+			// continue and wait for next cycle, it should then
+			// fall into the "TaskStateExited" case
+			continue
+		}
+
+		h.stateLock.Lock()
+		// keep last known containerStats in handle to
+		// have it available in the stats emitter
+		h.containerStats = *containerStats
+		h.stateLock.Unlock()
 	}
 }

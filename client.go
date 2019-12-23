@@ -70,6 +70,8 @@ func (c *PodmanClient) withVarlink(cb func(*varlink.Connection) error) error {
 		}),
 		// wait 1 sec between retries
 		retry.Delay(time.Second),
+		// and return last error directly (not wrapped)
+		retry.LastErrorOnly(true),
 	)
 	return err
 }

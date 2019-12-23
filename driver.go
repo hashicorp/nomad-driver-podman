@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -231,22 +232,19 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 
 	// FIXME: duplicated code. share more code with StartTask
-	psInfo, err := d.podmanClient.PsID(taskState.ContainerID)
+	_, err := d.podmanClient.PsID(taskState.ContainerID)
 	if err != nil {
 		return fmt.Errorf("failt to recover task, could not get container info: %v", err)
 	}
-	initPid := int(psInfo.PidNum)
-	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID, "pid", initPid)
 
 	h := &TaskHandle{
-		initPid:     initPid,
 		containerID: taskState.ContainerID,
 		driver:      d,
 		taskConfig:  taskState.TaskConfig,
 		procState:   drivers.TaskStateRunning,
 		startedAt:   taskState.StartedAt,
 		exitResult:  &drivers.ExitResult{},
-		logger:      d.logger,
+		logger:      d.logger.Named("podmanHandle"),
 
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
@@ -257,7 +255,8 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	d.tasks.Set(taskState.TaskConfig.ID, h)
 
-	go h.run()
+	go h.MonitorContainer()
+	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID)
 
 	return nil
 }
@@ -372,7 +371,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err != nil {
 		return nil, nil, fmt.Errorf("failt to start task, could not create container: %v", err)
 	}
-	d.logger.Info("Created container", "container", containerID)
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
@@ -386,7 +384,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		cleanup()
 		return nil, nil, fmt.Errorf("failt to start task, could not start container: %v", err)
 	}
-	d.logger.Info("Started container", "containerId", containerID)
 
 	inspectData, err := d.podmanClient.InspectContainer(containerID)
 	if err != nil {
@@ -394,7 +391,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		cleanup()
 		return nil, nil, fmt.Errorf("failt to start task, could not inspect container : %v", err)
 	}
-	d.logger.Debug("Started podman container", "container", containerID, "pid", inspectData.State.Pid, "ip", inspectData.NetworkSettings.IPAddress)
 
 	net := &drivers.DriverNetwork{
 		PortMap:       driverConfig.PortMap,
@@ -403,13 +399,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	h := &TaskHandle{
-		initPid:     inspectData.State.Pid,
 		containerID: containerID,
 		driver:      d,
 		taskConfig:  cfg,
 		procState:   drivers.TaskStateRunning,
+		exitResult:  &drivers.ExitResult{},
 		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger,
+		logger:      d.logger.Named("podmanHandle"),
 
 		totalCpuStats:  stats.NewCpuStats(),
 		userCpuStats:   stats.NewCpuStats(),
@@ -433,9 +429,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.tasks.Set(cfg.ID, h)
 
-	go h.run()
+	go h.MonitorContainer()
 
-	d.logger.Debug("Completely started", "containerID", containerID)
+	d.logger.Debug("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil
 }
@@ -447,43 +443,27 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 	}
 
 	ch := make(chan *drivers.ExitResult)
-	go d.handleWait(ctx, handle, ch)
 
+	// check if the container is already dead
+	s := handle.TaskStatus()
+	if s.State == drivers.TaskStateExited {
+		d.logger.Warn("Not setting exitChannel for a stopped container", "container", handle.containerID)
+		// tell nomad about this
+		ch <- handle.exitResult
+		close(ch)
+		// and bail out
+		return nil, errors.New("Container is not running")
+	}
+
+	// otherwise forward the exit channel into the handle.
+	// it's used when the stats collector detects a stopped channel
+	d.logger.Debug("Setting exitChannel for Handle", "container", handle.containerID)
+	handle.exitChannel = ch
 	return ch, nil
 }
 
-func (d *Driver) handleWait(ctx context.Context, handle *TaskHandle, ch chan *drivers.ExitResult) {
-	defer close(ch)
-
-	//
-	// Wait for process completion by polling status from handler.
-	// We cannot use the following alternatives:
-	//   * Process.Wait() requires LXC container processes to be children
-	//     of self process; but LXC runs container in separate PID hierarchy
-	//     owned by PID 1.
-	//   * lxc.Container.Wait() holds a write lock on container and prevents
-	//     any other calls, including stats.
-	//
-	// Going with simplest approach of polling for handler to mark exit.
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-d.ctx.Done():
-			return
-		case <-ticker.C:
-			s := handle.TaskStatus()
-			if s.State == drivers.TaskStateExited {
-				ch <- handle.exitResult
-			}
-		}
-	}
-}
-
 func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) error {
+	d.logger.Info("Stopping task", "taskID", taskID)
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return drivers.ErrTaskNotFound
@@ -527,6 +507,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 }
 
 func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
+	d.logger.Info("InspectTask called")
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound
@@ -536,13 +517,14 @@ func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 }
 
 func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
-	d.logger.Debug("TaskStats called")
+	d.logger.Debug("TaskStats called", "taskID", taskID)
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound
 	}
-
-	return handle.stats(ctx, interval)
+	statsChannel := make(chan *drivers.TaskResourceUsage)
+	go handle.runStatsEmitter(ctx, statsChannel, interval)
+	return statsChannel, nil
 }
 
 func (d *Driver) TaskEvents(ctx context.Context) (<-chan *drivers.TaskEvent, error) {

@@ -440,18 +440,18 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, check)
-
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
 	require.NoError(t, err)
 
 	select {
 	case <-waitCh:
-		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+		t.Fatalf("Container did not exit in time")
 	}
+
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, check)
 
 }
 
@@ -487,19 +487,19 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	// check if the hostname was visible in the container
-	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, shouldHaveHostname)
-
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
 	require.NoError(t, err)
 
 	select {
 	case <-waitCh:
-		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+		t.Fatalf("Container did not exit in time")
 	}
+
+	// check if the hostname was visible in the container
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, shouldHaveHostname)
 
 }
 
