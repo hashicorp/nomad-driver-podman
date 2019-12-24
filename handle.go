@@ -167,13 +167,18 @@ func (h *TaskHandle) MonitorContainer() {
 				h.stateLock.Lock()
 				h.procState = drivers.TaskStateExited
 				if err != nil {
-					h.logger.Error("Failt to inspect stopped container, can not get exit code", "err", err)
+					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
+					h.logger.Error("Failt to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
 					h.exitResult.Signal = 0
 					h.completedAt = time.Now()
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
-					h.exitResult.OOMKilled = inspectData.State.OOMKilled
 					h.completedAt = inspectData.State.FinishedAt
+					if inspectData.State.OOMKilled {
+						h.exitResult.OOMKilled = true
+						h.exitResult.Err = fmt.Errorf("Podman container killed by OOM killer")
+						h.logger.Error("Podman container killed by OOM killer", "container", h.containerID)
+					}
 				}
 				if h.exitChannel != nil {
 					h.exitChannel <- h.exitResult

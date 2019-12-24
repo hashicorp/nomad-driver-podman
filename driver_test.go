@@ -52,7 +52,7 @@ func createBasicResources() *drivers.Resources {
 	res := drivers.Resources{
 		NomadResources: &structs.AllocatedTaskResources{
 			Memory: structs.AllocatedMemoryResources{
-				// MemoryMB: 256,
+				MemoryMB: 100,
 			},
 			Cpu: structs.AllocatedCpuResources{
 				CpuShares: 250,
@@ -628,6 +628,54 @@ func TestPodmanDriver_Init(t *testing.T) {
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "/dev/init")
 
+}
+
+// test oom flag propagation
+func TestPodmanDriver_OOM(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// Incrementally creates a bigger and bigger variable.
+		"sh",
+		"-c", 
+		"x=a; while true; do eval x='$x$x'; done",
+	})
+	// enable --init
+	taskCfg.Init = true
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "oom",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// limit memory to 10MB to trigger oom soon enough
+	task.Resources.NomadResources.Memory.MemoryMB = 10
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		require.False(t, res.Successful(), "Should have failed because of oom but was successful")
+		require.True(t, res.OOMKilled, "OOM Flag not set")
+		require.Contains(t, res.Err.Error(), "OOM killer")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
 }
 
 // read a tasks logfile into a string, fail on error
