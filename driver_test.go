@@ -678,6 +678,54 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	}
 }
 
+// check setting a user for the task
+func TestPodmanDriver_User(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"whoami",
+	})
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "user",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// use "www-data" as a user for our test, it's part of the busybox image
+	task.User = "www-data"
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if stdout was populated with the "whoami" output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, "www-data")
+
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))

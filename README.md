@@ -22,6 +22,7 @@ Contributions are welcome, of course.
 * task config cpu value is used to populate podman CpuShares
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
 * utilize podmans --init feature
+* set username or UID used for the specified command within the container (podman --user option).
 
 
 ## Building The Driver from source
@@ -139,6 +140,16 @@ config {
   init = true
   init_path = /usr/libexec/podman/catatonit
 }
+```
+
+* **user** - Run the command as a specific user/uid within the container. See [Task configuration](https://www.nomadproject.io/docs/job-specification/task.html#user)
+
+```
+user = nobody
+
+config {
+}
+
 ```
 
 ## Example job

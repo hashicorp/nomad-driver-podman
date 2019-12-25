@@ -333,6 +333,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Hostname:   &driverConfig.Hostname,
 		Init:       &driverConfig.Init,
 		InitPath:   &driverConfig.InitPath,
+		User:		&cfg.User,
 	}
 
 	// Setup port mapping and exposed ports
