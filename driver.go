@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -445,37 +444,23 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 }
 
 func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.ExitResult, error) {
+	d.logger.Debug("WaitTask called", "task", taskID)
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound
 	}
-
 	ch := make(chan *drivers.ExitResult)
-
-	// check if the container is already dead
-	s := handle.TaskStatus()
-	if s.State == drivers.TaskStateExited {
-		d.logger.Warn("Not setting exitChannel for a stopped container", "container", handle.containerID)
-		// tell nomad about this
-		ch <- handle.exitResult
-		close(ch)
-		// and bail out
-		return nil, errors.New("Container is not running")
-	}
-
-	// otherwise forward the exit channel into the handle.
-	// it's used when the stats collector detects a stopped channel
-	d.logger.Debug("Setting exitChannel for Handle", "container", handle.containerID)
-	handle.exitChannel = ch
+	go handle.runExitWatcher(ctx, ch)
 	return ch, nil
 }
 
 func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) error {
-	d.logger.Info("Stopping task", "taskID", taskID)
+	d.logger.Info("Stopping task", "taskID", taskID, "signal", signal)
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
+	// fixme send proper signal to container
 	err := d.podmanClient.StopContainer(handle.containerID, int64(timeout.Seconds()))
 	if err != nil {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)

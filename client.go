@@ -24,9 +24,9 @@ import (
 
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"time"
+	"fmt"
 )
 
 const (
@@ -127,11 +127,11 @@ func (c *PodmanClient) GetInfo() (*iopodman.PodmanInfo, error) {
 	return ret, err
 }
 
-// PsId returns a PsContainer struct that describes the process state of exactly
+// PsID returns a PsContainer struct that describes the process state of exactly
 // one container.
 func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
 	var ret *iopodman.PsContainer
-	c.logger.Debug("Get podman info")
+	c.logger.Debug("Get container list", "container", containerID)
 	filters := []string{"id=" + containerID}
 	psOpts := iopodman.PsOpts{
 		Filters: &filters,
@@ -142,7 +142,7 @@ func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
 			if len(result) == 1 {
 				ret = &result[0]
 			} else {
-				return errors.New("No such container")
+				return fmt.Errorf("No such container: %s", containerID)
 			}
 		}
 		return err

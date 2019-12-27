@@ -59,7 +59,6 @@ type TaskHandle struct {
 
 	removeContainerOnExit bool
 
-	exitChannel    chan *drivers.ExitResult
 	containerStats iopodman.ContainerStats
 }
 
@@ -84,6 +83,34 @@ func (h *TaskHandle) IsRunning() bool {
 	h.stateLock.RLock()
 	defer h.stateLock.RUnlock()
 	return h.procState == drivers.TaskStateRunning
+}
+
+
+func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drivers.ExitResult) {
+	timer := time.NewTimer(0)
+	h.logger.Debug("Starting exitWatcher", "container", h.containerID)
+
+	defer func() {
+		h.logger.Debug("Stopping exitWatcher", "container", h.containerID)
+		// be sure to get the whole result
+		h.stateLock.Lock()
+		result := h.exitResult
+		h.stateLock.Unlock()
+		exitChannel <- result
+		close(exitChannel)
+	}()
+
+	for {
+		if ! h.IsRunning() {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			timer.Reset(time.Second)
+		}
+	}
 }
 
 func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
@@ -142,9 +169,6 @@ func (h *TaskHandle) MonitorContainer() {
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
 	cleanup := func() {
-		if h.exitChannel != nil {
-			close(h.exitChannel)
-		}
 		h.logger.Debug("Container monitor exits", "container", h.containerID)
 	}
 	defer cleanup()
@@ -165,7 +189,6 @@ func (h *TaskHandle) MonitorContainer() {
 				// container was stopped, get exit code and other post mortem infos
 				inspectData, err := h.driver.podmanClient.InspectContainer(h.containerID)
 				h.stateLock.Lock()
-				h.procState = drivers.TaskStateExited
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
 					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
@@ -180,12 +203,7 @@ func (h *TaskHandle) MonitorContainer() {
 						h.logger.Error("Podman container killed by OOM killer", "container", h.containerID)
 					}
 				}
-				if h.exitChannel != nil {
-					h.exitChannel <- h.exitResult
-				} else {
-					// this is bad....
-					h.logger.Error("Can not send exit signal to nomad, channel is empty", "container", h.containerID)
-				}
+				h.procState = drivers.TaskStateExited
 				h.stateLock.Unlock()
 				return
 			} else {
