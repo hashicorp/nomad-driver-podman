@@ -200,7 +200,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	// try to connect and get version info
 	info, err := d.podmanClient.GetInfo()
 	if err != nil {
-		d.logger.Error("Cound not get podman info", "err", err)
+		d.logger.Error("Could not get podman info", "err", err)
 	} else {
 		// yay! we can enable the driver
 		health = drivers.HealthStateHealthy
@@ -234,7 +234,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	// FIXME: duplicated code. share more code with StartTask
 	_, err := d.podmanClient.PsID(taskState.ContainerID)
 	if err != nil {
-		return fmt.Errorf("failt to recover task, could not get container info: %v", err)
+		return fmt.Errorf("failed to recover task, could not get container info: %v", err)
 	}
 
 	h := &TaskHandle{
@@ -377,7 +377,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	containerID, err := d.podmanClient.CreateContainer(createOpts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failt to start task, could not create container: %v", err)
+		return nil, nil, fmt.Errorf("failed to start task, could not create container: %v", err)
 	}
 
 	cleanup := func() {
@@ -390,14 +390,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	err = d.podmanClient.StartContainer(containerID)
 	if err != nil {
 		cleanup()
-		return nil, nil, fmt.Errorf("failt to start task, could not start container: %v", err)
+		return nil, nil, fmt.Errorf("failed to start task, could not start container: %v", err)
 	}
 
 	inspectData, err := d.podmanClient.InspectContainer(containerID)
 	if err != nil {
-		d.logger.Error("failt to inspect container", "err", err)
+		d.logger.Error("failed to inspect container", "err", err)
 		cleanup()
-		return nil, nil, fmt.Errorf("failt to start task, could not inspect container : %v", err)
+		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
 	}
 
 	net := &drivers.DriverNetwork{

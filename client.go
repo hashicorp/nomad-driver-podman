@@ -186,7 +186,7 @@ func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectCon
 		if err == nil {
 			err = json.Unmarshal([]byte(inspectJSON), &ret)
 			if err != nil {
-				c.logger.Error("failt to unmarshal inspect container", "err", err)
+				c.logger.Error("failed to unmarshal inspect container", "err", err)
 				return err
 			}
 
