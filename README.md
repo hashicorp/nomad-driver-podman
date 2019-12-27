@@ -18,7 +18,6 @@ Contributions are welcome, of course.
 * publish ports
 * monitor the memory consumption
 * monitor CPU usage
-* container memory is limited to configured value
 * task config cpu value is used to populate podman CpuShares
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
 * utilize podmans --init feature
@@ -177,7 +176,7 @@ config {
 
 ```
 config {
-  memory_swap = "180m"
+  memory_swappiness = 60
 }
 ```
 
