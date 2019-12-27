@@ -168,7 +168,7 @@ func (h *TaskHandle) MonitorContainer() {
 				h.procState = drivers.TaskStateExited
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
-					h.logger.Error("Failt to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
+					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
 					h.exitResult.Signal = 0
 					h.completedAt = time.Now()
 				} else {
