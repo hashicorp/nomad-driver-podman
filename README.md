@@ -23,6 +23,7 @@ Contributions are welcome, of course.
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
 * utilize podmans --init feature
 * set username or UID used for the specified command within the container (podman --user option).
+* fine tune memory usage: standard [nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
 
 
 ## Building The Driver from source
@@ -150,6 +151,34 @@ user = nobody
 config {
 }
 
+```
+
+* **memory_reservation** - Memory soft limit (nit = b (bytes), k (kilobytes), m (megabytes), or g (gigabytes))
+
+After setting memory reservation, when the system detects memory contention or low memory, containers are forced to restrict their consumption to their reservation. So you should always set the value below --memory, otherwise the hard limit will take precedence. By default, memory reservation will be the same as memory limit.
+
+```
+config {
+  memory_reservation = "100m"
+}
+```
+
+* **memory_swap** - A limit value equal to memory plus swap. The swap LIMIT should always be larger than the [memory value](https://www.nomadproject.io/docs/job-specification/resources.html#memory). 
+
+Unit can be b (bytes), k (kilobytes), m (megabytes), or g (gigabytes). If you don't specify a unit, b is used. Set LIMIT to -1 to enable unlimited swap.
+
+```
+config {
+  memory_swap = "180m"
+}
+```
+
+* **memory_swappiness** - Tune a container's memory swappiness behavior. Accepts an integer between 0 and 100.
+
+```
+config {
+  memory_swap = "180m"
+}
 ```
 
 ## Example job

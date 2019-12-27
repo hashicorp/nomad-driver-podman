@@ -321,19 +321,26 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
+	swap := memoryLimit
+	if driverConfig.MemorySwap != "" {
+		swap = driverConfig.MemorySwap
+	}
+
 	createOpts := iopodman.Create{
-		Args:       allArgs,
-		Env:        &allEnv,
-		Name:       &containerName,
-		Volume:     &allVolumes,
-		Memory:     &memoryLimit,
-		MemorySwap: &memoryLimit,
-		CpuShares:  &cpuShares,
-		LogOpt:     &logOpts,
-		Hostname:   &driverConfig.Hostname,
-		Init:       &driverConfig.Init,
-		InitPath:   &driverConfig.InitPath,
-		User:		&cfg.User,
+		Args:              allArgs,
+		Env:               &allEnv,
+		Name:              &containerName,
+		Volume:            &allVolumes,
+		Memory:            &memoryLimit,
+		CpuShares:         &cpuShares,
+		LogOpt:            &logOpts,
+		Hostname:          &driverConfig.Hostname,
+		Init:              &driverConfig.Init,
+		InitPath:          &driverConfig.InitPath,
+		User:              &cfg.User,
+		MemoryReservation: &driverConfig.MemoryReservation,
+		MemorySwap:        &swap,
+		MemorySwappiness:  &driverConfig.MemorySwappiness,
 	}
 
 	// Setup port mapping and exposed ports

@@ -220,4 +220,19 @@ type InspectContainerHostConfig struct {
 	// and represents the container port. A single container port may be
 	// bound to multiple host ports (on different IPs).
 	PortBindings map[string][]InspectHostPort `json:"PortBindings"`
+	// Memory indicates the memory resources allocated to the container.
+	// This is the limit (in bytes) of RAM the container may use.
+	Memory int64 `json:"Memory"`
+	// MemoryReservation is the reservation (soft limit) of memory available
+	// to the container. Soft limits are warnings only and can be exceeded.
+	MemoryReservation int64 `json:"MemoryReservation"`
+	// MemorySwap is the total limit for all memory available to the
+	// container, including swap. 0 indicates that there is no limit to the
+	// amount of memory available.
+	MemorySwap int64 `json:"MemorySwap"`
+	// MemorySwappiness is the willingness of the kernel to page container
+	// memory to swap. It is an integer from 0 to 100, with low numbers
+	// being more likely to be put into swap.
+	// -1, the default, will not set swappiness and use the system defaults.
+	MemorySwappiness int64 `json:"MemorySwappiness"`
 }

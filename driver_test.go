@@ -639,7 +639,7 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		// Incrementally creates a bigger and bigger variable.
 		"sh",
-		"-c", 
+		"-c",
 		"x=a; while true; do eval x='$x$x'; done",
 	})
 	// enable --init
@@ -723,6 +723,62 @@ func TestPodmanDriver_User(t *testing.T) {
 	// see if stdout was populated with the "whoami" output
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "www-data")
+
+}
+
+// test memory/swap options
+func TestPodmanDriver_Swap(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "swap",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// limit memory to 50MB
+	task.Resources.NomadResources.Memory.MemoryMB = 50
+	// but reserve 40MB
+	taskCfg.MemoryReservation = "40m"
+	// and allow mem+swap of 100MB (= 50 MB Swap)
+	taskCfg.MemorySwap = "100m"
+	// set a swappiness of 60
+	taskCfg.MemorySwappiness = 60
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	containerName := BuildContainerName(task)
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*1) * time.Second):
+	}
+	// inspect container to learn about the actual podman limits
+	inspectJSON := inspectContainer(t, containerName)
+	var inspectData iopodman.InspectContainerData
+
+	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
+	// see if the configured values are set correctly
+	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
+	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
+	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
+	require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 
 }
 
