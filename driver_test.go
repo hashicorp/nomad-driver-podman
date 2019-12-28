@@ -618,6 +618,16 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
 	// podman maps init process to /dev/init, so we should see this
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "/dev/init")
