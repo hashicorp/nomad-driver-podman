@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
+	nstructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
@@ -390,9 +391,31 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.Publish = &publishedPorts
 	}
 
-	containerID, err := d.podmanClient.CreateContainer(createOpts)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start task, could not create container: %v", err)
+	containerID := ""
+	recoverRunningContainer := false
+	// check if there is a container with same name
+	otherContainerInfo, err := d.podmanClient.InspectContainer(containerName)
+	if err == nil {
+		// ok, seems we found a container with similar name
+		if otherContainerInfo.State.Running {
+			// it's still running. So let's use it instead of creating a new one 
+			d.logger.Info("Detect running container with same name, we reuse it", "task", cfg.ID, "container", otherContainerInfo.ID)
+			containerID = otherContainerInfo.ID
+			recoverRunningContainer = true
+		} else {
+			// let's remove the old, dead container
+			d.logger.Info("Detect stopped container with same name, removing it", "task", cfg.ID, "container", otherContainerInfo.ID)
+			if err = d.podmanClient.ForceRemoveContainer(otherContainerInfo.ID); err != nil {
+				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
+			}
+		}
+	}
+
+	if !recoverRunningContainer {
+		containerID, err = d.podmanClient.CreateContainer(createOpts)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to start task, could not create container: %v", err)
+		}
 	}
 
 	cleanup := func() {
@@ -402,10 +425,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
-	err = d.podmanClient.StartContainer(containerID)
-	if err != nil {
-		cleanup()
-		return nil, nil, fmt.Errorf("failed to start task, could not start container: %v", err)
+	if !recoverRunningContainer {
+		if err = d.podmanClient.StartContainer(containerID); err != nil {
+			cleanup()
+			return nil, nil, fmt.Errorf("failed to start task, could not start container: %v", err)
+		}
 	}
 
 	inspectData, err := d.podmanClient.InspectContainer(containerID)

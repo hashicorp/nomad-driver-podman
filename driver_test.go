@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/lib/freeport"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/taskenv"
 	ctestutil "github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/testlog"
@@ -194,7 +195,6 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 	}
 }
 
-/*
 // TestPodmanDriver_Start_StoppedContainer asserts that Nomad will detect a
 // stopped task container, remove it, and start a new container.
 //
@@ -217,26 +217,21 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
 	// Create a container of the same name but don't start it. This mimics
 	// the case of dockerd getting restarted and stopping containers while
 	// Nomad is watching them.
-	containerName := task.Name+"-"+task.ID //strings.Replace(task.ID, "/", "_", -1)
+	containerName := BuildContainerName(task)
 	createOpts := iopodman.Create{
-		Args:       []string{
+		Args: []string{
 			taskCfg.Image,
 			"sleep",
 			"5",
 		},
-		Name:       &containerName,
+		Name: &containerName,
 	}
 
-	_, err = iopodman.CreateContainer().Call(ctx, varlinkConnection, createOpts)
+	podman := newPodmanClient()
+	_, err := podman.CreateContainer(createOpts)
 	require.NoError(t, err)
 
 	_, _, err = d.StartTask(task)
@@ -246,7 +241,6 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	require.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
 	require.NoError(t, d.DestroyTask(task.ID, true))
 }
-*/
 
 func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	if !tu.IsCI() {
@@ -836,4 +830,22 @@ func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
 	// FIXME: a parameter for the socket would be nice
 	varlinkConnection, err := varlink.NewConnection(ctx, "unix://run/podman/io.podman")
 	return varlinkConnection, err
+}
+
+func newPodmanClient() *PodmanClient {
+	testLogger := hclog.New(&hclog.LoggerOptions{
+		Name:  "testClient",
+		Level: hclog.LevelFromString("DEBUG"),
+	})
+	client := &PodmanClient{
+		ctx:    context.Background(),
+		logger: testLogger,
+	}
+	return client
+}
+
+func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
+	driver, ok := harness.Impl().(*Driver)
+	require.True(t, ok)
+	return driver
 }
