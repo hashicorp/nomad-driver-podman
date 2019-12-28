@@ -35,18 +35,19 @@ const (
 )
 
 var (
-	MeasuredCpuStats = []string{"System Mode", "User Mode", "Percent"}
-	MeasuredMemStats = []string{"RSS"}
+	measuredCPUStats = []string{"System Mode", "User Mode", "Percent"}
+	measuredMemStats = []string{"RSS"}
 )
 
+// TaskHandle is the podman specific handle for exactly one container
 type TaskHandle struct {
 	containerID string
 	logger      hclog.Logger
 	driver      *Driver
 
-	totalCpuStats  *stats.CpuStats
-	userCpuStats   *stats.CpuStats
-	systemCpuStats *stats.CpuStats
+	totalCPUStats  *stats.CpuStats
+	userCPUStats   *stats.CpuStats
+	systemCPUStats *stats.CpuStats
 
 	// stateLock syncs access to all fields below
 	stateLock sync.RWMutex
@@ -62,7 +63,7 @@ type TaskHandle struct {
 	containerStats iopodman.ContainerStats
 }
 
-func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
+func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
 	h.stateLock.RLock()
 	defer h.stateLock.RUnlock()
 
@@ -79,12 +80,11 @@ func (h *TaskHandle) TaskStatus() *drivers.TaskStatus {
 	}
 }
 
-func (h *TaskHandle) IsRunning() bool {
+func (h *TaskHandle) isRunning() bool {
 	h.stateLock.RLock()
 	defer h.stateLock.RUnlock()
 	return h.procState == drivers.TaskStateRunning
 }
-
 
 func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drivers.ExitResult) {
 	timer := time.NewTimer(0)
@@ -101,7 +101,7 @@ func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drive
 	}()
 
 	for {
-		if ! h.IsRunning() {
+		if !h.isRunning() {
 			return
 		}
 		select {
@@ -132,20 +132,20 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		//available := shelpers.TotalTicksAvailable()
 		//cpus := shelpers.CPUNumCores()
 
-		totalPercent := h.totalCpuStats.Percent(h.containerStats.Cpu * 10e16)
+		totalPercent := h.totalCPUStats.Percent(h.containerStats.Cpu * 10e16)
 		cs := &drivers.CpuStats{
-			SystemMode: h.systemCpuStats.Percent(float64(h.containerStats.System_nano)),
-			UserMode:   h.userCpuStats.Percent(float64(h.containerStats.Cpu_nano)),
+			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.System_nano)),
+			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.Cpu_nano)),
 			Percent:    totalPercent,
-			TotalTicks: h.systemCpuStats.TicksConsumed(totalPercent),
-			Measured:   MeasuredCpuStats,
+			TotalTicks: h.systemCPUStats.TicksConsumed(totalPercent),
+			Measured:   measuredCPUStats,
 		}
 
 		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
 
 		ms := &drivers.MemoryStats{
 			RSS:      uint64(h.containerStats.Mem_usage),
-			Measured: MeasuredMemStats,
+			Measured: measuredMemStats,
 		}
 		h.stateLock.Unlock()
 
@@ -162,7 +162,7 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 	}
 }
 
-func (h *TaskHandle) MonitorContainer() {
+func (h *TaskHandle) runContainerMonitor() {
 
 	timer := time.NewTimer(0)
 	interval := time.Second * 1
@@ -206,11 +206,10 @@ func (h *TaskHandle) MonitorContainer() {
 				h.procState = drivers.TaskStateExited
 				h.stateLock.Unlock()
 				return
-			} else {
-				h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			}
-			// continue and wait for next cycle, it should then
+			// continue and wait for next cycle, it should eventually
 			// fall into the "TaskStateExited" case
+			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			continue
 		}
 

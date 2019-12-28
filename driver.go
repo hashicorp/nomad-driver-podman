@@ -123,14 +123,22 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	}
 }
 
+// PluginInfo returns metadata about the podman driver plugin
 func (d *Driver) PluginInfo() (*base.PluginInfoResponse, error) {
 	return pluginInfo, nil
 }
 
+// ConfigSchema function allows a plugin to tell Nomad the schema for its configuration.
+// This configuration is given in a plugin block of the client configuration.
+// The schema is defined with the hclspec package.
 func (d *Driver) ConfigSchema() (*hclspec.Spec, error) {
 	return configSpec, nil
 }
 
+// SetConfig function is called when starting the plugin for the first time.
+// The Config given has two different configuration fields. The first PluginConfig,
+// is an encoded configuration from the plugin block of the client config.
+// The second, AgentConfig, is the Nomad agent's configuration which is given to all plugins.
 func (d *Driver) SetConfig(cfg *base.Config) error {
 	var config PluginConfig
 	if len(cfg.PluginConfig) != 0 {
@@ -147,19 +155,21 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	return nil
 }
 
-func (d *Driver) Shutdown(ctx context.Context) error {
-	d.signalShutdown()
-	return nil
-}
-
+// TaskConfigSchema returns the schema for the driver configuration of the task.
 func (d *Driver) TaskConfigSchema() (*hclspec.Spec, error) {
 	return taskConfigSpec, nil
 }
 
+// Capabilities define what features the driver implements.
 func (d *Driver) Capabilities() (*drivers.Capabilities, error) {
 	return capabilities, nil
 }
 
+// Fingerprint  is called by the client when the plugin is started.
+// It allows the driver to indicate its health to the client.
+// The channel returned should immediately send an initial Fingerprint,
+// then send periodic updates at an interval that is appropriate for the driver
+// until the context is canceled.
 func (d *Driver) Fingerprint(ctx context.Context) (<-chan *drivers.Fingerprint, error) {
 	err := shelpers.Init()
 	if err != nil {
@@ -216,6 +226,11 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	}
 }
 
+// RecoverTask detects running tasks when nomad client or task driver is restarted.
+// When a driver is restarted it is not expected to persist any internal state to disk.
+// To support this, Nomad will attempt to recover a task that was previously started
+// if the driver does not recognize the task ID. During task recovery,
+// Nomad calls RecoverTask passing the TaskHandle that was returned by the StartTask function.
 func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	if handle == nil {
 		return fmt.Errorf("error: handle cannot be nil")
@@ -245,16 +260,16 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		exitResult:  &drivers.ExitResult{},
 		logger:      d.logger.Named("podmanHandle"),
 
-		totalCpuStats:  stats.NewCpuStats(),
-		userCpuStats:   stats.NewCpuStats(),
-		systemCpuStats: stats.NewCpuStats(),
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
 
 		removeContainerOnExit: d.config.GC.Container,
 	}
 
 	d.tasks.Set(taskState.TaskConfig.ID, h)
 
-	go h.MonitorContainer()
+	go h.runContainerMonitor()
 	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID)
 
 	return nil
@@ -265,6 +280,7 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 	return fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
 }
 
+// StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
@@ -414,9 +430,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		startedAt:   time.Now().Round(time.Millisecond),
 		logger:      d.logger.Named("podmanHandle"),
 
-		totalCpuStats:  stats.NewCpuStats(),
-		userCpuStats:   stats.NewCpuStats(),
-		systemCpuStats: stats.NewCpuStats(),
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
 
 		removeContainerOnExit: d.config.GC.Container,
 	}
@@ -436,13 +452,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.tasks.Set(cfg.ID, h)
 
-	go h.MonitorContainer()
+	go h.runContainerMonitor()
 
 	d.logger.Debug("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil
 }
 
+// WaitTask function is expected to return a channel that will send an *ExitResult when the task
+// exits or close the channel when the context is canceled. It is also expected that calling
+// WaitTask on an exited task will immediately send an *ExitResult on the returned channel.
+// A call to WaitTask after StopTask is valid and should be handled.
+// If WaitTask is called after DestroyTask, it should return drivers.ErrTaskNotFound as no task state should exist after DestroyTask is called.
 func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.ExitResult, error) {
 	d.logger.Debug("WaitTask called", "task", taskID)
 	handle, ok := d.tasks.Get(taskID)
@@ -454,6 +475,9 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 	return ch, nil
 }
 
+// StopTask function is expected to stop a running task by sending the given signal to it.
+// If the task does not stop during the given timeout, the driver must forcefully kill the task.
+// StopTask does not clean up resources of the task or remove it from the driver's internal state.
 func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) error {
 	d.logger.Info("Stopping task", "taskID", taskID, "signal", signal)
 	handle, ok := d.tasks.Get(taskID)
@@ -469,17 +493,19 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	return nil
 }
 
+// DestroyTask function cleans up and removes a task that has terminated.
+// If force is set to true, the driver must destroy the task even if it is still running.
 func (d *Driver) DestroyTask(taskID string, force bool) error {
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
 
-	if handle.IsRunning() && !force {
+	if handle.isRunning() && !force {
 		return fmt.Errorf("cannot destroy running task")
 	}
 
-	if handle.IsRunning() {
+	if handle.isRunning() {
 		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
 		err := d.podmanClient.StopContainer(handle.containerID, int64(60))
@@ -499,6 +525,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	return nil
 }
 
+// InspectTask function returns detailed status information for the referenced taskID.
 func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 	d.logger.Info("InspectTask called")
 	handle, ok := d.tasks.Get(taskID)
@@ -506,9 +533,11 @@ func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 		return nil, drivers.ErrTaskNotFound
 	}
 
-	return handle.TaskStatus(), nil
+	return handle.taskStatus(), nil
 }
 
+// TaskStats function returns a channel which the driver should send stats to at the given interval.
+// The driver must send stats at the given interval until the given context is canceled or the task terminates.
 func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
 	d.logger.Debug("TaskStats called", "taskID", taskID)
 	handle, ok := d.tasks.Get(taskID)
@@ -520,14 +549,19 @@ func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Dur
 	return statsChannel, nil
 }
 
+// TaskEvents function allows the driver to publish driver specific events about tasks and
+// the Nomad client publishes events associated with an allocation.
 func (d *Driver) TaskEvents(ctx context.Context) (<-chan *drivers.TaskEvent, error) {
 	return d.eventer.TaskEvents(ctx)
 }
 
+// SignalTask function is used by drivers which support sending OS signals (SIGHUP, SIGKILL, SIGUSR1 etc.) to the task.
+// It is an optional function and is listed as a capability in the driver Capabilities struct.
 func (d *Driver) SignalTask(taskID string, signal string) error {
-	return fmt.Errorf("Pdoman driver does not support signals")
+	return fmt.Errorf("Podman driver does not support signals")
 }
 
+// ExecTask function is used by the Nomad client to execute commands inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
-	return nil, fmt.Errorf("Pdoman driver does not support exec")
+	return nil, fmt.Errorf("Podman driver does not support exec")
 }

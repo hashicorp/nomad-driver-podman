@@ -24,9 +24,9 @@ import (
 
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"time"
-	"fmt"
 )
 
 const (
