@@ -245,18 +245,19 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	if err := handle.GetDriverState(&taskState); err != nil {
 		return fmt.Errorf("failed to decode task state from handle: %v", err)
 	}
+	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
-	// FIXME: duplicated code. share more code with StartTask
-	_, err := d.podmanClient.PsID(taskState.ContainerID)
+	psInfo, err := d.podmanClient.PsID(taskState.ContainerID)
 	if err != nil {
-		return fmt.Errorf("failed to recover task, could not get container info: %v", err)
+		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID,"container", taskState.ContainerID, "err", err)
+		return nil
 	}
 
 	h := &TaskHandle{
 		containerID: taskState.ContainerID,
 		driver:      d,
 		taskConfig:  taskState.TaskConfig,
-		procState:   drivers.TaskStateRunning,
+		procState:   drivers.TaskStateUnknown,
 		startedAt:   taskState.StartedAt,
 		exitResult:  &drivers.ExitResult{},
 		logger:      d.logger.Named("podmanHandle"),
@@ -268,10 +269,36 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		removeContainerOnExit: d.config.GC.Container,
 	}
 
+	if psInfo.State == "running" {
+		d.logger.Info("Recovered a still running container", "container", psInfo.Id)
+		h.procState = drivers.TaskStateRunning
+	} else if psInfo.State == "exited" {
+		// are we allowed to restart a stopped container?
+		if d.config.RecoverStopped {
+			d.logger.Debug("Found a stopped container, try to start it", "container", psInfo.Id)
+			if err = d.podmanClient.StartContainer(psInfo.Id); err != nil {
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID,"container", taskState.ContainerID, "err", err)
+			} else {
+				d.logger.Info("Restarted a container during recovery", "container", psInfo.Id)
+				h.procState = drivers.TaskStateRunning
+			}
+		} else {
+			// no, let's cleanup here to prepare for a StartTask()
+			d.logger.Debug("Found a stopped container, removing it", "container", psInfo.Id)
+			if err = d.podmanClient.ForceRemoveContainer(psInfo.Id); err != nil {
+				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID,"container", psInfo.Id, "err", err)
+			}
+			h.procState = drivers.TaskStateExited
+		}
+	} else {
+		d.logger.Warn("Recovery restart failed, unknown container state", "state", psInfo.State,"container", taskState.ContainerID)
+		h.procState = drivers.TaskStateUnknown
+	}
+
 	d.tasks.Set(taskState.TaskConfig.ID, h)
 
 	go h.runContainerMonitor()
-	d.logger.Debug("Recovered podman container", "container", taskState.ContainerID)
+	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
 
 	return nil
 }
@@ -382,7 +409,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				containerPort = mapped
 			}
 
-			d.logger.Debug("Publish port", "ip", network.IP, "hostPort", hostPort, "containerPort", containerPort)
 			// we map both udp and tcp ports
 			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/tcp", network.IP, hostPort, containerPort))
 			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/udp", network.IP, hostPort, containerPort))
@@ -394,18 +420,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	containerID := ""
 	recoverRunningContainer := false
 	// check if there is a container with same name
-	otherContainerInfo, err := d.podmanClient.InspectContainer(containerName)
+	otherContainerPs, err := d.podmanClient.PsByName(containerName)
 	if err == nil {
 		// ok, seems we found a container with similar name
-		if otherContainerInfo.State.Running {
+		if otherContainerPs.State == "running" {
 			// it's still running. So let's use it instead of creating a new one 
-			d.logger.Info("Detect running container with same name, we reuse it", "task", cfg.ID, "container", otherContainerInfo.ID)
-			containerID = otherContainerInfo.ID
+			d.logger.Info("Detect running container with same name, we reuse it", "task", cfg.ID, "container", otherContainerPs.Id)
+			containerID = otherContainerPs.Id
 			recoverRunningContainer = true
 		} else {
 			// let's remove the old, dead container
-			d.logger.Info("Detect stopped container with same name, removing it", "task", cfg.ID, "container", otherContainerInfo.ID)
-			if err = d.podmanClient.ForceRemoveContainer(otherContainerInfo.ID); err != nil {
+			d.logger.Info("Detect stopped container with same name, removing it", "task", cfg.ID, "container", otherContainerPs.Id)
+			if err = d.podmanClient.ForceRemoveContainer(otherContainerPs.Id); err != nil {
 				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
 			}
 		}
@@ -478,7 +504,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	go h.runContainerMonitor()
 
-	d.logger.Debug("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
+	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil
 }

@@ -126,24 +126,48 @@ func (c *PodmanClient) GetInfo() (*iopodman.PodmanInfo, error) {
 	})
 	return ret, err
 }
-
 // PsID returns a PsContainer struct that describes the process state of exactly
 // one container.
 func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
-	var ret *iopodman.PsContainer
-	c.logger.Debug("Get container list", "container", containerID)
 	filters := []string{"id=" + containerID}
+	psInfo, err := c.Ps(filters)
+	if err == nil {
+		if len(psInfo) == 1 {
+			return &psInfo[0], nil
+		} else {
+			return nil,fmt.Errorf("No such container: %s", containerID)
+		}
+	}
+	return nil,err
+}
+
+// PsByName returns a PsContainer struct that describes the process state of exactly
+// one container.
+func (c *PodmanClient) PsByName(containerName string) (*iopodman.PsContainer, error) {
+	filters := []string{"name=" + containerName}
+	psInfo, err := c.Ps(filters)
+	if err == nil {
+		if len(psInfo) == 1 {
+			return &psInfo[0], nil
+		} else {
+			return nil,fmt.Errorf("No such container: %s", containerName)
+		}
+	}
+	return nil,err
+}
+
+// Ps finds process info for one or more containers by applying a filter
+func (c *PodmanClient) Ps(filters []string) ([]iopodman.PsContainer, error) {
+	var ret []iopodman.PsContainer
+	c.logger.Debug("Get container list", "filters", filters)
 	psOpts := iopodman.PsOpts{
 		Filters: &filters,
+		All:     true,
 	}
 	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
 		result, err := iopodman.Ps().Call(c.ctx, varlinkConnection, psOpts)
 		if err == nil {
-			if len(result) == 1 {
-				ret = &result[0]
-			} else {
-				return fmt.Errorf("No such container: %s", containerID)
-			}
+			ret = result
 		}
 		return err
 	})

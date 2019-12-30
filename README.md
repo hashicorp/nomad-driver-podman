@@ -81,6 +81,18 @@ plugin "nomad-driver-podman" {
 }
 ```
 
+* recover_stopped (bool) Defaults to true. Allows the driver to start and resuse a previously stopped container after 
+  a Nomad client restart. 
+  Consider a simple single node system and a complete reboot. All previously managed containers
+  will be reused instead of disposed and recreated.
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    recover_stopped = false
+  }
+}
+```
 
 ## Task Configuration
 

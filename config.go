@@ -43,6 +43,11 @@ var (
 		})), hclspec.NewLiteral(`{
 			container = true
 		}`)),
+		// allow TaskRecover to start a still existing, stopped, container during client/driver restart
+		"recover_stopped": hclspec.NewDefault(
+			hclspec.NewAttr("recover_stopped", "bool", false),
+			hclspec.NewLiteral("true"),
+		),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -75,8 +80,9 @@ type VolumeConfig struct {
 
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
-	Volumes VolumeConfig `codec:"volumes"`
-	GC      GCConfig     `codec:"gc"`
+	Volumes        VolumeConfig `codec:"volumes"`
+	GC             GCConfig     `codec:"gc"`
+	RecoverStopped bool         `codec:"recover_stopped"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
