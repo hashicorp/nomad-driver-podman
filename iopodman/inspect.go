@@ -220,6 +220,10 @@ type InspectContainerHostConfig struct {
 	// and represents the container port. A single container port may be
 	// bound to multiple host ports (on different IPs).
 	PortBindings map[string][]InspectHostPort `json:"PortBindings"`
+	// Tmpfs is a list of tmpfs filesystems that will be mounted into the
+	// container.
+	// It is a map of destination path to options for the mount.
+	Tmpfs map[string]string `json:"Tmpfs"`
 	// Memory indicates the memory resources allocated to the container.
 	// This is the limit (in bytes) of RAM the container may use.
 	Memory int64 `json:"Memory"`

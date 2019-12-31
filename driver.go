@@ -384,6 +384,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
 		MemorySwappiness:  &driverConfig.MemorySwappiness,
+		Tmpfs:             &driverConfig.Tmpfs,
 	}
 
 	// Setup port mapping and exposed ports

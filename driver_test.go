@@ -537,9 +537,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	inspectJSON := inspectContainer(t, containerName)
-	var inspectData iopodman.InspectContainerData
-	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
+	inspectData := inspectContainer(t, containerName)
 
 	// Verify that the port environment variables are set
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
@@ -774,16 +772,74 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 	// inspect container to learn about the actual podman limits
-	inspectJSON := inspectContainer(t, containerName)
-	var inspectData iopodman.InspectContainerData
+	inspectData := inspectContainer(t, containerName)
 
-	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
 	// see if the configured values are set correctly
 	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
 	require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 
+}
+
+// check tmpfs mounts
+func TestPodmanDriver_Tmpfs(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"sh",
+		"-c",
+		"mount|grep tmpfs",
+	})
+	taskCfg.Tmpfs = []string{
+		"/tmpdata1",
+		"/tmpdata2",
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "tmpfs",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// use "www-data" as a user for our test, it's part of the busybox image
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if tmpfs was propagated to podman
+	inspectData := inspectContainer(t, containerName)
+	expectedFilesystem := map[string]string {
+		"/tmpdata1" : "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
+		"/tmpdata2" : "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
+	}
+	require.Exactly(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
+
+	// see if stdout was populated with expected "mount" output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, " tmpfs on /tmpdata1 type tmpfs ")
+	require.Contains(t, tasklog, " tmpfs on /tmpdata2 type tmpfs ")
 }
 
 // read a tasks logfile into a string, fail on error
@@ -810,7 +866,7 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 	}
 }
 
-func inspectContainer(t *testing.T, containerName string) string {
+func inspectContainer(t *testing.T, containerName string) iopodman.InspectContainerData {
 	ctx := context.Background()
 	varlinkConnection, err := getPodmanConnection(ctx)
 	require.NoError(t, err)
@@ -820,7 +876,10 @@ func inspectContainer(t *testing.T, containerName string) string {
 	inspectJSON, err := iopodman.InspectContainer().Call(ctx, varlinkConnection, containerName)
 	require.NoError(t, err)
 
-	return inspectJSON
+	var inspectData iopodman.InspectContainerData
+	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
+
+	return inspectData
 }
 
 func getContainer(t *testing.T, containerName string) iopodman.Container {

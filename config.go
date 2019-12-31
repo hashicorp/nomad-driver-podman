@@ -64,6 +64,7 @@ var (
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
+		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 	})
 )
 
@@ -72,7 +73,7 @@ type GCConfig struct {
 	Container bool `codec:"container"`
 }
 
-// VolumeConfig
+// VolumeConfig is the drivers volume specific configuration
 type VolumeConfig struct {
 	Enabled      bool   `codec:"enabled"`
 	SelinuxLabel string `codec:"selinuxlabel"`
@@ -98,4 +99,5 @@ type TaskConfig struct {
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
+	Tmpfs             []string           `codec:"tmpfs"`
 }

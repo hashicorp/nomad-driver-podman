@@ -133,6 +133,16 @@ config {
 }
 ```
 
+* **tmpfs** - (Optional) A list of /container_path strings for tmpfs mount points. See podman run --tmpfs options for details. 
+
+```
+config {
+  tmpfs = [
+    "/var"
+  ]
+}
+```
+
 * **hostname** -  (Optional) The hostname to assign to the container. When launching more than one of a task (using count) with this option set, every container the task starts will have the same hostname.
 
 * **Forwarding and Exposing Ports** - (Optional) See [Docker Driver Configuration](https://www.nomadproject.io/docs/drivers/docker.html#forwarding-and-exposing-ports) for details.
