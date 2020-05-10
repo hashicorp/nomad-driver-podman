@@ -48,6 +48,11 @@ var (
 			hclspec.NewAttr("recover_stopped", "bool", false),
 			hclspec.NewLiteral("true"),
 		),
+		// the path to the VarLink socket
+		"socket_path": hclspec.NewDefault(
+			hclspec.NewAttr("socket_path", "string", false),
+			hclspec.NewLiteral(`"unix://run/podman/io.podman"`),
+		),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -85,6 +90,7 @@ type PluginConfig struct {
 	Volumes        VolumeConfig `codec:"volumes"`
 	GC             GCConfig     `codec:"gc"`
 	RecoverStopped bool         `codec:"recover_stopped"`
+	SocketPath     string       `codec:"socket_path"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
