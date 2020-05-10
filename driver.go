@@ -160,6 +160,8 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		d.nomadConfig = cfg.AgentConfig.Driver
 	}
 
+	d.podmanClient.varlinkSocketPath = config.SocketPath
+
 	return nil
 }
 

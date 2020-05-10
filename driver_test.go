@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"flag"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
@@ -47,6 +48,7 @@ var (
 	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
 	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
+	varlinkSocketPath = ""
 )
 
 func createBasicResources() *drivers.Resources {
@@ -967,8 +969,7 @@ func getContainer(t *testing.T, containerName string) iopodman.Container {
 }
 
 func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
-	// FIXME: a parameter for the socket would be nice
-	varlinkConnection, err := varlink.NewConnection(ctx, "unix://run/podman/io.podman")
+	varlinkConnection, err := varlink.NewConnection(ctx, *varlinkSocketPath)
 	return varlinkConnection, err
 }
 
@@ -980,6 +981,7 @@ func newPodmanClient() *PodmanClient {
 	client := &PodmanClient{
 		ctx:    context.Background(),
 		logger: testLogger,
+		varlinkSocketPath: *varlinkSocketPath,
 	}
 	return client
 }

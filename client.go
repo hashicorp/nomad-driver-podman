@@ -43,6 +43,8 @@ type PodmanClient struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
+
+	varlinkSocketPath string
 }
 
 // withVarlink calls a podman varlink function and retries N times in case of network failures
@@ -223,7 +225,6 @@ func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectCon
 
 // getConnection opens a new varlink connection
 func (c *PodmanClient) getConnection() (*varlink.Connection, error) {
-	// FIXME: a parameter for the socket would be nice
-	varlinkConnection, err := varlink.NewConnection(c.ctx, "unix://run/podman/io.podman")
+	varlinkConnection, err := varlink.NewConnection(c.ctx, c.varlinkSocketPath)
 	return varlinkConnection, err
 }
