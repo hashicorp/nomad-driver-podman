@@ -30,12 +30,10 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	"flag"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad/client/taskenv"
-	ctestutil "github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
@@ -51,7 +49,7 @@ var (
 	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
 	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
-	varlinkSocketPath = ""
+	varlinkSocketPath     = ""
 )
 
 func init() {
@@ -90,9 +88,8 @@ func createBasicResources() *drivers.Resources {
 // A driver plugin interface and cleanup function is returned
 func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.DriverHarness {
 
-	ctestutil.RequireRoot(t)
-
 	d := NewPodmanDriver(testlog.HCLogger(t)).(*Driver)
+	d.podmanClient = newPodmanClient()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
@@ -610,9 +607,9 @@ func TestPodmanDriver_Init(t *testing.T) {
 	if os.IsNotExist(err) {
 		path, err := exec.LookPath("catatonit")
 		if err != nil {
-		t.Skip("Skipping --init test because catatonit is not installed")
-		return
-	}
+			t.Skip("Skipping --init test because catatonit is not installed")
+			return
+		}
 		initPath = path
 	}
 
@@ -1014,8 +1011,8 @@ func newPodmanClient() *PodmanClient {
 		Level: hclog.LevelFromString("DEBUG"),
 	})
 	client := &PodmanClient{
-		ctx:    context.Background(),
-		logger: testLogger,
+		ctx:               context.Background(),
+		logger:            testLogger,
 		varlinkSocketPath: varlinkSocketPath,
 	}
 	return client
