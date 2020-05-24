@@ -29,6 +29,7 @@ Contributions are welcome, of course.
 
 This project has a go.mod definition. So you can clone it to whatever directory you want.
 It is not necessary to setup a go path at all.
+Ensure that you use go 1.13 or newer.
 
 ```sh
 $ git clone git@github.com:pascomnet/nomad-driver-podman
