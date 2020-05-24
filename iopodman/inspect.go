@@ -178,7 +178,7 @@ type InspectContainerState struct {
 	Dead       bool      `json:"Dead"`
 	Pid        int       `json:"Pid"`
 	ExitCode   int32     `json:"ExitCode"`
-	Error      string    `json:"Error"` // TODO
+	Error      string    `json:"Error"`
 	StartedAt  time.Time `json:"StartedAt"`
 	FinishedAt time.Time `json:"FinishedAt"`
 	// Healthcheck HealthCheckResults `json:"Healthcheck,omitempty"`
