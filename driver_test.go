@@ -665,7 +665,7 @@ func TestPodmanDriver_OOM(t *testing.T) {
 		// Incrementally creates a bigger and bigger variable.
 		"sh",
 		"-c",
-		"x=a; while true; do eval x='$x$x'; done",
+		"tail /dev/zero",
 	})
 
 	// only enable init if catatonit is installed
