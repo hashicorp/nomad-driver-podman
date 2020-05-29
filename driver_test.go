@@ -957,9 +957,7 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 }
 
 func newTaskConfig(variant string, command []string) TaskConfig {
-	// busyboxImageID is the ID stored in busybox.tar
-	busyboxImageID := "docker://busybox"
-	// busyboxImageID := "busybox:1.29.3"
+	busyboxImageID := "docker://docker.io/library/busybox:latest"
 
 	image := busyboxImageID
 
