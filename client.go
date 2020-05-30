@@ -227,6 +227,26 @@ func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectCon
 	return ret, err
 }
 
+// PullImage takes a name or ID of an image and pulls it to local storage
+// returning the name of the image pulled
+func (c *PodmanClient) PullImage(imageID string) (string, error) {
+	var ret string
+	c.logger.Debug("Pull image", "image", imageID)
+	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
+		moreResponse, err := iopodman.PullImage().Call(c.ctx, varlinkConnection, imageID)
+		if err == nil {
+			ret = moreResponse.Logs[len(moreResponse.Logs)-1]
+			if err != nil {
+				c.logger.Error("failed to unmarshal image pull logs", "err", err)
+				return err
+			}
+
+		}
+		return err
+	})
+	return ret, err
+}
+
 // InspectImage data takes a name or ID of an image and returns the inspection
 // data as iopodman.InspectImageData.
 func (c *PodmanClient) InspectImage(imageID string) (iopodman.InspectImageData, error) {
