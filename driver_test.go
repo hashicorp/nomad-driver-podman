@@ -28,10 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/lib/freeport"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/taskenv"
 	ctestutil "github.com/hashicorp/nomad/client/testutil"
+	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
@@ -502,7 +502,8 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
-	ports := freeport.GetT(t, 2)
+	ports := freeport.MustTake(2)
+	defer freeport.Return(ports)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 
@@ -830,9 +831,9 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	// see if tmpfs was propagated to podman
 	inspectData := inspectContainer(t, containerName)
-	expectedFilesystem := map[string]string {
-		"/tmpdata1" : "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
-		"/tmpdata2" : "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
+	expectedFilesystem := map[string]string{
+		"/tmpdata1": "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
+		"/tmpdata2": "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
 	}
 	require.Exactly(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
 
