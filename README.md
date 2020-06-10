@@ -8,7 +8,7 @@ Nomad podman Driver
 *THIS IS A WORK IN PROGRESS PLUGIN*. Do not run it in production!
 Contributions are welcome, of course.
 
-Many thanks to @towe75 and [Pascom](https://www.pascom.net/) for contributing
+Many thanks to [@towe75](https://github.com/towe75) and [Pascom](https://www.pascom.net/) for contributing
 this plugin to Nomad!
 
 ## Features
