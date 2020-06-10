@@ -33,6 +33,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	"github.com/pascomnet/nomad-driver-podman/iopodman"
+	"github.com/pascomnet/nomad-driver-podman/version"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 )
@@ -54,7 +55,7 @@ var (
 	pluginInfo = &base.PluginInfoResponse{
 		Type:              base.PluginTypeDriver,
 		PluginApiVersions: []string{drivers.ApiVersion010},
-		PluginVersion:     "0.0.1-dev",
+		PluginVersion:     version.Version,
 		Name:              pluginName,
 	}
 
@@ -249,7 +250,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	psInfo, err := d.podmanClient.PsID(taskState.ContainerID)
 	if err != nil {
-		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID,"container", taskState.ContainerID, "err", err)
+		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
 		return nil
 	}
 
@@ -277,7 +278,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		if d.config.RecoverStopped {
 			d.logger.Debug("Found a stopped container, try to start it", "container", psInfo.Id)
 			if err = d.podmanClient.StartContainer(psInfo.Id); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID,"container", taskState.ContainerID, "err", err)
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
 			} else {
 				d.logger.Info("Restarted a container during recovery", "container", psInfo.Id)
 				h.procState = drivers.TaskStateRunning
@@ -286,12 +287,12 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 			// no, let's cleanup here to prepare for a StartTask()
 			d.logger.Debug("Found a stopped container, removing it", "container", psInfo.Id)
 			if err = d.podmanClient.ForceRemoveContainer(psInfo.Id); err != nil {
-				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID,"container", psInfo.Id, "err", err)
+				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", psInfo.Id, "err", err)
 			}
 			h.procState = drivers.TaskStateExited
 		}
 	} else {
-		d.logger.Warn("Recovery restart failed, unknown container state", "state", psInfo.State,"container", taskState.ContainerID)
+		d.logger.Warn("Recovery restart failed, unknown container state", "state", psInfo.State, "container", taskState.ContainerID)
 		h.procState = drivers.TaskStateUnknown
 	}
 
@@ -425,7 +426,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err == nil {
 		// ok, seems we found a container with similar name
 		if otherContainerPs.State == "running" {
-			// it's still running. So let's use it instead of creating a new one 
+			// it's still running. So let's use it instead of creating a new one
 			d.logger.Info("Detect running container with same name, we reuse it", "task", cfg.ID, "container", otherContainerPs.Id)
 			containerID = otherContainerPs.Id
 			recoverRunningContainer = true
