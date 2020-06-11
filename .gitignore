@@ -1,2 +1,3 @@
 build
 nomad-driver-podman
+pkg/
