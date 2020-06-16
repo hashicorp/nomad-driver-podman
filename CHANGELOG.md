@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+FEATURES:
+
+* #33 configurable network_mode
+
 ## 0.0.2 (June 11, 2020)
 
 FEATURES:
