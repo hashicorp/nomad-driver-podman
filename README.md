@@ -208,7 +208,7 @@ config {
 
 * **network_mode** - Set the [network mode](http://docs.podman.io/en/latest/markdown/podman-run.1.html#options) for the container.
 
-- `bridge`: create a network stack on the default bridge
+- `bridge`: (default for rootful) create a network stack on the default bridge
 - `none`: no networking
 - `container:id`: reuse another container's network stack
 - `host`: use the Podman host network stack. Note: the host mode gives the
