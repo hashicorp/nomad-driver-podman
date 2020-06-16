@@ -832,8 +832,8 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	// see if tmpfs was propagated to podman
 	inspectData := inspectContainer(t, containerName)
 	expectedFilesystem := map[string]string{
-		"/tmpdata1": "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
-		"/tmpdata2": "rw,rprivate,noexec,nosuid,nodev,tmpcopyup",
+		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
+		"/tmpdata2": "rw,rprivate,nosuid,nodev,tmpcopyup",
 	}
 	require.Exactly(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
 
