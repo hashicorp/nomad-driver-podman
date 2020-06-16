@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/consul-template v0.20.0 // indirect
 	github.com/hashicorp/consul/sdk v0.4.0
 	github.com/hashicorp/cronexpr v1.1.0 // indirect
-	github.com/hashicorp/go-hclog v0.12.0
+	github.com/hashicorp/go-hclog v0.12.1
 	github.com/hashicorp/go-msgpack v1.1.5
 	github.com/hashicorp/hcl2 v0.0.0-20191002203319-fb75b3253c80 // indirect
 	github.com/hashicorp/nomad v0.11.2
