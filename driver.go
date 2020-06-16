@@ -385,6 +385,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
 		MemorySwappiness:  &driverConfig.MemorySwappiness,
+		Network:           &driverConfig.NetworkMode,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 

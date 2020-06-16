@@ -4,6 +4,10 @@ FEATURES:
 
 * config: Add ability to configure container network_mode [[GH-33](https://github.com/hashicorp/nomad-driver-podman/issues/33)]
 
+FEATURES:
+
+* #33 configurable network_mode
+
 ## 0.0.2 (June 11, 2020)
 
 FEATURES:

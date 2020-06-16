@@ -126,6 +126,7 @@ func (c *PodmanClient) GetInfo() (*iopodman.PodmanInfo, error) {
 	})
 	return ret, err
 }
+
 // PsID returns a PsContainer struct that describes the process state of exactly
 // one container.
 func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
@@ -135,10 +136,10 @@ func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
 		if len(psInfo) == 1 {
 			return &psInfo[0], nil
 		} else {
-			return nil,fmt.Errorf("No such container: %s", containerID)
+			return nil, fmt.Errorf("No such container: %s", containerID)
 		}
 	}
-	return nil,err
+	return nil, err
 }
 
 // PsByName returns a PsContainer struct that describes the process state of exactly
@@ -150,10 +151,10 @@ func (c *PodmanClient) PsByName(containerName string) (*iopodman.PsContainer, er
 		if len(psInfo) == 1 {
 			return &psInfo[0], nil
 		} else {
-			return nil,fmt.Errorf("No such container: %s", containerName)
+			return nil, fmt.Errorf("No such container: %s", containerName)
 		}
 	}
-	return nil,err
+	return nil, err
 }
 
 // Ps finds process info for one or more containers by applying a filter
