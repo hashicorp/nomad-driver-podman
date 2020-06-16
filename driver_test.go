@@ -843,6 +843,76 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Contains(t, tasklog, " tmpfs on /tmpdata2 type tmpfs ")
 }
 
+// TestPodmanDriver_NetworkMode asserts we can specify different network modes
+// Default podman cni subnet 10.88.0.0/16
+func TestPodmanDriver_NetworkMode(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		mode     string
+		expected string
+		gateway  string
+	}{
+		{
+			mode:    "host",
+			gateway: "",
+		},
+		{
+			// https://github.com/containers/libpod/issues/6618
+			// bridge mode info is not fully populated for inspect command
+			// so we can only make certain assertions
+			mode:    "bridge",
+			gateway: "10.88.0.1",
+		},
+		{
+			// slirp4netns information not populated by podman and
+			// is not supported for root containers
+			// https://github.com/containers/libpod/issues/6097
+			mode: "slirp4netns",
+		},
+		{
+			mode:    "none",
+			gateway: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s_mode_%s", t.Name(), tc.mode), func(t *testing.T) {
+
+			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+			taskCfg.NetworkMode = tc.mode
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      fmt.Sprintf("network_mode_%s", tc.mode),
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+			d := podmanDriverHarness(t, nil)
+			defer d.MkAllocDir(task, true)()
+
+			containerName := BuildContainerName(task)
+			_, _, err := d.StartTask(task)
+			require.NoError(t, err)
+
+			defer d.DestroyTask(task.ID, true)
+
+			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
+
+			inspectData := inspectContainer(t, containerName)
+			if tc.mode == "host" {
+				require.Equal(t, "host", inspectData.HostConfig.NetworkMode)
+			}
+			require.Equal(t, tc.gateway, inspectData.NetworkSettings.Gateway)
+		})
+	}
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))

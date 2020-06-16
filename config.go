@@ -53,18 +53,19 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"image":              hclspec.NewAttr("image", "string", true),
+		"args":               hclspec.NewAttr("args", "list(string)", false),
 		"command":            hclspec.NewAttr("command", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
+		"image":              hclspec.NewAttr("image", "string", true),
 		"init":               hclspec.NewAttr("init", "bool", false),
 		"init_path":          hclspec.NewAttr("init_path", "string", false),
-		"args":               hclspec.NewAttr("args", "list(string)", false),
-		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
-		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
+		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
+		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
+		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 	})
 )
 
@@ -88,16 +89,17 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Image             string             `codec:"image"`
-	Command           string             `codec:"command"`
 	Args              []string           `codec:"args"`
-	Volumes           []string           `codec:"volumes"`
+	Command           string             `codec:"command"`
 	Hostname          string             `codec:"hostname"`
+	Image             string             `codec:"image"`
 	Init              bool               `codec:"init"`
 	InitPath          string             `codec:"init_path"`
-	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
+	NetworkMode       string             `codec:"network_mode"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
+	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Tmpfs             []string           `codec:"tmpfs"`
+	Volumes           []string           `codec:"volumes"`
 }

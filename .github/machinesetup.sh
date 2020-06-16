@@ -22,6 +22,9 @@ echo "====== Installed podman:"
 # ensure to remember the used version when checking a build log
 podman info
 
+echo "====== Podman version:"
+podman version
+
 # enable varlink socket (not included in ubuntu package)
 cat > /etc/systemd/system/io.podman.service << EOF
 [Unit]

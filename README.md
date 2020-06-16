@@ -206,6 +206,24 @@ config {
 }
 ```
 
+* **network_mode** - Set the [network mode](http://docs.podman.io/en/latest/markdown/podman-run.1.html#options) for the container.
+
+- `bridge`: create a network stack on the default bridge
+- `none`: no networking
+- `container:id`: reuse another container's network stack
+- `host`: use the Podman host network stack. Note: the host mode gives the
+  container full access to local system services such as D-bus and is therefore
+  considered insecure
+- `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
+  default for rootless containers. Podman currently does not support it for root
+  containers [issue](https://github.com/containers/libpod/issues/6097).
+
+```
+config {
+  network_mode = "bridge"
+}
+```
+
 ## Example job
 
 ```
