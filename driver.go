@@ -349,23 +349,35 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
+	img, err := d.podmanClient.InspectImage(driverConfig.Image)
+	if err != nil {
+		return nil, nil, fmt.Errorf("image %s couldn't be inspected", driverConfig.Image)
+	}
+	d.logger.Debug("Image", fmt.Sprintf("%#v", img))
+	d.logger.Debug("Image config", fmt.Sprintf("%#v", img.Config))
+
 	allArgs := []string{driverConfig.Image}
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
+
+	var entryPoint *string // nil -> image default entryPoint
+	if driverConfig.Entrypoint != "" {
+		*entryPoint = driverConfig.Entrypoint
+	}
+
+	var workingDir *string // nil -> image default workingDir
+	if driverConfig.WorkingDir != "" {
+		*workingDir = driverConfig.WorkingDir
+	}
+
 	containerName := BuildContainerName(cfg)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
 	logOpts := []string{
 		fmt.Sprintf("path=%s", cfg.StdoutPath),
 	}
-
-	// ensure to include port_map into tasks environment map
-	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
-
-	// convert environment map into a k=v list
-	allEnv := cfg.EnvList()
 
 	// ensure to mount nomad alloc dirs into the container
 	allVolumes := []string{
@@ -378,6 +390,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		// add task specific volumes, if enabled
 		allVolumes = append(allVolumes, driverConfig.Volumes...)
 	}
+	d.logger.Debug("Volumes", fmt.Sprintf("%#v", allVolumes))
+
+	// reset env so we don't inherit host env by default
+	cfg.Env = make(map[string]string)
+	// ensure to include port_map into tasks environment map
+	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
+	// Set the env to image defaults
+	allEnv := img.Config.Env
+	// convert environment map into a k=v list
+	allEnv = append(allEnv, cfg.EnvList()...)
+	d.logger.Debug("Env", fmt.Sprintf("%#v", allEnv))
 
 	// Apply SELinux Label to each volume
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
@@ -393,6 +416,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := iopodman.Create{
 		Args:              allArgs,
+		Entrypoint:        entryPoint,
+		WorkDir:           workingDir,
 		Env:               &allEnv,
 		Name:              &containerName,
 		Volume:            &allVolumes,
