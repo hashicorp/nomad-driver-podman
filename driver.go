@@ -387,15 +387,39 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// ensure to mount nomad alloc dirs into the container
 	allVolumes := []string{
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, cfg.Env[taskenv.AllocDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, cfg.Env[taskenv.TaskLocalDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, cfg.Env[taskenv.SecretsDir]),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, "/alloc"),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, "/local"),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, "/secrets"),
+	}
+	cfg.Env[taskenv.AllocDir] = "/alloc"
+	cfg.Env[taskenv.TaskLocalDir] = "/local"
+	cfg.Env[taskenv.SecretsDir] = "/secrets"
+
+	for _, volume := range driverConfig.Volumes {
+		v := ""
+		if strings.HasPrefix(volume, "local/") {
+			v = strings.TrimPrefix(volume, "local/")
+			v = strings.Join([]string{cfg.TaskDir().LocalDir, v}, "/")
+		} else if strings.HasPrefix(volume, "alloc/") {
+			v = strings.TrimPrefix(volume, "alloc/")
+			v = strings.Join([]string{cfg.TaskDir().SharedAllocDir, v}, "/")
+		} else if strings.HasPrefix(volume, "secrets/") {
+			v = strings.TrimPrefix(volume, "secrets/")
+			v = strings.Join([]string{cfg.TaskDir().SecretsDir, v}, "/")
+		} else {
+			// If the volume isn't relative to the allocations directory
+			// we need to be sure that mounting volumes from outside the
+			// allocation directory is allowed by the driver configuration.
+			if d.config.Volumes.Enabled {
+				v = volume
+			} else {
+				d.logger.Warn("Volumes", fmt.Sprintf("trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
+			}
+		}
+
+		allVolumes = append(allVolumes, v)
 	}
 
-	if d.config.Volumes.Enabled {
-		// add task specific volumes, if enabled
-		allVolumes = append(allVolumes, driverConfig.Volumes...)
-	}
 	d.logger.Debug("Volumes", fmt.Sprintf("%#v", allVolumes))
 
 	// reset env so we don't inherit host env by default
