@@ -19,9 +19,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
-	"strings"
 	"os/user"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
@@ -425,12 +425,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 	// Set the env to image defaults
-	for _,v := range img.Config.Env {
+	for _, v := range img.Config.Env {
 		p := strings.Split(v, "=")
 		cfg.Env[p[0]] = p[1]
 	}
 	allEnv := []string{}
-	for k,v := range cfg.Env {
+	for k, v := range cfg.Env {
 		allEnv = append(allEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 	d.logger.Debug("Env", fmt.Sprintf("%#v", allEnv))
@@ -456,6 +456,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		network = driverConfig.NetworkMode
 	}
 
+	procFilesystems, err := getProcFilesystems()
+	swappiness := new(int64)
+	if err == nil {
+		cgroupv2 := false
+		for _, l := range procFilesystems {
+			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
+		}
+		if cgroupv2 == false {
+			swappiness = &driverConfig.MemorySwappiness
+		}
+	}
+
 	createOpts := iopodman.Create{
 		Args:              allArgs,
 		Entrypoint:        entryPoint,
@@ -472,8 +484,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		User:              &cfg.User,
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
-		MemorySwappiness:  &driverConfig.MemorySwappiness,
 		Network:           &network,
+		MemorySwappiness:  swappiness,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 

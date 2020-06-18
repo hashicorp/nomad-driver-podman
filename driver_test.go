@@ -816,8 +816,14 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
-	require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 
+	procFilesystems, err := getProcFilesystems()
+	if err == nil {
+		cgroupv2 := isCGroupV2(procFilesystems)
+		if cgroupv2 == false {
+			require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
+		}
+	}
 }
 
 // check tmpfs mounts
