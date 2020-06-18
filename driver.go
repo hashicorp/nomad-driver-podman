@@ -441,6 +441,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swap = driverConfig.MemorySwap
 	}
 
+	procFilesystems, err := getProcFilesystems()
+	swappiness := new(int64)
+	if err == nil {
+		cgroupv2 := false
+		for _,l := range procFilesystems {
+			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
+		}
+		if cgroupv2 == false {
+			swappiness = &driverConfig.MemorySwappiness
+		}
+	}
+
 	createOpts := iopodman.Create{
 		Args:              allArgs,
 		Entrypoint:        entryPoint,
@@ -457,8 +469,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		User:              &cfg.User,
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
-		MemorySwappiness:  &driverConfig.MemorySwappiness,
 		Network:           &driverConfig.NetworkMode,
+		MemorySwappiness:  swappiness,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 
