@@ -110,6 +110,19 @@ type InspectContainerConfig struct {
 	// Healthcheck *manifest.Schema2HealthConfig `json:"Healthcheck,omitempty"`
 }
 
+type InspectImageData struct {
+	ID              string                 `json:"Id"`
+	Created         time.Time              `json:"Created"`
+	Config          *InspectImageConfig    `json:"Config"`
+}
+
+type InspectImageConfig struct {
+	Env         []string              `json:"Env"`
+	Entrypoint  []string              `json:"Entrypoint"`
+	Cmd         []string              `json:"Cmd"`
+	WorkingDir  string                `json:"WorkingDir"`
+}
+
 // InspectMount provides a record of a single mount in a container. It contains
 // fields for both named and normal volumes. Only user-specified volumes will be
 // included, and tmpfs volumes are not included even if the user specified them.

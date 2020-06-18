@@ -57,6 +57,8 @@ var (
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
 		"args":               hclspec.NewAttr("args", "list(string)", false),
 		"command":            hclspec.NewAttr("command", "string", false),
+		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
+		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
 		"image":              hclspec.NewAttr("image", "string", true),
 		"init":               hclspec.NewAttr("init", "bool", false),
@@ -92,8 +94,10 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Args              []string           `codec:"args"`
 	Command           string             `codec:"command"`
+	Entrypoint        string             `codec:"entrypoint"`
+	Args              []string           `codec:"args"`
+	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	Init              bool               `codec:"init"`
