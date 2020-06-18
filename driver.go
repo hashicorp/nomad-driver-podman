@@ -416,14 +416,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.logger.Debug("Volumes", fmt.Sprintf("%#v", allVolumes))
 
-	// reset env so we don't inherit host env by default
-	cfg.Env = make(map[string]string)
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 	// Set the env to image defaults
-	allEnv := img.Config.Env
-	// convert environment map into a k=v list
-	allEnv = append(allEnv, cfg.EnvList()...)
+	for _,v := range img.Config.Env {
+		p := strings.Split(v, "=")
+		cfg.Env[p[0]] = p[1]
+	}
+	allEnv := []string{}
+	for k,v := range cfg.Env {
+		allEnv = append(allEnv, fmt.Sprintf("%s=%s", k, v))
+	}
 	d.logger.Debug("Env", fmt.Sprintf("%#v", allEnv))
 
 	// Apply SELinux Label to each volume
