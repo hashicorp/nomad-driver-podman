@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -50,6 +52,20 @@ var (
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
 	varlinkSocketPath = ""
 )
+
+func init() {
+	user, _ := user.Current()
+	procFilesystems, err := getProcFilesystems()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	socketPath := guessSocketPath(user, procFilesystems)
+
+	varlinkSocketPath = socketPath
+}
 
 func createBasicResources() *drivers.Resources {
 	res := drivers.Resources{
@@ -969,7 +985,7 @@ func getContainer(t *testing.T, containerName string) iopodman.Container {
 }
 
 func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
-	varlinkConnection, err := varlink.NewConnection(ctx, *varlinkSocketPath)
+	varlinkConnection, err := varlink.NewConnection(ctx, varlinkSocketPath)
 	return varlinkConnection, err
 }
 
@@ -981,7 +997,7 @@ func newPodmanClient() *PodmanClient {
 	client := &PodmanClient{
 		ctx:    context.Background(),
 		logger: testLogger,
-		varlinkSocketPath: *varlinkSocketPath,
+		varlinkSocketPath: varlinkSocketPath,
 	}
 	return client
 }
