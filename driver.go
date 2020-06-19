@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"strings"
+	"os/user"
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
@@ -154,7 +156,24 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		d.nomadConfig = cfg.AgentConfig.Driver
 	}
 
-	d.podmanClient.varlinkSocketPath = config.SocketPath
+	if config.SocketPath != "" {
+		d.podmanClient.varlinkSocketPath = config.SocketPath
+	} else {
+		user, _ := user.Current()
+		procFilesystems, err := getProcFilesystems()
+
+		if err != nil {
+			return err
+		}
+
+		socketPath := guessSocketPath(user, procFilesystems)
+
+		if err != nil {
+			return err
+		}
+
+		d.podmanClient.varlinkSocketPath = socketPath
+	}
 
 	return nil
 }

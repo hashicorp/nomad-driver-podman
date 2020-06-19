@@ -49,10 +49,7 @@ var (
 			hclspec.NewLiteral("true"),
 		),
 		// the path to the VarLink socket
-		"socket_path": hclspec.NewDefault(
-			hclspec.NewAttr("socket_path", "string", false),
-			hclspec.NewLiteral(`"unix://run/podman/io.podman"`),
-		),
+		"socket_path": hclspec.NewAttr("socket_path", "string", false),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
