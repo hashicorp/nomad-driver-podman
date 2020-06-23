@@ -36,7 +36,6 @@ const (
 
 // PodmanClient encapsulates varlink operations
 type PodmanClient struct {
-
 	// ctx is the context for the driver. It is passed to other subsystems to
 	// coordinate shutdown
 	ctx context.Context
@@ -89,6 +88,10 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 	})
 	return containerStats, err
 }
+
+// func (c *PodmanClient)GetContainerStatsV2(containerID string)(models.PodStatsReport, error){
+// 	err :=
+// }
 
 // StopContainer stops a container given a timeout.  It takes the name or ID of a container as well as a
 // timeout value.  The timeout value the time before a forcible stop to the container is applied.

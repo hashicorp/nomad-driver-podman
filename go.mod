@@ -23,6 +23,11 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/fsouza/go-dockerclient v1.5.0 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/go-openapi/errors v0.19.6
+	github.com/go-openapi/runtime v0.19.19
+	github.com/go-openapi/strfmt v0.19.5
+	github.com/go-openapi/swag v0.19.9
+	github.com/go-openapi/validate v0.19.10
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0 // indirect
 	github.com/hashicorp/consul v1.7.3
@@ -42,7 +47,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
 	github.com/opencontainers/selinux v1.5.1 // indirect
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
 	github.com/varlink/go v0.3.0
 	github.com/vishvananda/netlink v1.1.0 // indirect
