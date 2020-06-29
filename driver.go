@@ -65,6 +65,12 @@ var (
 		SendSignals: false,
 		Exec:        false,
 		FSIsolation: drivers.FSIsolationNone,
+		NetIsolationModes: []drivers.NetIsolationMode{
+			drivers.NetIsolationModeGroup,
+			drivers.NetIsolationModeHost,
+			drivers.NetIsolationModeTask,
+		},
+		MustInitiateNetwork: false,
 	}
 )
 
@@ -370,6 +376,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swap = driverConfig.MemorySwap
 	}
 
+	// Generate network string
+	var network string
+	if cfg.NetworkIsolation != nil &&
+		cfg.NetworkIsolation.Path != "" {
+		network = fmt.Sprintf("ns:%s", cfg.NetworkIsolation.Path)
+	} else {
+		network = driverConfig.NetworkMode
+	}
+
 	createOpts := iopodman.Create{
 		Args:              allArgs,
 		Env:               &allEnv,
@@ -385,7 +400,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
 		MemorySwappiness:  &driverConfig.MemorySwappiness,
-		Network:           &driverConfig.NetworkMode,
+		Network:           &network,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 
