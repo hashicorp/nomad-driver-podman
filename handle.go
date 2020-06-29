@@ -201,7 +201,6 @@ func (h *TaskHandle) runContainerMonitor() {
 						h.exitResult.Err = fmt.Errorf("Podman container killed by OOM killer")
 						h.logger.Error("Podman container killed by OOM killer", "container", h.containerID)
 					}
-					h.logger.Debug("Container inspect data", "container", h.containerID, "inspect_data", fmt.Sprintf("%#v", inspectData))
 				}
 
 				h.procState = drivers.TaskStateExited

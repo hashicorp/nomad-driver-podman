@@ -431,7 +431,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	for k, v := range cfg.Env {
 		allEnv = append(allEnv, fmt.Sprintf("%s=%s", k, v))
 	}
-	d.logger.Debug("Env", fmt.Sprintf("%#v", allEnv))
 
 	// Apply SELinux Label to each volume
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
