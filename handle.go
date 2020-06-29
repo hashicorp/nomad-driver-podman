@@ -23,9 +23,9 @@ import (
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/plugins/drivers"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
 )
 
 const (

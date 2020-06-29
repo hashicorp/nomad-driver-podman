@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/varlink/go/varlink"
 )
 
