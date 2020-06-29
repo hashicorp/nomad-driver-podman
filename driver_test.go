@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad/client/taskenv"
 	ctestutil "github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/freeport"
@@ -38,7 +39,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
 	"github.com/stretchr/testify/require"
 	"github.com/varlink/go/varlink"
 )

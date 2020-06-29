@@ -1,4 +1,4 @@
-module github.com/pascomnet/nomad-driver-podman
+module github.com/hashicorp/nomad-driver-podman
 
 go 1.14
 
@@ -41,6 +41,7 @@ require (
 	github.com/mrunalp/fileutils v0.0.0-20200504145649-7be891c94fd3 // indirect
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
 	github.com/opencontainers/selinux v1.5.1 // indirect
+	github.com/pascomnet/nomad-driver-podman v0.0.3
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect

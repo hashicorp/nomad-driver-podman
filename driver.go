@@ -24,6 +24,8 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
@@ -32,8 +34,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
-	"github.com/pascomnet/nomad-driver-podman/version"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 )
