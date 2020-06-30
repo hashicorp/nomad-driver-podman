@@ -444,15 +444,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swap = driverConfig.MemorySwap
 	}
 
-	// Generate network string
-	var network string
-	if cfg.NetworkIsolation != nil &&
-		cfg.NetworkIsolation.Path != "" {
-		network = fmt.Sprintf("ns:%s", cfg.NetworkIsolation.Path)
-	} else {
-		network = driverConfig.NetworkMode
-	}
-
 	procFilesystems, err := getProcFilesystems()
 	swappiness := new(int64)
 	if err == nil {
@@ -463,6 +454,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		if cgroupv2 == false {
 			swappiness = &driverConfig.MemorySwappiness
 		}
+	}
+
+	// Generate network string
+	var network string
+	if cfg.NetworkIsolation != nil &&
+		cfg.NetworkIsolation.Path != "" {
+		network = fmt.Sprintf("ns:%s", cfg.NetworkIsolation.Path)
+	} else {
+		network = driverConfig.NetworkMode
 	}
 
 	createOpts := iopodman.Create{
