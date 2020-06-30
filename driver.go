@@ -347,7 +347,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to decode driver config: %v", err)
 	}
 
-	// d.logger.Info("starting podman task", "driver_cfg", hclog.Fmt("%+v", driverConfig))
 	handle := drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
@@ -359,6 +358,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err != nil {
 		return nil, nil, fmt.Errorf("Couldn't create image: %v", err)
 	}
+	d.logger.Debug("created/pulled image", "img_id", img.ID)
 
 	allArgs := []string{driverConfig.Image}
 	if driverConfig.Command != "" {
@@ -458,8 +458,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		User:              &cfg.User,
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
-		Network:           &network,
 		MemorySwappiness:  swappiness,
+		Network:           &network,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 
