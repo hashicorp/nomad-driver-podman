@@ -19,9 +19,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
-	"strings"
 	"os/user"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
@@ -423,12 +423,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 	// Set the env to image defaults
-	for _,v := range img.Config.Env {
+	for _, v := range img.Config.Env {
 		p := strings.Split(v, "=")
 		cfg.Env[p[0]] = p[1]
 	}
 	allEnv := []string{}
-	for k,v := range cfg.Env {
+	for k, v := range cfg.Env {
 		allEnv = append(allEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 
@@ -444,17 +444,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swap = driverConfig.MemorySwap
 	}
 
-
 	procFilesystems, err := getProcFilesystems()
 	swappiness := new(int64)
 	if err == nil {
 		cgroupv2 := false
-		for _,l := range procFilesystems {
+		for _, l := range procFilesystems {
 			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
 		}
-		if cgroupv2 == false {
+		if !cgroupv2 {
 			swappiness = &driverConfig.MemorySwappiness
 		}
+	}
 
 	// Generate network string
 	var network string
@@ -482,7 +482,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
 		MemorySwappiness:  swappiness,
-		MemorySwappiness:  &driverConfig.MemorySwappiness,
 		Network:           &network,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
@@ -610,6 +609,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, net, nil
 }
 
+// func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
+// 	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
+// 	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
+// 	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
+// 	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
+
+// 	taskLocalBindVolume := driverConfig.Volume
+// }
+
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
 // exits or close the channel when the context is canceled. It is also expected that calling
 // WaitTask on an exited task will immediately send an *ExitResult on the returned channel.
@@ -720,7 +728,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) (iopodman.InspectImageData, error) {
 	img, err := d.podmanClient.InspectImage(driverConfig.Image)
 	if err != nil {
-		d.eventer.EmitEvent(&drivers.TaskEvent{
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
 			TaskID:    cfg.ID,
 			AllocID:   cfg.AllocID,
 			TaskName:  cfg.Name,
@@ -730,6 +738,9 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 				"image": driverConfig.Image,
 			},
 		})
+		if err != nil {
+			d.logger.Error("failed to emit event", "error", err)
+		}
 
 		pullLog, err := d.podmanClient.PullImage(driverConfig.Image)
 		if err != nil {
@@ -741,7 +752,7 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be inspected: %v", driverConfig.Image, err)
 		}
 
-		d.eventer.EmitEvent(&drivers.TaskEvent{
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
 			TaskID:    cfg.ID,
 			AllocID:   cfg.AllocID,
 			TaskName:  cfg.Name,
@@ -751,6 +762,9 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 				"image": driverConfig.Image,
 			},
 		})
+		if err != nil {
+			d.logger.Error("failed to emit event", "error", err)
+		}
 
 	}
 

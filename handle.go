@@ -28,12 +28,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
-const (
-	// containerMonitorIntv is the interval at which the driver checks if the
-	// container is still alive
-	containerMonitorIntv = 2 * time.Second
-)
-
 var (
 	measuredCPUStats = []string{"System Mode", "User Mode", "Percent"}
 	measuredMemStats = []string{"RSS"}
@@ -199,7 +193,7 @@ func (h *TaskHandle) runContainerMonitor() {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 					if len(inspectData.State.Error) > 0 {
 						h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
-						h.logger.Error("Container error", "container", h.containerID, "err", fmt.Sprintf("%s", h.exitResult.Err.Error()))
+						h.logger.Error("Container error", "container", h.containerID, "err", h.exitResult.Err.Error())
 					}
 					h.completedAt = inspectData.State.FinishedAt
 					if inspectData.State.OOMKilled {

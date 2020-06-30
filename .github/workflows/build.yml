@@ -9,7 +9,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-  
+
+    - name: Lint Deps
+      run: make lint-deps
+
+    - name: Lint
+      run: make check
+
     - name: Prepare machine
       run: sudo bash -e .github/machinesetup.sh
 

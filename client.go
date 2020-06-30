@@ -22,14 +22,14 @@ import (
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/varlink/go/varlink"
 
-	"os"
 	"bufio"
-	"os/user"
 	"context"
 	"encoding/json"
-	"strings"
 	"fmt"
 	"net"
+	"os"
+	"os/user"
+	"strings"
 	"time"
 )
 
@@ -284,7 +284,7 @@ func guessSocketPath(user *user.User, procFilesystems []string) string {
 
 func isCGroupV2(procFilesystems []string) bool {
 	cgroupv2 := false
-	for _,l := range procFilesystems {
+	for _, l := range procFilesystems {
 		if strings.HasSuffix(l, "cgroup2") {
 			cgroupv2 = true
 		}

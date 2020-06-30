@@ -18,6 +18,7 @@ package main
 
 import (
 	log "github.com/hashicorp/go-hclog"
+	_ "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/plugins"
 )
 
