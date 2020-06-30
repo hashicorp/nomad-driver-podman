@@ -383,54 +383,31 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		fmt.Sprintf("path=%s", cfg.StdoutPath),
 	}
 
+	// ensure to include port_map into tasks environment map
+	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
+
+	// convert environment map into a k=v list
+	allEnv := cfg.EnvList()
+
 	// ensure to mount nomad alloc dirs into the container
 	allVolumes := []string{
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, "/alloc"),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, "/local"),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, "/secrets"),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, cfg.Env[taskenv.AllocDir]),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, cfg.Env[taskenv.TaskLocalDir]),
+		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, cfg.Env[taskenv.SecretsDir]),
 	}
-	cfg.Env[taskenv.AllocDir] = "/alloc"
-	cfg.Env[taskenv.TaskLocalDir] = "/local"
-	cfg.Env[taskenv.SecretsDir] = "/secrets"
 
 	for _, volume := range driverConfig.Volumes {
 		v := ""
-		if strings.HasPrefix(volume, "local/") {
-			v = strings.TrimPrefix(volume, "local/")
-			v = strings.Join([]string{cfg.TaskDir().LocalDir, v}, "/")
-		} else if strings.HasPrefix(volume, "alloc/") {
-			v = strings.TrimPrefix(volume, "alloc/")
-			v = strings.Join([]string{cfg.TaskDir().SharedAllocDir, v}, "/")
-		} else if strings.HasPrefix(volume, "secrets/") {
-			v = strings.TrimPrefix(volume, "secrets/")
-			v = strings.Join([]string{cfg.TaskDir().SecretsDir, v}, "/")
+		if d.config.Volumes.Enabled {
+			v = volume
 		} else {
-			// If the volume isn't relative to the allocations directory
-			// we need to be sure that mounting volumes from outside the
-			// allocation directory is allowed by the driver configuration.
-			if d.config.Volumes.Enabled {
-				v = volume
-			} else {
-				d.logger.Warn("Volumes", fmt.Sprintf("trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
-			}
+			d.logger.Warn("Volumes", fmt.Sprintf("trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
 		}
 
 		allVolumes = append(allVolumes, v)
 	}
 
 	d.logger.Debug("Volumes", fmt.Sprintf("%#v", allVolumes))
-
-	// ensure to include port_map into tasks environment map
-	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
-	// Set the env to image defaults
-	for _, v := range img.Config.Env {
-		p := strings.Split(v, "=")
-		cfg.Env[p[0]] = p[1]
-	}
-	allEnv := []string{}
-	for k, v := range cfg.Env {
-		allEnv = append(allEnv, fmt.Sprintf("%s=%s", k, v))
-	}
 
 	// Apply SELinux Label to each volume
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
@@ -608,6 +585,60 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	return handle, net, nil
 }
+
+// func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
+// 	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
+// 	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
+// 	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
+// 	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
+
+// 	taskLocalBindVolume := driverConfig.VolumeDriver == ""
+
+// 	if !d.config.Volumes.Enabled && !taskLocalBindVolume {
+// 		return nil, fmt.Errorf("volumes are not enabled; cannot use volume driver %q", driverConfig.VolumeDriver)
+// 	}
+
+// 	for _, userbind := range driverConfig.Volumes {
+// 		// This assumes host OS = docker container OS.
+// 		// Not true, when we support Linux containers on Windows
+// 		src, dst, mode, err := parseVolumeSpec(userbind, runtime.GOOS)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("invalid docker volume %q: %v", userbind, err)
+// 		}
+
+// 		// Paths inside task dir are always allowed when using the default driver,
+// 		// Relative paths are always allowed as they mount within a container
+// 		// When a VolumeDriver is set, we assume we receive a binding in the format
+// 		// volume-name:container-dest
+// 		// Otherwise, we assume we receive a relative path binding in the format
+// 		// relative/to/task:/also/in/container
+// 		if taskLocalBindVolume {
+// 			src = expandPath(task.TaskDir().Dir, src)
+// 		} else {
+// 			// Resolve dotted path segments
+// 			src = filepath.Clean(src)
+// 		}
+
+// 		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
+// 			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
+// 		}
+
+// 		bind := src + ":" + dst
+// 		if mode != "" {
+// 			bind += ":" + mode
+// 		}
+// 		binds = append(binds, bind)
+// 	}
+
+// 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+// 		// Apply SELinux Label to each volume
+// 		for i := range binds {
+// 			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
+// 		}
+// 	}
+
+// 	return binds, nil
+// }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
 // exits or close the channel when the context is canceled. It is also expected that calling
