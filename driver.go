@@ -401,13 +401,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		if d.config.Volumes.Enabled {
 			v = volume
 		} else {
-			d.logger.Warn("Volumes", fmt.Sprintf("trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
+			d.logger.Warn(fmt.Sprintf("volume: trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
 		}
 
 		allVolumes = append(allVolumes, v)
 	}
 
-	d.logger.Debug("Volumes", fmt.Sprintf("%#v", allVolumes))
+	d.logger.Debug("volume info", "volumes", allVolumes)
 
 	// Apply SELinux Label to each volume
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
@@ -784,8 +784,7 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 
 	}
 
-	d.logger.Debug("Image", fmt.Sprintf("%#v", img))
-	d.logger.Debug("Image config", fmt.Sprintf("%#v", img.Config))
+	d.logger.Debug("Image created", "img_id", img.ID, "config", img.Config)
 
 	return img, nil
 }
