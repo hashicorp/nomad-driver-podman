@@ -19,7 +19,7 @@ package main
 import (
 	"github.com/avast/retry-go"
 	"github.com/hashicorp/go-hclog"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/varlink/go/varlink"
 
 	"os"

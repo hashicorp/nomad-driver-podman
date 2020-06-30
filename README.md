@@ -2,8 +2,8 @@ Nomad podman Driver
 ==================
 
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/pascomnet/nomad-driver-podman/blob/master/LICENSE)
-![](https://github.com/pascomnet/nomad-driver-podman/workflows/build/badge.svg)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/hashicorp/nomad-driver-podman/blob/master/LICENSE)
+![](https://github.com/hashicorp/nomad-driver-podman/workflows/build/badge.svg)
 
 *THIS IS A WORK IN PROGRESS PLUGIN*. Do not run it in production!
 Contributions are welcome, of course.
@@ -36,7 +36,7 @@ It is not necessary to setup a go path at all.
 Ensure that you use go 1.13 or newer.
 
 ```sh
-$ git clone git@github.com:pascomnet/nomad-driver-podman
+$ git clone git@github.com:hashicorp/nomad-driver-podman
 cd nomad-driver-podman
 ./build.sh
 ```

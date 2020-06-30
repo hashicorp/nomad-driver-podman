@@ -26,6 +26,8 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
@@ -34,8 +36,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
-	"github.com/pascomnet/nomad-driver-podman/iopodman"
-	"github.com/pascomnet/nomad-driver-podman/version"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 )
@@ -67,6 +67,12 @@ var (
 		SendSignals: false,
 		Exec:        false,
 		FSIsolation: drivers.FSIsolationNone,
+		NetIsolationModes: []drivers.NetIsolationMode{
+			drivers.NetIsolationModeGroup,
+			drivers.NetIsolationModeHost,
+			drivers.NetIsolationModeTask,
+		},
+		MustInitiateNetwork: false,
 	}
 )
 
@@ -438,6 +444,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swap = driverConfig.MemorySwap
 	}
 
+
 	procFilesystems, err := getProcFilesystems()
 	swappiness := new(int64)
 	if err == nil {
@@ -448,6 +455,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		if cgroupv2 == false {
 			swappiness = &driverConfig.MemorySwappiness
 		}
+
+	// Generate network string
+	var network string
+	if cfg.NetworkIsolation != nil &&
+		cfg.NetworkIsolation.Path != "" {
+		network = fmt.Sprintf("ns:%s", cfg.NetworkIsolation.Path)
+	} else {
+		network = driverConfig.NetworkMode
 	}
 
 	createOpts := iopodman.Create{
@@ -466,8 +481,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		User:              &cfg.User,
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
-		Network:           &driverConfig.NetworkMode,
 		MemorySwappiness:  swappiness,
+		MemorySwappiness:  &driverConfig.MemorySwappiness,
+		Network:           &network,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
 

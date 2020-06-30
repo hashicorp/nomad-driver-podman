@@ -3,6 +3,7 @@
 FEATURES:
 
 * config: Add ability to configure container network_mode [[GH-33](https://github.com/hashicorp/nomad-driver-podman/issues/33)]
+* network: (Consul Connect) Ability to accept a bridge network namespace from Nomad. [[GH-38](https://github.com/hashicorp/nomad-driver-podman/issues/38)]
 
 ## 0.0.2 (June 11, 2020)
 
