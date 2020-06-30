@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -389,32 +390,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// convert environment map into a k=v list
 	allEnv := cfg.EnvList()
 
-	// ensure to mount nomad alloc dirs into the container
-	allVolumes := []string{
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, cfg.Env[taskenv.AllocDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, cfg.Env[taskenv.TaskLocalDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, cfg.Env[taskenv.SecretsDir]),
+	allVolumes, err := d.containerBinds(cfg, &driverConfig)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	for _, volume := range driverConfig.Volumes {
-		v := ""
-		if d.config.Volumes.Enabled {
-			v = volume
-		} else {
-			d.logger.Warn(fmt.Sprintf("volume: trying to mount %#v, which is outside the allocation directory, while volume mounting from host paths haven't been enabled", volume))
-		}
-
-		allVolumes = append(allVolumes, v)
-	}
-
-	d.logger.Debug("volume info", "volumes", allVolumes)
-
-	// Apply SELinux Label to each volume
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
-		for i := range allVolumes {
-			allVolumes[i] = fmt.Sprintf("%s:%s", allVolumes[i], selinuxLabel)
-		}
-	}
+	d.logger.Trace("binding volumes", "volumes", allVolumes)
 
 	swap := memoryLimit
 	if driverConfig.MemorySwap != "" {
@@ -586,60 +566,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, net, nil
 }
 
-// func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
-// 	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
-// 	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
-// 	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
-// 	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
-
-// 	taskLocalBindVolume := driverConfig.VolumeDriver == ""
-
-// 	if !d.config.Volumes.Enabled && !taskLocalBindVolume {
-// 		return nil, fmt.Errorf("volumes are not enabled; cannot use volume driver %q", driverConfig.VolumeDriver)
-// 	}
-
-// 	for _, userbind := range driverConfig.Volumes {
-// 		// This assumes host OS = docker container OS.
-// 		// Not true, when we support Linux containers on Windows
-// 		src, dst, mode, err := parseVolumeSpec(userbind, runtime.GOOS)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("invalid docker volume %q: %v", userbind, err)
-// 		}
-
-// 		// Paths inside task dir are always allowed when using the default driver,
-// 		// Relative paths are always allowed as they mount within a container
-// 		// When a VolumeDriver is set, we assume we receive a binding in the format
-// 		// volume-name:container-dest
-// 		// Otherwise, we assume we receive a relative path binding in the format
-// 		// relative/to/task:/also/in/container
-// 		if taskLocalBindVolume {
-// 			src = expandPath(task.TaskDir().Dir, src)
-// 		} else {
-// 			// Resolve dotted path segments
-// 			src = filepath.Clean(src)
-// 		}
-
-// 		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
-// 			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
-// 		}
-
-// 		bind := src + ":" + dst
-// 		if mode != "" {
-// 			bind += ":" + mode
-// 		}
-// 		binds = append(binds, bind)
-// 	}
-
-// 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
-// 		// Apply SELinux Label to each volume
-// 		for i := range binds {
-// 			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
-// 		}
-// 	}
-
-// 	return binds, nil
-// }
-
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
 // exits or close the channel when the context is canceled. It is also expected that calling
 // WaitTask on an exited task will immediately send an *ExitResult on the returned channel.
@@ -787,4 +713,90 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 	d.logger.Debug("Image created", "img_id", img.ID, "config", img.Config)
 
 	return img, nil
+}
+
+func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
+	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
+	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
+	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
+	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
+
+	// TODO support volume drivers
+	// https://github.com/containers/libpod/pull/4548
+	taskLocalBindVolume := false
+
+	for _, userbind := range driverConfig.Volumes {
+		src, dst, mode, err := parseVolumeSpec(userbind)
+		if err != nil {
+			return nil, fmt.Errorf("invalid docker volume %q: %v", userbind, err)
+		}
+
+		// Paths inside task dir are always allowed when using the default driver,
+		// Relative paths are always allowed as they mount within a container
+		// When a VolumeDriver is set, we assume we receive a binding in the format
+		// volume-name:container-dest
+		// Otherwise, we assume we receive a relative path binding in the format
+		// relative/to/task:/also/in/container
+		if taskLocalBindVolume {
+			src = expandPath(task.TaskDir().Dir, src)
+		} else {
+			// Resolve dotted path segments
+			src = filepath.Clean(src)
+		}
+
+		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
+			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
+		}
+
+		bind := src + ":" + dst
+		if mode != "" {
+			bind += ":" + mode
+		}
+		binds = append(binds, bind)
+	}
+
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+		// Apply SELinux Label to each volume
+		for i := range binds {
+			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
+		}
+	}
+
+	return binds, nil
+}
+
+// expandPath returns the absolute path of dir, relative to base if dir is relative path.
+// base is expected to be an absolute path
+func expandPath(base, dir string) string {
+	if filepath.IsAbs(dir) {
+		return filepath.Clean(dir)
+	}
+
+	return filepath.Clean(filepath.Join(base, dir))
+}
+
+func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mode string, err error) {
+	// using internal parser to preserve old parsing behavior.  Docker
+	// parser has additional validators (e.g. mode validity) and accepts invalid output (per Nomad),
+	// e.g. single path entry to be treated as a container path entry with an auto-generated host-path.
+	//
+	// Reconsider updating to use Docker parser when ready to make incompatible changes.
+	parts := strings.Split(volBind, ":")
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("not <src>:<destination> format")
+	}
+
+	m := ""
+	if len(parts) > 2 {
+		m = parts[2]
+	}
+
+	return parts[0], parts[1], m, nil
+}
+
+// isParentPath returns true if path is a child or a descendant of parent path.
+// Both inputs need to be absolute paths.
+func isParentPath(parent, path string) bool {
+	rel, err := filepath.Rel(parent, path)
+	return err == nil && !strings.HasPrefix(rel, "..")
 }
