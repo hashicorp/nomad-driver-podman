@@ -408,7 +408,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		for _, l := range procFilesystems {
 			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
 		}
-		if cgroupv2 == false {
+		if !cgroupv2 {
 			swappiness = &driverConfig.MemorySwappiness
 		}
 	}
@@ -676,7 +676,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) (iopodman.InspectImageData, error) {
 	img, err := d.podmanClient.InspectImage(driverConfig.Image)
 	if err != nil {
-		d.eventer.EmitEvent(&drivers.TaskEvent{
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
 			TaskID:    cfg.ID,
 			AllocID:   cfg.AllocID,
 			TaskName:  cfg.Name,
@@ -686,6 +686,9 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 				"image": driverConfig.Image,
 			},
 		})
+		if err != nil {
+			d.logger.Warn("error emitting event", "error", err)
+		}
 
 		pullLog, err := d.podmanClient.PullImage(driverConfig.Image)
 		if err != nil {
@@ -697,7 +700,7 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be inspected: %v", driverConfig.Image, err)
 		}
 
-		d.eventer.EmitEvent(&drivers.TaskEvent{
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
 			TaskID:    cfg.ID,
 			AllocID:   cfg.AllocID,
 			TaskName:  cfg.Name,
@@ -707,6 +710,9 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 				"image": driverConfig.Image,
 			},
 		})
+		if err != nil {
+			d.logger.Warn("error emitting event", "error", err)
+		}
 
 	}
 

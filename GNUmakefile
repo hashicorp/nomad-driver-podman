@@ -8,6 +8,8 @@ changelogfmt:
 check: ## Lint the source code
 	@echo "==> Linting source code..."
 	@golangci-lint run
+	@echo "==> vetting hc-log statements"
+	@hclogvet .
 
 .PHONY: lint-deps
 lint-deps: ## Install linter dependencies
@@ -15,3 +17,4 @@ lint-deps: ## Install linter dependencies
 	@echo "==> Updating linter dependencies..."
 	GO111MODULE=on cd tools && go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.24.0
 	GO111MODULE=on cd tools && go get github.com/client9/misspell/cmd/misspell@v0.3.4
+	GO111MODULE=on cd tools && go get github.com/hashicorp/go-hclog/hclogvet@master 
