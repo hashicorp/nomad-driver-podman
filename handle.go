@@ -28,12 +28,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
-const (
-	// containerMonitorIntv is the interval at which the driver checks if the
-	// container is still alive
-	containerMonitorIntv = 2 * time.Second
-)
-
 var (
 	measuredCPUStats = []string{"System Mode", "User Mode", "Percent"}
 	measuredMemStats = []string{"RSS"}
