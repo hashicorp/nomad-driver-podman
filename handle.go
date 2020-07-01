@@ -177,7 +177,7 @@ func (h *TaskHandle) runContainerMonitor() {
 		}
 
 		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
-		h.logger.Debug("Container stats", "container", h.containerID, "stats", fmt.Sprintf("%#v", containerStats))
+		h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
 		if err != nil {
 			if _, ok := err.(*iopodman.NoContainerRunning); ok {
 				h.logger.Debug("Container is not running anymore", "container", h.containerID)

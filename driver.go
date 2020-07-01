@@ -394,7 +394,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err != nil {
 		return nil, nil, err
 	}
-	d.logger.Trace("binding volumes", "volumes", allVolumes)
+	d.logger.Debug("binding volumes", "volumes", allVolumes)
 
 	swap := memoryLimit
 	if driverConfig.MemorySwap != "" {
