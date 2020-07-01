@@ -297,3 +297,87 @@ podman ps
 CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS             PORTS  NAMES
 6d2d700cbce6  docker.io/library/redis:latest  docker-entrypoint...  16 seconds ago  Up 16 seconds ago         redis-60fdc69b-65cb-8ece-8554-df49321b3462
 ```
+
+### Rootless on ubuntu
+
+edit `/etc/default/grub` to enable cgroups v2
+```
+GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.unified_cgroup_hierarchy=1"
+```
+
+`sudo update-grub`
+
+ensure that podman varlink is running
+```
+$ systemctl --user status io.podman
+● io.podman.service - Podman Remote API Service
+     Loaded: loaded (/usr/lib/systemd/user/io.podman.service; disabled; vendor preset: enabled)
+     Active: active (running) since Wed 2020-07-01 16:01:41 EDT; 7s ago
+TriggeredBy: ● io.podman.socket
+       Docs: man:podman-varlink(1)
+   Main PID: 25091 (podman)
+      Tasks: 29 (limit: 18808)
+     Memory: 17.5M
+        CPU: 184ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/io.podman.service
+             ├─25091 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
+             ├─25121 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
+             └─25125 /usr/bin/podman
+```
+
+ensure that you have a recent version of [crun](https://github.com/containers/crun/)
+
+```
+crun -V
+crun version 0.13.227-d38b
+commit: d38b8c28fc50a14978a27fa6afc69a55bfdd2c11
+spec: 1.0.0
++SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +YAJL
+```
+
+`nomad job run example.nomad`
+```
+job "example" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "cache" {
+    count = 1
+    restart {
+      attempts = 2
+      interval = "30m"
+      delay    = "15s"
+      mode     = "fail"
+    }
+    task "redis" {
+      driver = "podman"
+
+      config {
+        image = "redis"
+
+        port_map {
+          db = 6379
+        }
+      }
+
+      resources {
+        cpu    = 500 # 500 MHz
+        memory = 256 # 256MB
+
+        network {
+          # mbits = 10
+          port "db" {}
+        }
+      }
+    }
+  }
+}
+```
+
+verify `podman ps`
+
+```
+$ podman ps
+CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
+2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
+```
