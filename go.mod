@@ -16,7 +16,6 @@ require (
 	github.com/container-storage-interface/spec v1.2.0 // indirect
 	github.com/containernetworking/plugins v0.8.5 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
-	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/hashicorp/consul v1.7.3 // indirect

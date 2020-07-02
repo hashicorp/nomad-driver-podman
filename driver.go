@@ -19,6 +19,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/user"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/nomad/nomad/structs"
@@ -158,6 +161,25 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	d.config = &config
 	if cfg.AgentConfig != nil {
 		d.nomadConfig = cfg.AgentConfig.Driver
+	}
+
+	if config.SocketPath != "" {
+		d.podmanClient.varlinkSocketPath = config.SocketPath
+	} else {
+		user, _ := user.Current()
+		procFilesystems, err := getProcFilesystems()
+
+		if err != nil {
+			return err
+		}
+
+		socketPath := guessSocketPath(user, procFilesystems)
+
+		if err != nil {
+			return err
+		}
+
+		d.podmanClient.varlinkSocketPath = socketPath
 	}
 
 	return nil
@@ -326,7 +348,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to decode driver config: %v", err)
 	}
 
-	// d.logger.Info("starting podman task", "driver_cfg", hclog.Fmt("%+v", driverConfig))
 	handle := drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
@@ -334,11 +355,28 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
+	img, err := d.createImage(cfg, &driverConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Couldn't create image: %v", err)
+	}
+	d.logger.Debug("created/pulled image", "img_id", img.ID)
+
 	allArgs := []string{driverConfig.Image}
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
+
+	var entryPoint *string // nil -> image default entryPoint
+	if driverConfig.Entrypoint != "" {
+		*entryPoint = driverConfig.Entrypoint
+	}
+
+	var workingDir *string // nil -> image default workingDir
+	if driverConfig.WorkingDir != "" {
+		*workingDir = driverConfig.WorkingDir
+	}
+
 	containerName := BuildContainerName(cfg)
 	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
 	cpuShares := cfg.Resources.LinuxResources.CPUShares
@@ -352,28 +390,27 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// convert environment map into a k=v list
 	allEnv := cfg.EnvList()
 
-	// ensure to mount nomad alloc dirs into the container
-	allVolumes := []string{
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SharedAllocDir, cfg.Env[taskenv.AllocDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().LocalDir, cfg.Env[taskenv.TaskLocalDir]),
-		fmt.Sprintf("%s:%s", cfg.TaskDir().SecretsDir, cfg.Env[taskenv.SecretsDir]),
+	allVolumes, err := d.containerBinds(cfg, &driverConfig)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	if d.config.Volumes.Enabled {
-		// add task specific volumes, if enabled
-		allVolumes = append(allVolumes, driverConfig.Volumes...)
-	}
-
-	// Apply SELinux Label to each volume
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
-		for i := range allVolumes {
-			allVolumes[i] = fmt.Sprintf("%s:%s", allVolumes[i], selinuxLabel)
-		}
-	}
+	d.logger.Debug("binding volumes", "volumes", allVolumes)
 
 	swap := memoryLimit
 	if driverConfig.MemorySwap != "" {
 		swap = driverConfig.MemorySwap
+	}
+
+	procFilesystems, err := getProcFilesystems()
+	swappiness := new(int64)
+	if err == nil {
+		cgroupv2 := false
+		for _, l := range procFilesystems {
+			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
+		}
+		if !cgroupv2 {
+			swappiness = &driverConfig.MemorySwappiness
+		}
 	}
 
 	// Generate network string
@@ -387,6 +424,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := iopodman.Create{
 		Args:              allArgs,
+		Entrypoint:        entryPoint,
+		WorkDir:           workingDir,
 		Env:               &allEnv,
 		Name:              &containerName,
 		Volume:            &allVolumes,
@@ -399,7 +438,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		User:              &cfg.User,
 		MemoryReservation: &driverConfig.MemoryReservation,
 		MemorySwap:        &swap,
-		MemorySwappiness:  &driverConfig.MemorySwappiness,
+		MemorySwappiness:  swappiness,
 		Network:           &network,
 		Tmpfs:             &driverConfig.Tmpfs,
 	}
@@ -632,4 +671,138 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
 	return nil, fmt.Errorf("Podman driver does not support exec")
+}
+
+func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) (iopodman.InspectImageData, error) {
+	img, err := d.podmanClient.InspectImage(driverConfig.Image)
+	if err != nil {
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
+			TaskID:    cfg.ID,
+			AllocID:   cfg.AllocID,
+			TaskName:  cfg.Name,
+			Timestamp: time.Now(),
+			Message:   "Downloading image",
+			Annotations: map[string]string{
+				"image": driverConfig.Image,
+			},
+		})
+		if err != nil {
+			d.logger.Warn("error emitting event", "error", err)
+		}
+
+		pullLog, err := d.podmanClient.PullImage(driverConfig.Image)
+		if err != nil {
+			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be downloaded: %v", driverConfig.Image, err)
+		}
+
+		img, err = d.podmanClient.InspectImage(driverConfig.Image)
+		if err != nil {
+			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be inspected: %v", driverConfig.Image, err)
+		}
+
+		err = d.eventer.EmitEvent(&drivers.TaskEvent{
+			TaskID:    cfg.ID,
+			AllocID:   cfg.AllocID,
+			TaskName:  cfg.Name,
+			Timestamp: time.Now(),
+			Message:   fmt.Sprintf("Image downloaded: %s", pullLog),
+			Annotations: map[string]string{
+				"image": driverConfig.Image,
+			},
+		})
+		if err != nil {
+			d.logger.Warn("error emitting event", "error", err)
+		}
+
+	}
+
+	d.logger.Debug("Image created", "img_id", img.ID, "config", img.Config)
+
+	return img, nil
+}
+
+func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
+	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
+	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
+	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
+	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
+
+	// TODO support volume drivers
+	// https://github.com/containers/libpod/pull/4548
+	taskLocalBindVolume := false
+
+	for _, userbind := range driverConfig.Volumes {
+		src, dst, mode, err := parseVolumeSpec(userbind)
+		if err != nil {
+			return nil, fmt.Errorf("invalid docker volume %q: %v", userbind, err)
+		}
+
+		// Paths inside task dir are always allowed when using the default driver,
+		// Relative paths are always allowed as they mount within a container
+		// When a VolumeDriver is set, we assume we receive a binding in the format
+		// volume-name:container-dest
+		// Otherwise, we assume we receive a relative path binding in the format
+		// relative/to/task:/also/in/container
+		if taskLocalBindVolume {
+			src = expandPath(task.TaskDir().Dir, src)
+		} else {
+			// Resolve dotted path segments
+			src = filepath.Clean(src)
+		}
+
+		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
+			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
+		}
+
+		bind := src + ":" + dst
+		if mode != "" {
+			bind += ":" + mode
+		}
+		binds = append(binds, bind)
+	}
+
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+		// Apply SELinux Label to each volume
+		for i := range binds {
+			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
+		}
+	}
+
+	return binds, nil
+}
+
+// expandPath returns the absolute path of dir, relative to base if dir is relative path.
+// base is expected to be an absolute path
+func expandPath(base, dir string) string {
+	if filepath.IsAbs(dir) {
+		return filepath.Clean(dir)
+	}
+
+	return filepath.Clean(filepath.Join(base, dir))
+}
+
+func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mode string, err error) {
+	// using internal parser to preserve old parsing behavior.  Docker
+	// parser has additional validators (e.g. mode validity) and accepts invalid output (per Nomad),
+	// e.g. single path entry to be treated as a container path entry with an auto-generated host-path.
+	//
+	// Reconsider updating to use Docker parser when ready to make incompatible changes.
+	parts := strings.Split(volBind, ":")
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("not <src>:<destination> format")
+	}
+
+	m := ""
+	if len(parts) > 2 {
+		m = parts[2]
+	}
+
+	return parts[0], parts[1], m, nil
+}
+
+// isParentPath returns true if path is a child or a descendant of parent path.
+// Both inputs need to be absolute paths.
+func isParentPath(parent, path string) bool {
+	rel, err := filepath.Rel(parent, path)
+	return err == nil && !strings.HasPrefix(rel, "..")
 }

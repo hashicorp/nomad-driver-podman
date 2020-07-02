@@ -177,6 +177,7 @@ func (h *TaskHandle) runContainerMonitor() {
 		}
 
 		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
+		h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
 		if err != nil {
 			if _, ok := err.(*iopodman.NoContainerRunning); ok {
 				h.logger.Debug("Container is not running anymore", "container", h.containerID)
@@ -190,6 +191,10 @@ func (h *TaskHandle) runContainerMonitor() {
 					h.completedAt = time.Now()
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
+					if len(inspectData.State.Error) > 0 {
+						h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
+						h.logger.Error("Container error", "container", h.containerID, "err", h.exitResult.Err)
+					}
 					h.completedAt = inspectData.State.FinishedAt
 					if inspectData.State.OOMKilled {
 						h.exitResult.OOMKilled = true
@@ -197,6 +202,7 @@ func (h *TaskHandle) runContainerMonitor() {
 						h.logger.Error("Podman container killed by OOM killer", "container", h.containerID)
 					}
 				}
+
 				h.procState = drivers.TaskStateExited
 				h.stateLock.Unlock()
 				return

@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"os/user"
+
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -31,7 +34,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad/client/taskenv"
-	ctestutil "github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
@@ -47,7 +49,22 @@ var (
 	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
 	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
+	varlinkSocketPath     = ""
 )
+
+func init() {
+	user, _ := user.Current()
+	procFilesystems, err := getProcFilesystems()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	socketPath := guessSocketPath(user, procFilesystems)
+
+	varlinkSocketPath = socketPath
+}
 
 func createBasicResources() *drivers.Resources {
 	res := drivers.Resources{
@@ -71,9 +88,8 @@ func createBasicResources() *drivers.Resources {
 // A driver plugin interface and cleanup function is returned
 func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.DriverHarness {
 
-	ctestutil.RequireRoot(t)
-
 	d := NewPodmanDriver(testlog.HCLogger(t)).(*Driver)
+	d.podmanClient = newPodmanClient()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
@@ -249,6 +265,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 
 	exp := []byte{'w', 'i', 'n'}
 	file := "output.txt"
+	allocDir := "/mnt/alloc"
 
 	taskCfg := newTaskConfig("", []string{
 		"sh",
@@ -256,6 +273,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 		fmt.Sprintf(`echo -n %s > $%s/%s; sleep 1`,
 			string(exp), taskenv.AllocDir, file),
 	})
+	taskCfg.Volumes = []string{fmt.Sprintf("alloc/:%s", allocDir)}
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "start_wait_allocDir",
@@ -586,10 +604,15 @@ func TestPodmanDriver_Init(t *testing.T) {
 	}
 
 	// only test --init if catatonit is installed
-	_, err := os.Stat("/usr/libexec/podman/catatonit")
+	initPath := "/usr/libexec/podman/catatonit"
+	_, err := os.Stat(initPath)
 	if os.IsNotExist(err) {
-		t.Skip("Skipping --init test because catatonit is not installed")
-		return
+		path, err := exec.LookPath("catatonit")
+		if err != nil {
+			t.Skip("Skipping --init test because catatonit is not installed")
+			return
+		}
+		initPath = path
 	}
 
 	taskCfg := newTaskConfig("", []string{
@@ -599,6 +622,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 	})
 	// enable --init
 	taskCfg.Init = true
+	taskCfg.InitPath = initPath
 
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
@@ -643,10 +667,22 @@ func TestPodmanDriver_OOM(t *testing.T) {
 		// Incrementally creates a bigger and bigger variable.
 		"sh",
 		"-c",
-		"x=a; while true; do eval x='$x$x'; done",
+		"tail /dev/zero",
 	})
-	// enable --init
+
+	// only enable init if catatonit is installed
+	initPath := "/usr/libexec/podman/catatonit"
+	_, err := os.Stat(initPath)
+	if os.IsNotExist(err) {
+		path, err := exec.LookPath("catatonit")
+		if err != nil {
+			t.Skip("Skipping oom test because catatonit is not installed")
+			return
+		}
+		initPath = path
+	}
 	taskCfg.Init = true
+	taskCfg.InitPath = initPath
 
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
@@ -662,7 +698,7 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
-	_, _, err := d.StartTask(task)
+	_, _, err = d.StartTask(task)
 	require.NoError(t, err)
 
 	defer d.DestroyTask(task.ID, true)
@@ -779,8 +815,14 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
-	require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 
+	procFilesystems, err := getProcFilesystems()
+	if err == nil {
+		cgroupv2 := isCGroupV2(procFilesystems)
+		if cgroupv2 == false {
+			require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
+		}
+	}
 }
 
 // check tmpfs mounts
@@ -923,9 +965,7 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 }
 
 func newTaskConfig(variant string, command []string) TaskConfig {
-	// busyboxImageID is the ID stored in busybox.tar
-	busyboxImageID := "docker://busybox"
-	// busyboxImageID := "busybox:1.29.3"
+	busyboxImageID := "docker://docker.io/library/busybox:latest"
 
 	image := busyboxImageID
 
@@ -967,8 +1007,7 @@ func getContainer(t *testing.T, containerName string) iopodman.Container {
 }
 
 func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
-	// FIXME: a parameter for the socket would be nice
-	varlinkConnection, err := varlink.NewConnection(ctx, "unix://run/podman/io.podman")
+	varlinkConnection, err := varlink.NewConnection(ctx, varlinkSocketPath)
 	return varlinkConnection, err
 }
 
@@ -978,8 +1017,9 @@ func newPodmanClient() *PodmanClient {
 		Level: hclog.LevelFromString("DEBUG"),
 	})
 	client := &PodmanClient{
-		ctx:    context.Background(),
-		logger: testLogger,
+		ctx:               context.Background(),
+		logger:            testLogger,
+		varlinkSocketPath: varlinkSocketPath,
 	}
 	return client
 }

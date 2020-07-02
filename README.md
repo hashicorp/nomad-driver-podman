@@ -13,19 +13,20 @@ this plugin to Nomad!
 
 ## Features
 
-* use the jobs driver config to define the image for your container
-* start/stop containers with default or customer entrypoint and arguments
+* Use the jobs driver config to define the image for your container
+* Start/stop containers with default or customer entrypoint and arguments
 * [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
-* use nomad alloc data in the container.
-* bind mount custom volumes into the container
-* publish ports
-* monitor the memory consumption
-* monitor CPU usage
-* task config cpu value is used to populate podman CpuShares
-* Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html) 
-* utilize podmans --init feature
-* set username or UID used for the specified command within the container (podman --user option).
-* fine tune memory usage: standard [nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
+* Use nomad alloc data in the container.
+* Bind mount custom volumes into the container
+* Publish ports
+* Monitor the memory consumption
+* Monitor CPU usage
+* Task config cpu value is used to populate podman CpuShares
+* Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html)
+* Utilize podmans --init feature
+* Set username or UID used for the specified command within the container (podman --user option).
+* Fine tune memory usage: standard [nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
+* Supports rootless containers with cgroup V2
 
 
 ## Building The Driver from source
@@ -44,11 +45,12 @@ cd nomad-driver-podman
 
 - [Nomad](https://www.nomadproject.io/downloads.html) 0.9+
 - Linux host with `podman` installed
+- For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
 You need a varlink enabled podman binary and a system socket activation unit,
-see https://podman.io/blogs/2019/01/16/podman-varlink.html. 
+see https://podman.io/blogs/2019/01/16/podman-varlink.html.
 
-nomad agent, nomad-driver-podman and podman will reside on the same host, so you 
+nomad agent, nomad-driver-podman and podman will reside on the same host, so you
 do not have to worry about the ssh aspects of podman varlink.
 
 Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
@@ -57,7 +59,7 @@ Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject
 
 * volumes stanza:
 
-  * enabled - Defaults to true. Allows tasks to bind host paths (volumes) inside their container. 
+  * enabled - Defaults to true. Allows tasks to bind host paths (volumes) inside their container.
   * selinuxlabel - Allows the operator to set a SELinux label to the allocation and task local bind-mounts to containers. If used with _volumes.enabled_ set to false, the labels will still be applied to the standard binds in the container.
 
 ```
@@ -85,8 +87,8 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* recover_stopped (bool) Defaults to true. Allows the driver to start and resuse a previously stopped container after 
-  a Nomad client restart. 
+* recover_stopped (bool) Defaults to true. Allows the driver to start and resuse a previously stopped container after
+  a Nomad client restart.
   Consider a simple single node system and a complete reboot. All previously managed containers
   will be reused instead of disposed and recreated.
 
@@ -98,13 +100,31 @@ plugin "nomad-driver-podman" {
 }
 ```
 
+* socket_path (string) Defaults to `"unix://run/podman/io.podman"` when running as root or a cgroup V1 system, and `"unix://run/user/<USER_ID>/podman/io.podman"` for rootless cgroup V2 systems
+
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    socket_path = "unix://run/podman/io.podman"
+  }
+}
+```
 ## Task Configuration
 
-* **image** - The image to run, 
+* **image** - The image to run,
 
 ```
 config {
   image = "docker://redis"
+}
+```
+
+* **entrypoint** - (Optional) The entrypoint for the container. Defaults to the entrypoint set in the image.
+
+```
+config {
+  entrypoint = "/entrypoint.sh"
 }
 ```
 
@@ -127,7 +147,15 @@ config {
 }
 ```
 
-* **volumes** - (Optional) A list of host_path:container_path strings to bind host paths to container paths. 
+* **working_dir** - (Optional) The working directory for the container. Defaults to the default set in the image.
+
+```
+config {
+  working_dir = "/data"
+}
+```
+
+* **volumes** - (Optional) A list of host_path:container_path strings to bind host paths to container paths.
 
 ```
 config {
@@ -137,7 +165,7 @@ config {
 }
 ```
 
-* **tmpfs** - (Optional) A list of /container_path strings for tmpfs mount points. See podman run --tmpfs options for details. 
+* **tmpfs** - (Optional) A list of /container_path strings for tmpfs mount points. See podman run --tmpfs options for details.
 
 ```
 config {
@@ -188,7 +216,7 @@ config {
 }
 ```
 
-* **memory_swap** - A limit value equal to memory plus swap. The swap LIMIT should always be larger than the [memory value](https://www.nomadproject.io/docs/job-specification/resources.html#memory). 
+* **memory_swap** - A limit value equal to memory plus swap. The swap LIMIT should always be larger than the [memory value](https://www.nomadproject.io/docs/job-specification/resources.html#memory).
 
 Unit can be b (bytes), k (kilobytes), m (megabytes), or g (gigabytes). If you don't specify a unit, b is used. Set LIMIT to -1 to enable unlimited swap.
 
@@ -266,6 +294,90 @@ nomad run redis.nomad
 
 podman ps
 
-CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS             PORTS  NAMES                                                                              
+CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS             PORTS  NAMES
 6d2d700cbce6  docker.io/library/redis:latest  docker-entrypoint...  16 seconds ago  Up 16 seconds ago         redis-60fdc69b-65cb-8ece-8554-df49321b3462
+```
+
+### Rootless on ubuntu
+
+edit `/etc/default/grub` to enable cgroups v2
+```
+GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.unified_cgroup_hierarchy=1"
+```
+
+`sudo update-grub`
+
+ensure that podman varlink is running
+```
+$ systemctl --user status io.podman
+● io.podman.service - Podman Remote API Service
+     Loaded: loaded (/usr/lib/systemd/user/io.podman.service; disabled; vendor preset: enabled)
+     Active: active (running) since Wed 2020-07-01 16:01:41 EDT; 7s ago
+TriggeredBy: ● io.podman.socket
+       Docs: man:podman-varlink(1)
+   Main PID: 25091 (podman)
+      Tasks: 29 (limit: 18808)
+     Memory: 17.5M
+        CPU: 184ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/io.podman.service
+             ├─25091 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
+             ├─25121 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
+             └─25125 /usr/bin/podman
+```
+
+ensure that you have a recent version of [crun](https://github.com/containers/crun/)
+
+```
+crun -V
+crun version 0.13.227-d38b
+commit: d38b8c28fc50a14978a27fa6afc69a55bfdd2c11
+spec: 1.0.0
++SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +YAJL
+```
+
+`nomad job run example.nomad`
+```
+job "example" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "cache" {
+    count = 1
+    restart {
+      attempts = 2
+      interval = "30m"
+      delay    = "15s"
+      mode     = "fail"
+    }
+    task "redis" {
+      driver = "podman"
+
+      config {
+        image = "redis"
+
+        port_map {
+          db = 6379
+        }
+      }
+
+      resources {
+        cpu    = 500 # 500 MHz
+        memory = 256 # 256MB
+
+        network {
+          # mbits = 10
+          port "db" {}
+        }
+      }
+    }
+  }
+}
+```
+
+verify `podman ps`
+
+```
+$ podman ps
+CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
+2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
 ```

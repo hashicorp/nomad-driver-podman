@@ -22,10 +22,14 @@ import (
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/varlink/go/varlink"
 
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"os/user"
+	"strings"
 	"time"
 )
 
@@ -43,6 +47,8 @@ type PodmanClient struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
+
+	varlinkSocketPath string
 }
 
 // withVarlink calls a podman varlink function and retries N times in case of network failures
@@ -221,9 +227,90 @@ func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectCon
 	return ret, err
 }
 
+// PullImage takes a name or ID of an image and pulls it to local storage
+// returning the name of the image pulled
+func (c *PodmanClient) PullImage(imageID string) (string, error) {
+	var ret string
+	c.logger.Debug("Pull image", "image", imageID)
+	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
+		moreResponse, err := iopodman.PullImage().Call(c.ctx, varlinkConnection, imageID)
+		if err == nil {
+			ret = moreResponse.Logs[len(moreResponse.Logs)-1]
+			if err != nil {
+				c.logger.Error("failed to unmarshal image pull logs", "err", err)
+				return err
+			}
+
+		}
+		return err
+	})
+	return ret, err
+}
+
+// InspectImage data takes a name or ID of an image and returns the inspection
+// data as iopodman.InspectImageData.
+func (c *PodmanClient) InspectImage(imageID string) (iopodman.InspectImageData, error) {
+	var ret iopodman.InspectImageData
+	c.logger.Debug("Inspect image", "image", imageID)
+	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
+		inspectJSON, err := iopodman.InspectImage().Call(c.ctx, varlinkConnection, imageID)
+		if err == nil {
+			err = json.Unmarshal([]byte(inspectJSON), &ret)
+			if err != nil {
+				c.logger.Error("failed to unmarshal inspect image", "err", err)
+				return err
+			}
+
+		}
+		return err
+	})
+	return ret, err
+}
+
+func guessSocketPath(user *user.User, procFilesystems []string) string {
+	rootVarlinkPath := "unix://run/podman/io.podman"
+	if user.Uid == "0" {
+		return rootVarlinkPath
+	}
+
+	cgroupv2 := isCGroupV2(procFilesystems)
+
+	if cgroupv2 {
+		return fmt.Sprintf("unix://run/user/%s/podman/io.podman", user.Uid)
+	}
+
+	return rootVarlinkPath
+}
+
+func isCGroupV2(procFilesystems []string) bool {
+	cgroupv2 := false
+	for _, l := range procFilesystems {
+		if strings.HasSuffix(l, "cgroup2") {
+			cgroupv2 = true
+		}
+	}
+
+	return cgroupv2
+}
+
+func getProcFilesystems() ([]string, error) {
+	file, err := os.Open("/proc/filesystems")
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines, scanner.Err()
+}
+
 // getConnection opens a new varlink connection
 func (c *PodmanClient) getConnection() (*varlink.Connection, error) {
-	// FIXME: a parameter for the socket would be nice
-	varlinkConnection, err := varlink.NewConnection(c.ctx, "unix://run/podman/io.podman")
+	varlinkConnection, err := varlink.NewConnection(c.ctx, c.varlinkSocketPath)
 	return varlinkConnection, err
 }
