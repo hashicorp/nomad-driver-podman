@@ -431,6 +431,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Volume:            &allVolumes,
 		Memory:            &memoryLimit,
 		CpuShares:         &cpuShares,
+		CapAdd:            &driverConfig.CapAdd,
+		CapDrop:           &driverConfig.CapDrop,
 		LogOpt:            &logOpts,
 		Hostname:          &driverConfig.Hostname,
 		Init:              &driverConfig.Init,

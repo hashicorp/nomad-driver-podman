@@ -885,6 +885,37 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Contains(t, tasklog, " tmpfs on /tmpdata2 type tmpfs ")
 }
 
+// check default capabilities
+func TestPodmanDriver_DefaultCaps(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	inspectData := startDestroyInspect(t, taskCfg, "defaultcaps")
+
+	// a default container should not have SYS_TIME
+	require.NotContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
+	// a default container gets MKNOD cap
+	require.Contains(t, inspectData.EffectiveCaps, "CAP_MKNOD")
+}
+
+// check modified capabilities (CapAdd/CapDrop)
+func TestPodmanDriver_Caps(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// 	cap_add = [
+	//     "SYS_TIME",
+	//   ]
+	taskCfg.CapAdd = []string{"SYS_TIME"}
+	// 	cap_drop = [
+	//     "MKNOD",
+	//   ]
+	taskCfg.CapDrop = []string{"MKNOD"}
+
+	inspectData := startDestroyInspect(t, taskCfg, "caps")
+
+	// we added SYS_TIME, so we should see it in inspect
+	require.Contains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
+	// we dropped CAP_MKNOD, so we should NOT see it in inspect
+	require.NotContains(t, inspectData.EffectiveCaps, "CAP_MKNOD")
+}
+
 // TestPodmanDriver_NetworkMode asserts we can specify different network modes
 // Default podman cni subnet 10.88.0.0/16
 func TestPodmanDriver_NetworkMode(t *testing.T) {
@@ -1028,4 +1059,43 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 	driver, ok := harness.Impl().(*Driver)
 	require.True(t, ok)
 	return driver
+}
+
+// helper to start, destroy and inspect a long running container
+func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopodman.InspectContainerData {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      taskName,
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	}
+	// inspect container to learn about the actual podman limits
+	inspectData := inspectContainer(t, containerName)
+	return inspectData
 }
