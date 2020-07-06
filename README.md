@@ -5,9 +5,6 @@ Nomad podman Driver
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/hashicorp/nomad-driver-podman/blob/master/LICENSE)
 ![](https://github.com/hashicorp/nomad-driver-podman/workflows/build/badge.svg)
 
-*THIS IS A WORK IN PROGRESS PLUGIN*. Do not run it in production!
-Contributions are welcome, of course.
-
 Many thanks to [@towe75](https://github.com/towe75) and [Pascom](https://www.pascom.net/) for contributing
 this plugin to Nomad!
 
