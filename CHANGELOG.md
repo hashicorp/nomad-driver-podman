@@ -7,6 +7,7 @@ FEATURES:
 * runtime: Ability to run podman rootless [[GH-42](https://github.com/hashicorp/nomad-driver-podman/issues/42)]
 * config: Ability to specify varlink socket path [[GH-42](https://github.com/hashicorp/nomad-driver-podman/issues/42)]
 * runtime: Conditionally set memory swappiness only if cgroupv1 is running [[GH-42](https://github.com/hashicorp/nomad-driver-podman/issues/42)]
+* config: Ability to configure linux capabilities (cap_add/cap_drop) [[GH-44](https://github.com/hashicorp/nomad-driver-podman/issues/44)]
 
 ## 0.0.2 (June 11, 2020)
 
