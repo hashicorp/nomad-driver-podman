@@ -249,6 +249,26 @@ config {
 }
 ```
 
+* **cap_add** - (Optional)  A list of Linux capabilities as strings to pass to --cap-add.
+
+```
+config {
+  cap_add = [
+    "SYS_TIME"
+  ]
+}
+```
+
+* **cap_drop** - (Optional)  A list of Linux capabilities as strings to pass to --cap-drop.
+
+```
+config {
+  cap_add = [
+    "MKNOD"
+  ]
+}
+```
+
 ## Example job
 
 ```
