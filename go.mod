@@ -18,6 +18,10 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/go-openapi/errors v0.19.6
+	github.com/go-openapi/strfmt v0.19.5
+	github.com/go-openapi/swag v0.19.9
+	github.com/go-openapi/validate v0.19.10
 	github.com/hashicorp/consul v1.7.3 // indirect
 	github.com/hashicorp/go-hclog v0.14.1
 	github.com/hashicorp/nomad v0.11.3-0.20200630133459-42c2ee4448c8
@@ -25,7 +29,7 @@ require (
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mrunalp/fileutils v0.0.0-20200504145649-7be891c94fd3 // indirect
 	github.com/opencontainers/selinux v1.5.1 // indirect
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.6.1
 	github.com/varlink/go v0.3.0
 	google.golang.org/grpc v1.29.1 // indirect
 
