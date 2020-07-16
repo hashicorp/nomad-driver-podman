@@ -13,11 +13,11 @@ jobs:
       with:
         go-version: '^1.14.5'
 
-    # - name: Lint Deps
-    #   run: make lint-deps
+    - name: Lint Deps
+      run: make lint-deps
 
-    # - name: Lint
-    #   run: make check
+    - name: Lint
+      run: make check
 
     - name: Prepare machine
       run: sudo -E PATH=$PATH:$(go env GOPATH)/bin bash -e .github/machinesetup.sh
@@ -32,7 +32,7 @@ jobs:
         path: nomad-driver-podman
 
     - name: Test
-      run: sudo -E PATH=$PATH:$(go env GOPATH)/bin CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
+      run: CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
     - name: Archive test result
       uses: actions/upload-artifact@v1
       with:
