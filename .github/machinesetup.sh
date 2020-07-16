@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+echo "PATH"
+echo $PATH
+
+echo "apt go?"
+echo apt list | grep go
 # add podman repository
 echo "deb http://ppa.launchpad.net/projectatomic/ppa/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/podman.list
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 018BA5AD9DF57A4448F0E6CF8BECF1637AD8C79D
