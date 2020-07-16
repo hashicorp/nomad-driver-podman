@@ -20,7 +20,7 @@ jobs:
       run: make check
 
     - name: Prepare machine
-      run: sudo bash -e .github/machinesetup.sh
+      run: sudo GOPATH=$GOPATH bash -e .github/machinesetup.sh
 
     - name: Compile driver
       run: sudo -E ./build.sh
