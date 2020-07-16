@@ -19,8 +19,10 @@ jobs:
     - name: Lint
       run: make check
 
+    - name: which go is this
+      run: go version && which go
     - name: Prepare machine
-      run: sudo GOPATH=$GOPATH bash -e .github/machinesetup.sh
+      run: sudo env PATH=$PATH bash -e .github/machinesetup.sh
 
     - name: Compile driver
       run: sudo -E ./build.sh
