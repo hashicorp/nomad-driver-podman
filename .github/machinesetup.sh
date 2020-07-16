@@ -18,6 +18,10 @@ mkdir -p /usr/libexec/podman
 mv catatonit* /usr/libexec/podman/catatonit
 chmod +x /usr/libexec/podman/catatonit
 
+echo "====== Installed Go Version:"
+go version
+which go
+
 echo "====== Installed podman:"
 # ensure to remember the used version when checking a build log
 podman info
