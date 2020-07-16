@@ -13,19 +13,18 @@ jobs:
       with:
         go-version: '^1.14.5'
 
-    - name: Lint Deps
-      run: make lint-deps
+    # - name: Lint Deps
+    #   run: make lint-deps
 
-    - name: Lint
-      run: make check
+    # - name: Lint
+    #   run: make check
 
-    - name: which go is this
-      run: go version && which go
     - name: Prepare machine
       run: sudo -E PATH=$PATH:$(go env GOPATH)/bin bash -e .github/machinesetup.sh
 
     - name: Compile driver
-      run: sudo -E ./build.sh
+      run: ./build.sh
+
     - name: Archive production artifacts
       uses: actions/upload-artifact@v1
       with:
