@@ -32,7 +32,7 @@ jobs:
         path: nomad-driver-podman
 
     - name: Test
-      run: sudo -E CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
+      run: sudo -E PATH=$PATH:$(go env GOPATH)/bin CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
     - name: Archive test result
       uses: actions/upload-artifact@v1
       with:
