@@ -22,7 +22,7 @@ jobs:
     - name: which go is this
       run: go version && which go
     - name: Prepare machine
-      run: sudo env PATH=$PATH bash -e .github/machinesetup.sh
+      run: sudo -E GOPATH=$(which go) bash -e .github/machinesetup.sh
 
     - name: Compile driver
       run: sudo -E ./build.sh
