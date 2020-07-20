@@ -27,6 +27,7 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/nomad-driver-podman/apiclient"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
@@ -104,7 +105,8 @@ type Driver struct {
 	logger hclog.Logger
 
 	// podmanClient encapsulates podman remote calls
-	podmanClient *PodmanClient
+	podmanClient  *PodmanClient
+	podmanClient2 *apiclient.APIClient
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -131,6 +133,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 			ctx:    ctx,
 			logger: logger.Named("podmanClient"),
 		},
+		podmanClient2: apiclient.NewClient("unix:/run/podman/podman.sock"),
 	}
 }
 
@@ -594,7 +597,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 		return drivers.ErrTaskNotFound
 	}
 	// fixme send proper signal to container
-	err := d.podmanClient.StopContainer(handle.containerID, int64(timeout.Seconds()))
+	err := d.podmanClient2.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
 	if err != nil {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
@@ -617,7 +620,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.isRunning() {
 		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		err := d.podmanClient.StopContainer(handle.containerID, int64(60))
+		err := d.podmanClient2.ContainerStop(d.ctx, handle.containerID, 60)
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
 		}

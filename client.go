@@ -96,19 +96,6 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 	return containerStats, err
 }
 
-// StopContainer stops a container given a timeout.  It takes the name or ID of a container as well as a
-// timeout value.  The timeout value the time before a forcible stop to the container is applied.
-// If the container cannot be found, a [ContainerNotFound](#ContainerNotFound)
-// error will be returned instead.
-func (c *PodmanClient) StopContainer(containerID string, timeoutSeconds int64) error {
-	c.logger.Debug("Stopping container", "container", containerID, "timeout", timeoutSeconds)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		_, err := iopodman.StopContainer().Call(c.ctx, varlinkConnection, containerID, timeoutSeconds)
-		return err
-	})
-	return err
-}
-
 // ForceRemoveContainer requires the name or ID of a container and will stop and remove a container and it's volumes.
 // iI container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
 func (c *PodmanClient) ForceRemoveContainer(containerID string) error {
