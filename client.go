@@ -182,18 +182,6 @@ func (c *PodmanClient) CreateContainer(createOpts iopodman.Create) (string, erro
 	return ret, err
 }
 
-// StartContainer starts a created or stopped container. It takes the name or ID of container.  It returns
-// the container ID once started.  If the container cannot be found, a [ContainerNotFound](#ContainerNotFound)
-// error will be returned.
-func (c *PodmanClient) StartContainer(containerID string) error {
-	c.logger.Debug("Starting container", "container", containerID)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		_, err := iopodman.StartContainer().Call(c.ctx, varlinkConnection, containerID)
-		return err
-	})
-	return err
-}
-
 // InspectContainer data takes a name or ID of a container returns the inspection
 // data as iopodman.InspectContainerData.
 func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectContainerData, error) {

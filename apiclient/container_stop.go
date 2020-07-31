@@ -19,7 +19,7 @@ func (c *APIClient) ContainerStop(ctx context.Context, name string, timeout int)
 
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusNoContent {
+	if res.StatusCode == http.StatusNoContent {
 		return nil
 	}
 	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)

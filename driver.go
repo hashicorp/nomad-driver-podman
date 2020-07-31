@@ -308,7 +308,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		// are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
 			d.logger.Debug("Found a stopped container, try to start it", "container", psInfo.Id)
-			if err = d.podmanClient.StartContainer(psInfo.Id); err != nil {
+			if err = d.podmanClient2.ContainerStart(d.ctx, psInfo.Id); err != nil {
 				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
 			} else {
 				d.logger.Info("Restarted a container during recovery", "container", psInfo.Id)
@@ -317,7 +317,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		} else {
 			// no, let's cleanup here to prepare for a StartTask()
 			d.logger.Debug("Found a stopped container, removing it", "container", psInfo.Id)
-			if err = d.podmanClient.ForceRemoveContainer(psInfo.Id); err != nil {
+			if err = d.podmanClient2.ContainerStart(d.ctx, psInfo.Id); err != nil {
 				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", psInfo.Id, "err", err)
 			}
 			h.procState = drivers.TaskStateExited
@@ -515,7 +515,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		if err = d.podmanClient.StartContainer(containerID); err != nil {
+		if err = d.podmanClient2.ContainerStart(d.ctx, containerID); err != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("failed to start task, could not start container: %v", err)
 		}
