@@ -887,8 +887,12 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 // check default capabilities
 func TestPodmanDriver_DefaultCaps(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
-	inspectData := startDestroyInspect(t, taskCfg, "defaultcaps")
+	inspectData := startDestroyInspect(t, taskCfg, nil, "defaultcaps")
 
 	// a default container should not have SYS_TIME
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
@@ -898,6 +902,10 @@ func TestPodmanDriver_DefaultCaps(t *testing.T) {
 
 // check modified capabilities (CapAdd/CapDrop)
 func TestPodmanDriver_Caps(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	// 	cap_add = [
 	//     "SYS_TIME",
@@ -908,7 +916,7 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	//   ]
 	taskCfg.CapDrop = []string{"MKNOD"}
 
-	inspectData := startDestroyInspect(t, taskCfg, "caps")
+	inspectData := startDestroyInspect(t, taskCfg, nil, "caps")
 
 	// we added SYS_TIME, so we should see it in inspect
 	require.Contains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
@@ -1038,6 +1046,36 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 	}
 }
 
+// TestTestPodmanDriver_IsolatedEnv ensures that env vars do not leak
+// into other tasks
+func TestPodmanDriver_IsolatedEnv(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg1 := newTaskConfig("", busyboxLongRunningCmd)
+	cb := func(d *drivers.TaskConfig) {
+		if d.Env == nil {
+			d.Env = make(map[string]string)
+		}
+		d.Env["foo"] = "bar"
+	}
+	inspectData := startDestroyInspect(t, taskCfg1, cb, "env1")
+	require.NotNil(t, inspectData)
+	require.Contains(t, inspectData.Config.Env, "foo=bar")
+
+	taskCfg2 := newTaskConfig("", busyboxLongRunningCmd)
+	cb2 := func(d *drivers.TaskConfig) {
+		if d.Env == nil {
+			d.Env = make(map[string]string)
+		}
+		d.Env["env2"] = "bar2"
+	}
+	inspectData2 := startDestroyInspect(t, taskCfg2, cb2, "env2")
+
+	require.NotContains(t, inspectData2.Config.Env, "foo=bar")
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
@@ -1114,17 +1152,18 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 }
 
 // helper to start, destroy and inspect a long running container
-func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopodman.InspectContainerData {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
-
+func startDestroyInspect(t *testing.T, taskCfg TaskConfig, driverCB func(d *drivers.TaskConfig), taskName string) iopodman.InspectContainerData {
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      taskName,
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
+
+	if driverCB != nil {
+		driverCB(task)
+	}
+
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)

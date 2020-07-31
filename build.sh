@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+which go
+go version
+go env
+
 me=$(readlink -f "${BASH_SOURCE[0]}")
 project=$(dirname "$me")
 cd "$project"

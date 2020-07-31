@@ -1,6 +1,6 @@
 module github.com/hashicorp/nomad-driver-podman
 
-go 1.14
+go 1.15
 
 replace (
 	github.com/docker/docker v1.13.1 => github.com/docker/docker v0.7.3-0.20181219122643-d1117e8e1040
@@ -29,6 +29,5 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/varlink/go v0.3.0
 	google.golang.org/grpc v1.29.1 // indirect
-	gotest.tools/gotestsum v0.5.2 // indirect
 
 )
