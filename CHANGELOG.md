@@ -1,3 +1,9 @@
+## Unreleased
+
+FEATURES:
+
+* config: Ability to configure dns server list
+
 ## 0.1.0
 
 FEATURES:

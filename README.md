@@ -269,6 +269,16 @@ config {
 }
 ```
 
+* **dns** - (Optional)  A list of dns servers. Replaces the default from podman binary and containers.conf.
+
+```
+config {
+  dns = [
+    "1.1.1.1"
+  ]
+}
+```
+
 ## Example job
 
 ```

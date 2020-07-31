@@ -916,6 +916,58 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_MKNOD")
 }
 
+// check dns server configuration
+func TestPodmanDriver_Dns(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		"cat",
+		"/etc/resolv.conf",
+	})
+	// config {
+	//   dns = [
+	//     "1.1.1.1"
+	//   ]
+	// }
+	taskCfg.Dns = []string{"1.1.1.1"}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "dns",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if stdout was populated with the correct output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, "nameserver 1.1.1.1")
+
+}
+
 // TestPodmanDriver_NetworkMode asserts we can specify different network modes
 // Default podman cni subnet 10.88.0.0/16
 func TestPodmanDriver_NetworkMode(t *testing.T) {
