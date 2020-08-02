@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-# add podman repository
-echo "deb http://ppa.launchpad.net/projectatomic/ppa/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/podman.list
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 018BA5AD9DF57A4448F0E6CF8BECF1637AD8C79D
+# add podman 2.x repository
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_18.04/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_18.04/Release.key | apt-key add -
 
 # Ignore apt-get update errors to avoid failing due to misbehaving repo;
 # true errors would fail in the apt-get install phase
@@ -25,37 +25,39 @@ podman info
 echo "====== Podman version:"
 podman version
 
-# enable varlink socket (not included in ubuntu package)
-cat > /etc/systemd/system/io.podman.service << EOF
+# enable http socket (not included in ubuntu package)
+cat > /etc/systemd/system/podman.service << EOF
 [Unit]
-Description=Podman Remote API Service
-Requires=io.podman.socket
-After=io.podman.socket
-Documentation=man:podman-varlink(1)
+Description=Podman API Service
+Requires=podman.socket
+After=podman.socket
+Documentation=man:podman-system-service(1)
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/podman varlink unix:%t/podman/io.podman --timeout=60000
-TimeoutStopSec=30
-KillMode=process
+ExecStart=/usr/bin/podman system service
 
 [Install]
 WantedBy=multi-user.target
-Also=io.podman.socket
+Also=podman.socket
 EOF
 
-cat > /etc/systemd/system/io.podman.socket << EOF
+cat > /etc/systemd/system/podman.socket << EOF
 [Unit]
-Description=Podman Remote API Socket
-Documentation=man:podman-varlink(1)
+Description=Podman API Socket
+Documentation=man:podman-system-service(1)
 
 [Socket]
-ListenStream=%t/podman/io.podman
-SocketMode=0600
+ListenStream=%t/podman/podman.sock
+SocketMode=0660
 
 [Install]
-WantedBy=sockets.targett
+WantedBy=sockets.target
 EOF
 
 systemctl daemon-reload
+# enable varlink (until it's fully removed...)
 systemctl start io.podman
+# enable http api
+systemctl start podman
