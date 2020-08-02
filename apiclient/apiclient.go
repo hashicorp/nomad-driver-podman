@@ -54,3 +54,12 @@ func (c *APIClient) Post(ctx context.Context, path string) (*http.Response, erro
 	req = req.WithContext(ctx)
 	return c.Do(req)
 }
+
+func (c *APIClient) Delete(ctx context.Context, path string) (*http.Response, error) {
+	req, err := http.NewRequest("DELETE", c.baseUrl+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	return c.Do(req)
+}

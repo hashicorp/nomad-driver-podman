@@ -96,17 +96,6 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 	return containerStats, err
 }
 
-// ForceRemoveContainer requires the name or ID of a container and will stop and remove a container and it's volumes.
-// iI container cannot be found by name or ID, a [ContainerNotFound](#ContainerNotFound) error will be returned.
-func (c *PodmanClient) ForceRemoveContainer(containerID string) error {
-	c.logger.Debug("Removing container", "container", containerID)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		_, err := iopodman.RemoveContainer().Call(c.ctx, varlinkConnection, containerID, true, true)
-		return err
-	})
-	return err
-}
-
 // GetInfo returns a [PodmanInfo](#PodmanInfo) struct that describes podman and its host such as storage stats,
 // build information of Podman, and system-wide registries
 func (c *PodmanClient) GetInfo() (*iopodman.PodmanInfo, error) {

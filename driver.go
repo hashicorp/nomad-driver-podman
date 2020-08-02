@@ -494,7 +494,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else {
 			// let's remove the old, dead container
 			d.logger.Info("Detect stopped container with same name, removing it", "task", cfg.ID, "container", otherContainerPs.Id)
-			if err = d.podmanClient.ForceRemoveContainer(otherContainerPs.Id); err != nil {
+			if err = d.podmanClient2.ContainerDelete(d.ctx, otherContainerPs.Id, true, true); err != nil {
 				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
 			}
 		}
@@ -509,7 +509,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
-		if err := d.podmanClient.ForceRemoveContainer(containerID); err != nil {
+		if err := d.podmanClient2.ContainerDelete(d.ctx, containerID, true, true); err != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
@@ -628,7 +628,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	}
 
 	if handle.removeContainerOnExit {
-		err := d.podmanClient.ForceRemoveContainer(handle.containerID)
+		err := d.podmanClient2.ContainerDelete(d.ctx, handle.containerID, true, true)
 		if err != nil {
 			d.logger.Warn("Could not remove container", "container", handle.containerID, "error", err)
 		}
