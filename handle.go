@@ -177,12 +177,11 @@ func (h *TaskHandle) runContainerMonitor() {
 		}
 
 		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
-		h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
 		if err != nil {
 			if _, ok := err.(*iopodman.NoContainerRunning); ok {
 				h.logger.Debug("Container is not running anymore", "container", h.containerID)
 				// container was stopped, get exit code and other post mortem infos
-				inspectData, err := h.driver.podmanClient.InspectContainer(h.containerID)
+				inspectData, err := h.driver.podmanClient2.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
@@ -211,6 +210,8 @@ func (h *TaskHandle) runContainerMonitor() {
 			// fall into the "TaskStateExited" case
 			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
 			continue
+		} else {
+			h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
 		}
 
 		h.stateLock.Lock()

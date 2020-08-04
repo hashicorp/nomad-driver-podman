@@ -96,67 +96,6 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 	return containerStats, err
 }
 
-// GetInfo returns a [PodmanInfo](#PodmanInfo) struct that describes podman and its host such as storage stats,
-// build information of Podman, and system-wide registries
-func (c *PodmanClient) GetInfo() (*iopodman.PodmanInfo, error) {
-	var ret *iopodman.PodmanInfo
-	c.logger.Debug("Get podman info")
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		result, err := iopodman.GetInfo().Call(c.ctx, varlinkConnection)
-		ret = &result
-		return err
-	})
-	return ret, err
-}
-
-// PsID returns a PsContainer struct that describes the process state of exactly
-// one container.
-func (c *PodmanClient) PsID(containerID string) (*iopodman.PsContainer, error) {
-	filters := []string{"id=" + containerID}
-	psInfo, err := c.Ps(filters)
-	if err == nil {
-		if len(psInfo) == 1 {
-			return &psInfo[0], nil
-		} else {
-			return nil, fmt.Errorf("No such container: %s", containerID)
-		}
-	}
-	return nil, err
-}
-
-// PsByName returns a PsContainer struct that describes the process state of exactly
-// one container.
-func (c *PodmanClient) PsByName(containerName string) (*iopodman.PsContainer, error) {
-	filters := []string{"name=" + containerName}
-	psInfo, err := c.Ps(filters)
-	if err == nil {
-		if len(psInfo) == 1 {
-			return &psInfo[0], nil
-		} else {
-			return nil, fmt.Errorf("No such container: %s", containerName)
-		}
-	}
-	return nil, err
-}
-
-// Ps finds process info for one or more containers by applying a filter
-func (c *PodmanClient) Ps(filters []string) ([]iopodman.PsContainer, error) {
-	var ret []iopodman.PsContainer
-	c.logger.Debug("Get container list", "filters", filters)
-	psOpts := iopodman.PsOpts{
-		Filters: &filters,
-		All:     true,
-	}
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		result, err := iopodman.Ps().Call(c.ctx, varlinkConnection, psOpts)
-		if err == nil {
-			ret = result
-		}
-		return err
-	})
-	return ret, err
-}
-
 // CreateContainer creates a new container from an image.  It uses a [Create](#Create) type for input.
 func (c *PodmanClient) CreateContainer(createOpts iopodman.Create) (string, error) {
 	ret := ""
@@ -165,26 +104,6 @@ func (c *PodmanClient) CreateContainer(createOpts iopodman.Create) (string, erro
 		if err == nil {
 			ret = result
 			c.logger.Debug("Created container", "container", ret)
-		}
-		return err
-	})
-	return ret, err
-}
-
-// InspectContainer data takes a name or ID of a container returns the inspection
-// data as iopodman.InspectContainerData.
-func (c *PodmanClient) InspectContainer(containerID string) (iopodman.InspectContainerData, error) {
-	var ret iopodman.InspectContainerData
-	c.logger.Debug("Inspect container", "container", containerID)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		inspectJSON, err := iopodman.InspectContainer().Call(c.ctx, varlinkConnection, containerID)
-		if err == nil {
-			err = json.Unmarshal([]byte(inspectJSON), &ret)
-			if err != nil {
-				c.logger.Error("failed to unmarshal inspect container", "err", err)
-				return err
-			}
-
 		}
 		return err
 	})
