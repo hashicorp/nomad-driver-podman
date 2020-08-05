@@ -16,7 +16,7 @@ func (c *APIClient) SystemInfo(ctx context.Context) (Info, error) {
 	// the libpod/info endpoint seems to have some trouble
 	// using "compat" endpoint and minimal struct
 	// until podman returns proper data.
-	res, err := c.Get(ctx, fmt.Sprintf("/info"))
+	res, err := c.Get(ctx, "/info")
 	if err != nil {
 		return infoData, err
 	}

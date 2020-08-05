@@ -41,6 +41,8 @@ func (c *APIClient) ContainerInspect(ctx context.Context, name string) (InspectC
 //
 // some unused parts are modified/commented out to not pull
 // more dependencies and also to overcome some json unmarshall/version problems
+//
+// some fields are reordert to make the linter happy (bytes maligned complains)
 // -------------------------------------------------------------------------------------------------------
 
 // InspectContainerConfig holds further data about how a container was initially
@@ -52,19 +54,6 @@ type InspectContainerConfig struct {
 	DomainName string `json:"Domainname"`
 	// User the container was launched with
 	User string `json:"User"`
-	// Unused, at present
-	AttachStdin bool `json:"AttachStdin"`
-	// Unused, at present
-	AttachStdout bool `json:"AttachStdout"`
-	// Unused, at present
-	AttachStderr bool `json:"AttachStderr"`
-	// Whether the container creates a TTY
-	Tty bool `json:"Tty"`
-	// Whether the container leaves STDIN open
-	OpenStdin bool `json:"OpenStdin"`
-	// Whether STDIN is only left open once.
-	// Presently not supported by Podman, unused.
-	StdinOnce bool `json:"StdinOnce"`
 	// Container environment variables
 	Env []string `json:"Env"`
 	// Container command
@@ -95,12 +84,25 @@ type InspectContainerConfig struct {
 	// Timezone is the timezone inside the container.
 	// Local means it has the same timezone as the host machine
 	Timezone string `json:"Timezone,omitempty"`
+	// Umask is the umask inside the container.
+	Umask string `json:"Umask,omitempty"`
 	// SystemdMode is whether the container is running in systemd mode. In
 	// systemd mode, the container configuration is customized to optimize
 	// running systemd in the container.
 	SystemdMode bool `json:"SystemdMode,omitempty"`
-	// Umask is the umask inside the container.
-	Umask string `json:"Umask,omitempty"`
+	// Unused, at present
+	AttachStdin bool `json:"AttachStdin"`
+	// Unused, at present
+	AttachStdout bool `json:"AttachStdout"`
+	// Unused, at present
+	AttachStderr bool `json:"AttachStderr"`
+	// Whether the container creates a TTY
+	Tty bool `json:"Tty"`
+	// Whether the container leaves STDIN open
+	OpenStdin bool `json:"OpenStdin"`
+	// Whether STDIN is only left open once.
+	// Presently not supported by Podman, unused.
+	StdinOnce bool `json:"StdinOnce"`
 }
 
 // InspectRestartPolicy holds information about the container's restart policy.
@@ -190,7 +192,7 @@ type InspectMount struct {
 	// "volume" and "bind".
 	Type string `json:"Type"`
 	// The name of the volume. Empty for bind mounts.
-	Name string `json:"Name,omptempty"`
+	Name string `json:"Name,omitempty"`
 	// The source directory for the volume.
 	Source string `json:"Source"`
 	// The destination directory for the volume. Specified as a path within
@@ -636,52 +638,51 @@ type InspectNetworkSettings struct {
 // compatible with `docker inspect` JSON, but additional fields have been added
 // as required to share information not in the original output.
 type InspectContainerData struct {
-	ID string `json:"Id"`
-	// FIXME can not parse date/time: "Created": "2020-07-05 11:32:38.541987006 -0400 -0400",
-	//Created         time.Time              `json:"Created"`
-	Path            string                 `json:"Path"`
-	Args            []string               `json:"Args"`
-	State           *InspectContainerState `json:"State"`
-	Image           string                 `json:"Image"`
-	ImageName       string                 `json:"ImageName"`
-	Rootfs          string                 `json:"Rootfs"`
-	Pod             string                 `json:"Pod"`
-	ResolvConfPath  string                 `json:"ResolvConfPath"`
-	HostnamePath    string                 `json:"HostnamePath"`
-	HostsPath       string                 `json:"HostsPath"`
-	StaticDir       string                 `json:"StaticDir"`
-	OCIConfigPath   string                 `json:"OCIConfigPath,omitempty"`
-	OCIRuntime      string                 `json:"OCIRuntime,omitempty"`
-	LogPath         string                 `json:"LogPath"`
-	LogTag          string                 `json:"LogTag"`
-	ConmonPidFile   string                 `json:"ConmonPidFile"`
-	Name            string                 `json:"Name"`
-	RestartCount    int32                  `json:"RestartCount"`
-	Driver          string                 `json:"Driver"`
-	MountLabel      string                 `json:"MountLabel"`
-	ProcessLabel    string                 `json:"ProcessLabel"`
-	AppArmorProfile string                 `json:"AppArmorProfile"`
-	EffectiveCaps   []string               `json:"EffectiveCaps"`
-	BoundingCaps    []string               `json:"BoundingCaps"`
-	ExecIDs         []string               `json:"ExecIDs"`
-	//GraphDriver     *driver.Data                `json:"GraphDriver"`
-	SizeRw          *int64                      `json:"SizeRw,omitempty"`
-	SizeRootFs      int64                       `json:"SizeRootFs,omitempty"`
+	State           *InspectContainerState      `json:"State"`
 	Mounts          []InspectMount              `json:"Mounts"`
-	Dependencies    []string                    `json:"Dependencies"`
 	NetworkSettings *InspectNetworkSettings     `json:"NetworkSettings"` //TODO
-	ExitCommand     []string                    `json:"ExitCommand"`
-	Namespace       string                      `json:"Namespace"`
-	IsInfra         bool                        `json:"IsInfra"`
 	Config          *InspectContainerConfig     `json:"Config"`
 	HostConfig      *InspectContainerHostConfig `json:"HostConfig"`
+	ID              string                      `json:"Id"`
+	// FIXME can not parse date/time: "Created": "2020-07-05 11:32:38.541987006 -0400 -0400",
+	//Created         time.Time              `json:"Created"`
+	Path            string   `json:"Path"`
+	Args            []string `json:"Args"`
+	Image           string   `json:"Image"`
+	ImageName       string   `json:"ImageName"`
+	Rootfs          string   `json:"Rootfs"`
+	Pod             string   `json:"Pod"`
+	ResolvConfPath  string   `json:"ResolvConfPath"`
+	HostnamePath    string   `json:"HostnamePath"`
+	HostsPath       string   `json:"HostsPath"`
+	StaticDir       string   `json:"StaticDir"`
+	OCIConfigPath   string   `json:"OCIConfigPath,omitempty"`
+	OCIRuntime      string   `json:"OCIRuntime,omitempty"`
+	LogPath         string   `json:"LogPath"`
+	LogTag          string   `json:"LogTag"`
+	ConmonPidFile   string   `json:"ConmonPidFile"`
+	Name            string   `json:"Name"`
+	Driver          string   `json:"Driver"`
+	MountLabel      string   `json:"MountLabel"`
+	ProcessLabel    string   `json:"ProcessLabel"`
+	AppArmorProfile string   `json:"AppArmorProfile"`
+	EffectiveCaps   []string `json:"EffectiveCaps"`
+	BoundingCaps    []string `json:"BoundingCaps"`
+	ExecIDs         []string `json:"ExecIDs"`
+	Dependencies    []string `json:"Dependencies"`
+	ExitCommand     []string `json:"ExitCommand"`
+	Namespace       string   `json:"Namespace"`
+	//GraphDriver     *driver.Data                `json:"GraphDriver"`
+	SizeRw       *int64 `json:"SizeRw,omitempty"`
+	SizeRootFs   int64  `json:"SizeRootFs,omitempty"`
+	RestartCount int32  `json:"RestartCount"`
+	IsInfra      bool   `json:"IsInfra"`
 }
 
 // InspectExecSession contains information about a given exec session.
 type InspectExecSession struct {
-	// CanRemove is legacy and used purely for compatibility reasons.
-	// Will always be set to true, unless the exec session is running.
-	CanRemove bool `json:"CanRemove"`
+	// ProcessConfig contains information about the exec session's process.
+	ProcessConfig *InspectExecProcess `json:"ProcessConfig"`
 	// ContainerID is the ID of the container this exec session is attached
 	// to.
 	ContainerID string `json:"ContainerID"`
@@ -689,11 +690,17 @@ type InspectExecSession struct {
 	// If set to "" the default keys are being used.
 	// Will show "<none>" if no detach keys are set.
 	DetachKeys string `json:"DetachKeys"`
+	// ID is the ID of the exec session.
+	ID string `json:"ID"`
 	// ExitCode is the exit code of the exec session. Will be set to 0 if
 	// the exec session has not yet exited.
 	ExitCode int `json:"ExitCode"`
-	// ID is the ID of the exec session.
-	ID string `json:"ID"`
+	// Pid is the PID of the exec session's process.
+	// Will be set to 0 if the exec session is not running.
+	Pid int `json:"Pid"`
+	// CanRemove is legacy and used purely for compatibility reasons.
+	// Will always be set to true, unless the exec session is running.
+	CanRemove bool `json:"CanRemove"`
 	// OpenStderr is whether the container's STDERR stream will be attached.
 	// Always set to true if the exec session created a TTY.
 	OpenStderr bool `json:"OpenStderr"`
@@ -705,11 +712,6 @@ type InspectExecSession struct {
 	OpenStdout bool `json:"OpenStdout"`
 	// Running is whether the exec session is running.
 	Running bool `json:"Running"`
-	// Pid is the PID of the exec session's process.
-	// Will be set to 0 if the exec session is not running.
-	Pid int `json:"Pid"`
-	// ProcessConfig contains information about the exec session's process.
-	ProcessConfig *InspectExecProcess `json:"ProcessConfig"`
 }
 
 // InspectExecProcess contains information about the process in a given exec
