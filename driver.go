@@ -518,8 +518,21 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
-	inspectData, err := d.podmanClient.InspectContainer(containerID)
-	if err != nil {
+	// Attempt to fetch inspect container data and retry if the
+	// request fails due to the container not being ready yet
+	var inspectData iopodman.InspectContainerData
+	var inspectErr error
+	retries := 3
+	for i := 0; i < retries; i++ {
+		inspectData, inspectErr = d.podmanClient.InspectContainer(containerID)
+		if err != nil {
+			d.logger.Debug("failed to inspect container, retrying", "err", err)
+			continue
+		}
+		break
+	}
+
+	if inspectErr != nil {
 		d.logger.Error("failed to inspect container", "err", err)
 		cleanup()
 		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
