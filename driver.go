@@ -19,6 +19,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/consul-template/signals"
+	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -65,7 +67,7 @@ var (
 	// capabilities is returned by the Capabilities RPC and indicates what
 	// optional features this driver supports
 	capabilities = &drivers.Capabilities{
-		SendSignals: false,
+		SendSignals: true,
 		Exec:        false,
 		FSIsolation: drivers.FSIsolationNone,
 		NetIsolationModes: []drivers.NetIsolationMode{
@@ -668,7 +670,21 @@ func (d *Driver) TaskEvents(ctx context.Context) (<-chan *drivers.TaskEvent, err
 // SignalTask function is used by drivers which support sending OS signals (SIGHUP, SIGKILL, SIGUSR1 etc.) to the task.
 // It is an optional function and is listed as a capability in the driver Capabilities struct.
 func (d *Driver) SignalTask(taskID string, signal string) error {
-	return fmt.Errorf("Podman driver does not support signals")
+	handle, ok := d.tasks.Get(taskID)
+	if !ok {
+		return drivers.ErrTaskNotFound
+	}
+
+	// The given signal will be forwarded to the target taskID.
+	// Please checkout https://github.com/hashicorp/consul-template/blob/master/signals/signals_unix.go
+	// for a list of supported signals.
+	sig := os.Interrupt
+	if s, ok := signals.SignalLookup[signal]; ok {
+		sig = s
+	} else {
+		d.logger.Warn("unknown signal to send to task, using SIGINT instead", "signal", signal, "task_id", handle.taskConfig.ID)
+	}
+	return d.podmanClient.SignalContainer(handle.containerID, sig)
 }
 
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.

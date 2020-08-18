@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/user"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -104,6 +105,17 @@ func (c *PodmanClient) StopContainer(containerID string, timeoutSeconds int64) e
 	c.logger.Debug("Stopping container", "container", containerID, "timeout", timeoutSeconds)
 	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
 		_, err := iopodman.StopContainer().Call(c.ctx, varlinkConnection, containerID, timeoutSeconds)
+		return err
+	})
+	return err
+}
+
+// Forward signal to the container.
+// This is an optional capability.
+func (c *PodmanClient) SignalContainer(containerID string, sig os.Signal) error {
+	c.logger.Debug("Sending signal to the container", "container", containerID, "signal", sig)
+	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
+		_, err := iopodman.KillContainer().Call(c.ctx, varlinkConnection, containerID, int64(sig.(syscall.Signal)))
 		return err
 	})
 	return err
