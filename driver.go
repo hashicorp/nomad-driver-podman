@@ -679,7 +679,7 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 	// for a list of supported signals.
 	sig, ok := signals.SignalLookup[signal]
 	if !ok {
-		return fmt.Errorf("Error in looking up signal: %s", signal)
+		return fmt.Errorf("Invalid signal: %s", signal)
 	}
 
 	return d.podmanClient.SignalContainer(handle.containerID, sig)
