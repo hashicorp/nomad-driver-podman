@@ -19,6 +19,7 @@ require (
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/hashicorp/consul v1.7.3 // indirect
+	github.com/hashicorp/consul-template v0.24.1
 	github.com/hashicorp/go-hclog v0.14.1
 	github.com/hashicorp/nomad v0.11.3-0.20200630133459-42c2ee4448c8
 	github.com/hashicorp/nomad/api v0.0.0-20200630133459-42c2ee4448c8
@@ -28,5 +29,6 @@ require (
 	github.com/stretchr/testify v1.5.1
 	github.com/varlink/go v0.3.0
 	google.golang.org/grpc v1.29.1 // indirect
+	gotest.tools/gotestsum v0.5.2 // indirect
 
 )
