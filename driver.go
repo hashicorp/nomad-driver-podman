@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/consul-template/signals"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -27,6 +26,7 @@ import (
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
+	"github.com/hashicorp/consul-template/signals"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad-driver-podman/version"

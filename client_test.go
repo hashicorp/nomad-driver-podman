@@ -17,13 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"github.com/stretchr/testify/require"
 	"os/user"
 	"testing"
-	"github.com/stretchr/testify/require"
 )
 
 func TestClient_GuessSocketPathForRootCgroupV1(t *testing.T) {
-	u := user.User { Uid: "0" }
+	u := user.User{Uid: "0"}
 	fs := []string{"nodev	cgroup"}
 	p := guessSocketPath(&u, fs)
 
@@ -31,7 +31,7 @@ func TestClient_GuessSocketPathForRootCgroupV1(t *testing.T) {
 }
 
 func TestClient_GuessSocketPathForRootCgroupV2(t *testing.T) {
-	u := user.User { Uid: "0" }
+	u := user.User{Uid: "0"}
 	fs := []string{"nodev	cgroup2"}
 	p := guessSocketPath(&u, fs)
 
@@ -39,7 +39,7 @@ func TestClient_GuessSocketPathForRootCgroupV2(t *testing.T) {
 }
 
 func TestClient_GuessSocketPathForUserCgroupV1(t *testing.T) {
-	u := user.User { Uid: "1000" }
+	u := user.User{Uid: "1000"}
 	fs := []string{"nodev	cgroup"}
 	p := guessSocketPath(&u, fs)
 
@@ -47,7 +47,7 @@ func TestClient_GuessSocketPathForUserCgroupV1(t *testing.T) {
 }
 
 func TestClient_GuessSocketPathForUserCgroupV2_1(t *testing.T) {
-	u := user.User { Uid: "1000" }
+	u := user.User{Uid: "1000"}
 	fs := []string{"nodev	cgroup2"}
 	p := guessSocketPath(&u, fs)
 
@@ -55,7 +55,7 @@ func TestClient_GuessSocketPathForUserCgroupV2_1(t *testing.T) {
 }
 
 func TestClient_GuessSocketPathForUserCgroupV2_2(t *testing.T) {
-	u := user.User { Uid: "1337" }
+	u := user.User{Uid: "1337"}
 	fs := []string{"nodev	cgroup2"}
 	p := guessSocketPath(&u, fs)
 
