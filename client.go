@@ -96,20 +96,6 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 	return containerStats, err
 }
 
-// CreateContainer creates a new container from an image.  It uses a [Create](#Create) type for input.
-func (c *PodmanClient) CreateContainer(createOpts iopodman.Create) (string, error) {
-	ret := ""
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		result, err := iopodman.CreateContainer().Call(c.ctx, varlinkConnection, createOpts)
-		if err == nil {
-			ret = result
-			c.logger.Debug("Created container", "container", ret)
-		}
-		return err
-	})
-	return ret, err
-}
-
 // PullImage takes a name or ID of an image and pulls it to local storage
 // returning the name of the image pulled
 func (c *PodmanClient) PullImage(imageID string) (string, error) {

@@ -18,6 +18,7 @@ package apiclient
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -31,7 +32,7 @@ type APIClient struct {
 
 func NewClient(baseUrl string) *APIClient {
 	httpClient := http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: 60 * time.Second,
 	}
 	if strings.HasPrefix(baseUrl, "unix:") {
 		path := strings.TrimPrefix(baseUrl, "unix:")
@@ -62,12 +63,13 @@ func (c *APIClient) Get(ctx context.Context, path string) (*http.Response, error
 	return c.Do(req)
 }
 
-func (c *APIClient) Post(ctx context.Context, path string) (*http.Response, error) {
-	req, err := http.NewRequest("POST", c.baseUrl+path, nil)
+func (c *APIClient) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", c.baseUrl+path, body)
 	if err != nil {
 		return nil, err
 	}
 	req = req.WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
 	return c.Do(req)
 }
 

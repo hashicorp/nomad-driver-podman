@@ -22,20 +22,17 @@ import (
 	"net/http"
 )
 
-// ContainerStop stops a container given a timeout.  It takes the name or ID of a container as well as a
-// timeout value.  The timeout value the time before a forcible stop to the container is applied.
-// If the container cannot be found, a [ContainerNotFound](#ContainerNotFound)
-// error will be returned instead.
-func (c *APIClient) ContainerStop(ctx context.Context, name string, timeout int) error {
+// ContainerWait waits on a container to met a given condition
+func (c *APIClient) ContainerWait(ctx context.Context, name string, condition string) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/stop?timeout=%d", name, timeout), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/wait?condition=%s", name, condition), nil)
 	if err != nil {
 		return err
 	}
 
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusNoContent {
+	if res.StatusCode == http.StatusOK {
 		return nil
 	}
 	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)

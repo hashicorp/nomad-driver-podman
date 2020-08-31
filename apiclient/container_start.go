@@ -20,20 +20,27 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // ContainerStart starts a container via id or name
 func (c *APIClient) ContainerStart(ctx context.Context, name string) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/start", name))
+	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/start", name), nil)
 	if err != nil {
 		return err
 	}
 
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusNoContent {
-		return nil
+	if res.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}
-	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+
+	// wait max 10 seconds for running state
+	timeout, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	err = c.ContainerWait(timeout, name, "running")
+	return err
 }

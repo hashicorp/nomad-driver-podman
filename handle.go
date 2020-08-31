@@ -178,8 +178,14 @@ func (h *TaskHandle) runContainerMonitor() {
 
 		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
 		if err != nil {
-			if _, ok := err.(*iopodman.NoContainerRunning); ok {
-				h.logger.Debug("Container is not running anymore", "container", h.containerID)
+			gone := false
+			if _, ok := err.(*iopodman.ContainerNotFound); ok {
+				gone = true
+			} else if _, ok := err.(*iopodman.NoContainerRunning); ok {
+				gone = true
+			}
+			if gone {
+				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", err)
 				// container was stopped, get exit code and other post mortem infos
 				inspectData, err := h.driver.podmanClient2.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()

@@ -24,6 +24,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20200630133459-42c2ee4448c8
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mrunalp/fileutils v0.0.0-20200504145649-7be891c94fd3 // indirect
+	github.com/opencontainers/runtime-spec v1.0.2-0.20200307132014-f49fed0d6290
 	github.com/opencontainers/selinux v1.5.1 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/varlink/go v0.3.0

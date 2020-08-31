@@ -19,8 +19,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +42,7 @@ import (
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 const (
@@ -364,89 +367,123 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	d.logger.Debug("created/pulled image", "img_id", img.ID)
 
-	allArgs := []string{driverConfig.Image}
+	createOpts := apiclient.SpecGenerator{}
+	createOpts.ContainerBasicConfig.LogConfiguration = &apiclient.LogConfig{}
+	allArgs := []string{}
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
 
-	var entryPoint *string // nil -> image default entryPoint
 	if driverConfig.Entrypoint != "" {
-		*entryPoint = driverConfig.Entrypoint
-	}
-
-	var workingDir *string // nil -> image default workingDir
-	if driverConfig.WorkingDir != "" {
-		*workingDir = driverConfig.WorkingDir
+		createOpts.ContainerBasicConfig.Entrypoint = append(createOpts.ContainerBasicConfig.Entrypoint, driverConfig.Entrypoint)
 	}
 
 	containerName := BuildContainerName(cfg)
-	memoryLimit := fmt.Sprintf("%dm", cfg.Resources.NomadResources.Memory.MemoryMB)
-	cpuShares := cfg.Resources.LinuxResources.CPUShares
-	logOpts := []string{
-		fmt.Sprintf("path=%s", cfg.StdoutPath),
-	}
+	cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 
-	// convert environment map into a k=v list
-	allEnv := cfg.EnvList()
+	procFilesystems, err := getProcFilesystems()
 
-	allVolumes, err := d.containerBinds(cfg, &driverConfig)
+	// -------------------------------------------------------------------------------------------
+	// BASIC
+	// -------------------------------------------------------------------------------------------
+	createOpts.ContainerBasicConfig.Name = containerName
+	createOpts.ContainerBasicConfig.Command = allArgs
+	createOpts.ContainerBasicConfig.Env = cfg.Env
+	createOpts.ContainerBasicConfig.Hostname = driverConfig.Hostname
+
+	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+
+	// -------------------------------------------------------------------------------------------
+	// STORAGE
+	// -------------------------------------------------------------------------------------------
+	createOpts.ContainerStorageConfig.Init = driverConfig.Init
+	createOpts.ContainerStorageConfig.Image = driverConfig.Image
+	createOpts.ContainerStorageConfig.InitPath = driverConfig.InitPath
+	createOpts.ContainerStorageConfig.WorkDir = driverConfig.WorkingDir
+	allMounts, err := d.containerMounts(cfg, &driverConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	d.logger.Debug("binding volumes", "volumes", allVolumes)
+	createOpts.ContainerStorageConfig.Mounts = allMounts
 
-	swap := memoryLimit
-	if driverConfig.MemorySwap != "" {
-		swap = driverConfig.MemorySwap
+	// -------------------------------------------------------------------------------------------
+	// RESOURCES
+	// -------------------------------------------------------------------------------------------
+	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
+		Memory: &spec.LinuxMemory{},
+		CPU:    &spec.LinuxCPU{},
+	}
+	if driverConfig.MemoryReservation != "" {
+		reservation, err := memoryInBytes(driverConfig.MemoryReservation)
+		if err != nil {
+			return nil, nil, err
+		}
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = &reservation
 	}
 
-	procFilesystems, err := getProcFilesystems()
-	swappiness := new(int64)
+	if cfg.Resources.NomadResources.Memory.MemoryMB > 0 {
+		limit := cfg.Resources.NomadResources.Memory.MemoryMB * 1024 * 1024
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = &limit
+	}
+	if driverConfig.MemorySwap != "" {
+		swap, err := memoryInBytes(driverConfig.MemorySwap)
+		if err != nil {
+			return nil, nil, err
+		}
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
+	}
 	if err == nil {
 		cgroupv2 := false
 		for _, l := range procFilesystems {
 			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
 		}
 		if !cgroupv2 {
-			swappiness = &driverConfig.MemorySwappiness
+			swappiness := uint64(driverConfig.MemorySwappiness)
+			createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 		}
 	}
+	createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 
-	// Generate network string
-	var network string
-	if cfg.NetworkIsolation != nil &&
-		cfg.NetworkIsolation.Path != "" {
-		network = fmt.Sprintf("ns:%s", cfg.NetworkIsolation.Path)
-	} else {
-		network = driverConfig.NetworkMode
+	// -------------------------------------------------------------------------------------------
+	// SECURITY
+	// -------------------------------------------------------------------------------------------
+	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
+	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
+	createOpts.ContainerSecurityConfig.User = cfg.User
+
+	// -------------------------------------------------------------------------------------------
+	// NETWORK
+	// -------------------------------------------------------------------------------------------
+	for _, strdns := range driverConfig.Dns {
+		ipdns := net.ParseIP(strdns)
+		if ipdns == nil {
+			return nil, nil, fmt.Errorf("Invald dns server address")
+		}
+		createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
 	}
-
-	createOpts := iopodman.Create{
-		Args:              allArgs,
-		Entrypoint:        entryPoint,
-		WorkDir:           workingDir,
-		Env:               &allEnv,
-		Name:              &containerName,
-		Volume:            &allVolumes,
-		Memory:            &memoryLimit,
-		CpuShares:         &cpuShares,
-		CapAdd:            &driverConfig.CapAdd,
-		CapDrop:           &driverConfig.CapDrop,
-		Dns:               &driverConfig.Dns,
-		LogOpt:            &logOpts,
-		Hostname:          &driverConfig.Hostname,
-		Init:              &driverConfig.Init,
-		InitPath:          &driverConfig.InitPath,
-		User:              &cfg.User,
-		MemoryReservation: &driverConfig.MemoryReservation,
-		MemorySwap:        &swap,
-		MemorySwappiness:  swappiness,
-		Network:           &network,
-		Tmpfs:             &driverConfig.Tmpfs,
+	// Configure network
+	if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Path != "" {
+		createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.Path
+		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
+	} else {
+		if driverConfig.NetworkMode == "" {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.Bridge
+		} else if driverConfig.NetworkMode == "bridge" {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.Bridge
+		} else if driverConfig.NetworkMode == "host" {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.Host
+		} else if driverConfig.NetworkMode == "none" {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.NoNetwork
+		} else if driverConfig.NetworkMode == "slirp4netns" {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = apiclient.Slirp
+		} else {
+			// FIXME: needs more work, parsing etc.
+			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
+		}
 	}
 
 	// Setup port mapping and exposed ports
@@ -456,29 +493,39 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			return nil, nil, fmt.Errorf("Trying to map ports but no network interface is available")
 		}
 	} else {
-		publishedPorts := []string{}
+		publishedPorts := []apiclient.PortMapping{}
 		network := cfg.Resources.NomadResources.Networks[0]
 		allPorts := []structs.Port{}
 		allPorts = append(allPorts, network.ReservedPorts...)
 		allPorts = append(allPorts, network.DynamicPorts...)
 
 		for _, port := range allPorts {
-			hostPort := port.Value
+			hostPort := uint16(port.Value)
 			// By default we will map the allocated port 1:1 to the container
-			containerPort := port.Value
+			containerPort := uint16(port.Value)
 
 			// If the user has mapped a port using port_map we'll change it here
 			if mapped, ok := driverConfig.PortMap[port.Label]; ok {
-				containerPort = mapped
+				containerPort = uint16(mapped)
 			}
 
 			// we map both udp and tcp ports
-			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/tcp", network.IP, hostPort, containerPort))
-			publishedPorts = append(publishedPorts, fmt.Sprintf("%s:%d:%d/udp", network.IP, hostPort, containerPort))
+			publishedPorts = append(publishedPorts, apiclient.PortMapping{
+				HostIP:        network.IP,
+				HostPort:      hostPort,
+				ContainerPort: containerPort,
+				Protocol:      "tcp",
+			})
+			publishedPorts = append(publishedPorts, apiclient.PortMapping{
+				HostIP:        network.IP,
+				HostPort:      hostPort,
+				ContainerPort: containerPort,
+				Protocol:      "udp",
+			})
 		}
-
-		createOpts.Publish = &publishedPorts
+		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
 	}
+	// -------------------------------------------------------------------------------------------
 
 	containerID := ""
 	recoverRunningContainer := false
@@ -501,10 +548,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		containerID, err = d.podmanClient.CreateContainer(createOpts)
+		createResponse, err := d.podmanClient2.ContainerCreate(d.ctx, createOpts)
+		for _, w := range createResponse.Warnings {
+			d.logger.Warn("Create Warning", "warning", w)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to start task, could not create container: %v", err)
 		}
+		containerID = createResponse.Id
 	}
 
 	cleanup := func() {
@@ -572,6 +623,30 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, net, nil
 }
 
+func memoryInBytes(strmem string) (int64, error) {
+	l := len(strmem)
+	if l < 2 {
+		return 0, fmt.Errorf("Invalid memory string: %s", strmem)
+	}
+	ival, err := strconv.Atoi(strmem[0 : l-1])
+	if err != nil {
+		return 0, err
+	}
+
+	switch strmem[l-1] {
+	case 'b':
+		return int64(ival), nil
+	case 'k':
+		return int64(ival) * 1024, nil
+	case 'm':
+		return int64(ival) * 1024 * 1024, nil
+	case 'g':
+		return int64(ival) * 1024 * 1024 * 1024, nil
+	default:
+		return 0, fmt.Errorf("Invalid memory string: %s", strmem)
+	}
+}
+
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
 // exits or close the channel when the context is canceled. It is also expected that calling
 // WaitTask on an exited task will immediately send an *ExitResult on the returned channel.
@@ -624,6 +699,16 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 		err := d.podmanClient2.ContainerStop(d.ctx, handle.containerID, 60)
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
+		}
+		// wait a while for stats emitter to collect exit code etc.
+		for i := 0; i < 20; i++ {
+			if !handle.isRunning() {
+				break
+			}
+			time.Sleep(time.Millisecond * 250)
+		}
+		if handle.isRunning() {
+			d.logger.Warn("stats emitter did not exit while stop/kill container during destroy", "error", err)
 		}
 	}
 
@@ -727,15 +812,15 @@ func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) 
 	return img, nil
 }
 
-func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
-	allocDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SharedAllocDir, task.Env[taskenv.AllocDir])
-	taskLocalBind := fmt.Sprintf("%s:%s", task.TaskDir().LocalDir, task.Env[taskenv.TaskLocalDir])
-	secretDirBind := fmt.Sprintf("%s:%s", task.TaskDir().SecretsDir, task.Env[taskenv.SecretsDir])
-	binds := []string{allocDirBind, taskLocalBind, secretDirBind}
+func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
+	binds := []spec.Mount{}
+	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
+	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
+	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
 
 	// TODO support volume drivers
 	// https://github.com/containers/libpod/pull/4548
-	taskLocalBindVolume := false
+	taskLocalBindVolume := true
 
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
@@ -759,10 +844,14 @@ func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConf
 		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
 			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
 		}
+		bind := spec.Mount{
+			Source:      src,
+			Destination: dst,
+			Type:        "bind",
+		}
 
-		bind := src + ":" + dst
 		if mode != "" {
-			bind += ":" + mode
+			bind.Options = append(bind.Options, mode)
 		}
 		binds = append(binds, bind)
 	}
@@ -770,8 +859,16 @@ func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConf
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
 		// Apply SELinux Label to each volume
 		for i := range binds {
-			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
+			binds[i].Options = append(binds[i].Options, selinuxLabel)
 		}
+	}
+
+	for _, dst := range driverConfig.Tmpfs {
+		bind := spec.Mount{
+			Destination: dst,
+			Type:        "tmpfs",
+		}
+		binds = append(binds, bind)
 	}
 
 	return binds, nil
