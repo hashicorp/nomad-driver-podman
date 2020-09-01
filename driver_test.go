@@ -888,8 +888,8 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, " tmpfs on /tmpdata1 type tmpfs ")
-	require.Contains(t, tasklog, " tmpfs on /tmpdata2 type tmpfs ")
+	require.Contains(t, tasklog, " on /tmpdata1 type tmpfs ")
+	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
 // check default capabilities
