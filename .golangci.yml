@@ -54,6 +54,8 @@ linters-settings:
   gofmt:
     # simplify code: gofmt with `-s` option, true by default
     simplify: true
+  maligned:
+    suggest-new: true
 
 
 linters:
