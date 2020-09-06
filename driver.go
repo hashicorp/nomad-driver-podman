@@ -28,7 +28,6 @@ import (
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
-	"github.com/hashicorp/consul-template/signals"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/apiclient"
 	"github.com/hashicorp/nomad-driver-podman/iopodman"
@@ -765,15 +764,7 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 		return drivers.ErrTaskNotFound
 	}
 
-	// The given signal will be forwarded to the target taskID.
-	// Please checkout https://github.com/hashicorp/consul-template/blob/master/signals/signals_unix.go
-	// for a list of supported signals.
-	sig, ok := signals.SignalLookup[signal]
-	if !ok {
-		return fmt.Errorf("Invalid signal: %s", signal)
-	}
-
-	return d.podmanClient.SignalContainer(handle.containerID, sig)
+	return d.podmanClient2.ContainerKill(d.ctx, handle.containerID, signal)
 }
 
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.

@@ -1045,6 +1045,50 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 	}
 }
 
+// test kill / signal support
+func TestPodmanDriver_SignalTask(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "signal_task",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	go func(t *testing.T) {
+		time.Sleep(300 * time.Millisecond)
+		// try to send non-existing singal, should yield an error
+		require.Error(t, d.SignalTask(task.ID, "FOO"))
+		time.Sleep(300 * time.Millisecond)
+		// SIGINT should stop busybox and hence the container will shutdown
+		require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
+	}(t)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+		t.Fatalf("wait channel should not have received an exit result")
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	}
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))

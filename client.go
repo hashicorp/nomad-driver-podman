@@ -30,7 +30,6 @@ import (
 	"os"
 	"os/user"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -95,17 +94,6 @@ func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.Containe
 		return err
 	})
 	return containerStats, err
-}
-
-// Forward signal to the container.
-// This is an optional capability.
-func (c *PodmanClient) SignalContainer(containerID string, sig os.Signal) error {
-	c.logger.Debug("Sending signal to the container", "container", containerID, "signal", sig)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		_, err := iopodman.KillContainer().Call(c.ctx, varlinkConnection, containerID, int64(sig.(syscall.Signal)))
-		return err
-	})
-	return err
 }
 
 // PullImage takes a name or ID of an image and pulls it to local storage
