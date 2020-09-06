@@ -1074,7 +1074,7 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 		// try to send non-existing singal, should yield an error
 		require.Error(t, d.SignalTask(task.ID, "FOO"))
 		time.Sleep(300 * time.Millisecond)
-		// SIGINT should stop busybox and hence the container will shutdown
+		// send a friendly CTRL+C to busybox to stop the container
 		require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
 	}(t)
 
@@ -1083,9 +1083,10 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 	require.NoError(t, err)
 
 	select {
-	case <-waitCh:
-		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case res := <-waitCh:
+		require.Equal(t, 130, res.ExitCode, "Should have got exit code 130")
+	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
+		t.Fatalf("Container did not exit in time")
 	}
 }
 
