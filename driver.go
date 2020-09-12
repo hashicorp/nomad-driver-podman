@@ -748,6 +748,13 @@ func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConf
 	// https://github.com/containers/libpod/pull/4548
 	taskLocalBindVolume := false
 
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+		// Apply SELinux Label to each volume
+		for i := range binds {
+			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
+		}
+	}
+
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
 		if err != nil {
@@ -776,13 +783,6 @@ func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConf
 			bind += ":" + mode
 		}
 		binds = append(binds, bind)
-	}
-
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
-		// Apply SELinux Label to each volume
-		for i := range binds {
-			binds[i] = fmt.Sprintf("%s:%s", binds[i], selinuxLabel)
-		}
 	}
 
 	return binds, nil
