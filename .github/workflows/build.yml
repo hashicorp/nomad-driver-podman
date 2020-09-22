@@ -42,7 +42,7 @@ jobs:
         path: nomad-driver-podman
 
     - name: Test
-      run: CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
+      run: sudo env "PATH=$PATH" CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m .
     - name: Archive test result
       uses: actions/upload-artifact@v1
       with:
