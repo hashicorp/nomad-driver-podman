@@ -82,20 +82,6 @@ func (c *PodmanClient) withVarlink(cb func(*varlink.Connection) error) error {
 	return err
 }
 
-// GetContainerStats takes the name or ID of a container and returns a single ContainerStats structure which
-// contains attributes like memory and cpu usage.  If the container cannot be found, a
-// [ContainerNotFound](#ContainerNotFound) error will be returned. If the container is not running, a [NoContainerRunning](#NoContainerRunning)
-// error will be returned
-func (c *PodmanClient) GetContainerStats(containerID string) (*iopodman.ContainerStats, error) {
-	var containerStats *iopodman.ContainerStats
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		result, err := iopodman.GetContainerStats().Call(c.ctx, varlinkConnection, containerID)
-		containerStats = &result
-		return err
-	})
-	return containerStats, err
-}
-
 // PullImage takes a name or ID of an image and pulls it to local storage
 // returning the name of the image pulled
 func (c *PodmanClient) PullImage(imageID string) (string, error) {

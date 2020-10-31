@@ -18,19 +18,20 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad-driver-podman/apiclient"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
 var (
 	measuredCPUStats = []string{"System Mode", "User Mode", "Percent"}
-	measuredMemStats = []string{"RSS"}
+	measuredMemStats = []string{"Usage", "Max Usage"}
 )
 
 // TaskHandle is the podman specific handle for exactly one container
@@ -54,7 +55,7 @@ type TaskHandle struct {
 
 	removeContainerOnExit bool
 
-	containerStats iopodman.ContainerStats
+	containerStats apiclient.Stats
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -123,13 +124,10 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
-		//available := shelpers.TotalTicksAvailable()
-		//cpus := shelpers.CPUNumCores()
-
-		totalPercent := h.totalCPUStats.Percent(h.containerStats.Cpu * 10e16)
+		totalPercent := h.totalCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.TotalUsage))
 		cs := &drivers.CpuStats{
-			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.System_nano)),
-			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.Cpu_nano)),
+			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.UsageInKernelmode)),
+			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.UsageInUsermode)),
 			Percent:    totalPercent,
 			TotalTicks: h.systemCPUStats.TicksConsumed(totalPercent),
 			Measured:   measuredCPUStats,
@@ -138,7 +136,9 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
 
 		ms := &drivers.MemoryStats{
-			RSS:      uint64(h.containerStats.Mem_usage),
+			MaxUsage: h.containerStats.MemoryStats.MaxUsage,
+			Usage:    h.containerStats.MemoryStats.Usage,
+			RSS:      h.containerStats.MemoryStats.Usage,
 			Measured: measuredMemStats,
 		}
 		h.stateLock.Unlock()
@@ -176,24 +176,24 @@ func (h *TaskHandle) runContainerMonitor() {
 			timer.Reset(interval)
 		}
 
-		containerStats, err := h.driver.podmanClient.GetContainerStats(h.containerID)
-		if err != nil {
+		containerStats, statsErr := h.driver.podmanClient2.ContainerStats(h.driver.ctx, h.containerID)
+		if statsErr != nil {
 			gone := false
-			if _, ok := err.(*iopodman.ContainerNotFound); ok {
+			if errors.Is(statsErr, apiclient.ContainerNotFound) {
 				gone = true
-			} else if _, ok := err.(*iopodman.NoContainerRunning); ok {
+			} else if errors.Is(statsErr, apiclient.ContainerWrongState) {
 				gone = true
 			}
 			if gone {
-				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", err)
+				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", statsErr)
 				// container was stopped, get exit code and other post mortem infos
 				inspectData, err := h.driver.podmanClient2.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
+				h.completedAt = time.Now()
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
 					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
 					h.exitResult.Signal = 0
-					h.completedAt = time.Now()
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 					if len(inspectData.State.Error) > 0 {
@@ -214,16 +214,16 @@ func (h *TaskHandle) runContainerMonitor() {
 			}
 			// continue and wait for next cycle, it should eventually
 			// fall into the "TaskStateExited" case
-			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", err))
+			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", statsErr))
 			continue
-		} else {
-			h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
+			// } else {
+			// 	h.logger.Trace("Container stats", "container", h.containerID, "stats", containerStats)
 		}
 
 		h.stateLock.Lock()
 		// keep last known containerStats in handle to
 		// have it available in the stats emitter
-		h.containerStats = *containerStats
+		h.containerStats = containerStats
 		h.stateLock.Unlock()
 	}
 }
