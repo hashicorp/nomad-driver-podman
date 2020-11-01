@@ -12,7 +12,6 @@ replace (
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
-	github.com/avast/retry-go v2.4.3+incompatible
 	github.com/container-storage-interface/spec v1.2.0 // indirect
 	github.com/containernetworking/plugins v0.8.5 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
@@ -30,7 +29,6 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2-0.20200307132014-f49fed0d6290
 	github.com/opencontainers/selinux v1.5.1 // indirect
 	github.com/stretchr/testify v1.6.1
-	github.com/varlink/go v0.3.0
 	golang.org/x/tools v0.0.0-20200724022722-7017fd6b1305 // indirect
 	google.golang.org/grpc v1.29.1 // indirect
 

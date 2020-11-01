@@ -17,9 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -106,7 +108,6 @@ type Driver struct {
 	logger hclog.Logger
 
 	// podmanClient encapsulates podman remote calls
-	podmanClient  *PodmanClient
 	podmanClient2 *apiclient.APIClient
 }
 
@@ -130,11 +131,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
-		podmanClient: &PodmanClient{
-			ctx:    ctx,
-			logger: logger.Named("podmanClient"),
-		},
-		podmanClient2: apiclient.NewClient(logger),
+		podmanClient2:  apiclient.NewClient(logger),
 	}
 }
 
@@ -362,11 +359,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 
-	procFilesystems, err := getProcFilesystems()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Couldn't get Proc info: %v", err)
-	}
-
 	// -------------------------------------------------------------------------------------------
 	// BASIC
 	// -------------------------------------------------------------------------------------------
@@ -416,15 +408,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
 	}
-	if err == nil {
-		cgroupv2 := false
-		for _, l := range procFilesystems {
-			cgroupv2 = cgroupv2 || strings.HasSuffix(l, "cgroup2")
-		}
-		if !cgroupv2 {
-			swappiness := uint64(driverConfig.MemorySwappiness)
-			createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
-		}
+
+	v2, err := isCGroupV2()
+	if err != nil {
+		return nil, nil, err
+	}
+	if !v2 {
+		swappiness := uint64(driverConfig.MemorySwappiness)
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 	}
 	createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 
@@ -845,4 +836,30 @@ func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mod
 func isParentPath(parent, path string) bool {
 	rel, err := filepath.Rel(parent, path)
 	return err == nil && !strings.HasPrefix(rel, "..")
+}
+
+func isCGroupV2() (bool, error) {
+	file, err := os.Open("/proc/filesystems")
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if scanner.Err() != nil {
+		return false, scanner.Err()
+	}
+
+	cgroupv2 := false
+	for _, l := range lines {
+		if strings.HasSuffix(l, "cgroup2") {
+			cgroupv2 = true
+		}
+	}
+
+	return cgroupv2, nil
 }

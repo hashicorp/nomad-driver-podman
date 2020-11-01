@@ -57,7 +57,5 @@ WantedBy=sockets.target
 EOF
 
 systemctl daemon-reload
-# enable varlink (until it's fully removed...)
-systemctl start io.podman
 # enable http api
 systemctl start podman

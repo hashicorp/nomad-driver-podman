@@ -48,7 +48,7 @@ var (
 			hclspec.NewAttr("recover_stopped", "bool", false),
 			hclspec.NewLiteral("true"),
 		),
-		// the path to the VarLink socket
+		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
 	})
 
