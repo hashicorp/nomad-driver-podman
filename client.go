@@ -19,12 +19,10 @@ package main
 import (
 	"github.com/avast/retry-go"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/varlink/go/varlink"
 
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -80,46 +78,6 @@ func (c *PodmanClient) withVarlink(cb func(*varlink.Connection) error) error {
 		retry.LastErrorOnly(true),
 	)
 	return err
-}
-
-// PullImage takes a name or ID of an image and pulls it to local storage
-// returning the name of the image pulled
-func (c *PodmanClient) PullImage(imageID string) (string, error) {
-	var ret string
-	c.logger.Debug("Pull image", "image", imageID)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		moreResponse, err := iopodman.PullImage().Call(c.ctx, varlinkConnection, imageID)
-		if err == nil {
-			ret = moreResponse.Logs[len(moreResponse.Logs)-1]
-			if err != nil {
-				c.logger.Error("failed to unmarshal image pull logs", "err", err)
-				return err
-			}
-
-		}
-		return err
-	})
-	return ret, err
-}
-
-// InspectImage data takes a name or ID of an image and returns the inspection
-// data as iopodman.InspectImageData.
-func (c *PodmanClient) InspectImage(imageID string) (iopodman.InspectImageData, error) {
-	var ret iopodman.InspectImageData
-	c.logger.Debug("Inspect image", "image", imageID)
-	err := c.withVarlink(func(varlinkConnection *varlink.Connection) error {
-		inspectJSON, err := iopodman.InspectImage().Call(c.ctx, varlinkConnection, imageID)
-		if err == nil {
-			err = json.Unmarshal([]byte(inspectJSON), &ret)
-			if err != nil {
-				c.logger.Error("failed to unmarshal inspect image", "err", err)
-				return err
-			}
-
-		}
-		return err
-	})
-	return ret, err
 }
 
 func guessSocketPath(user *user.User, procFilesystems []string) string {

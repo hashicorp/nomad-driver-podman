@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/apiclient"
-	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
@@ -136,7 +134,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 			ctx:    ctx,
 			logger: logger.Named("podmanClient"),
 		},
-		podmanClient2: apiclient.NewClient("unix:/run/podman/podman.sock"),
+		podmanClient2: apiclient.NewClient(logger),
 	}
 }
 
@@ -170,22 +168,7 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	}
 
 	if config.SocketPath != "" {
-		d.podmanClient.varlinkSocketPath = config.SocketPath
-	} else {
-		user, _ := user.Current()
-		procFilesystems, err := getProcFilesystems()
-
-		if err != nil {
-			return err
-		}
-
-		socketPath := guessSocketPath(user, procFilesystems)
-
-		if err != nil {
-			return err
-		}
-
-		d.podmanClient.varlinkSocketPath = socketPath
+		d.podmanClient2.SetSocketPath(config.SocketPath)
 	}
 
 	return nil
@@ -360,12 +343,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if driverConfig.Image == "" {
 		return nil, nil, fmt.Errorf("image name required")
 	}
-
-	img, err := d.createImage(cfg, &driverConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Couldn't create image: %v", err)
-	}
-	d.logger.Debug("created/pulled image", "img_id", img.ID)
 
 	createOpts := apiclient.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &apiclient.LogConfig{}
@@ -770,54 +747,6 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
 	return nil, fmt.Errorf("Podman driver does not support exec")
-}
-
-func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) (iopodman.InspectImageData, error) {
-	img, err := d.podmanClient.InspectImage(driverConfig.Image)
-	if err != nil {
-		err = d.eventer.EmitEvent(&drivers.TaskEvent{
-			TaskID:    cfg.ID,
-			AllocID:   cfg.AllocID,
-			TaskName:  cfg.Name,
-			Timestamp: time.Now(),
-			Message:   "Downloading image",
-			Annotations: map[string]string{
-				"image": driverConfig.Image,
-			},
-		})
-		if err != nil {
-			d.logger.Warn("error emitting event", "error", err)
-		}
-
-		pullLog, err := d.podmanClient.PullImage(driverConfig.Image)
-		if err != nil {
-			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be downloaded: %v", driverConfig.Image, err)
-		}
-
-		img, err = d.podmanClient.InspectImage(driverConfig.Image)
-		if err != nil {
-			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be inspected: %v", driverConfig.Image, err)
-		}
-
-		err = d.eventer.EmitEvent(&drivers.TaskEvent{
-			TaskID:    cfg.ID,
-			AllocID:   cfg.AllocID,
-			TaskName:  cfg.Name,
-			Timestamp: time.Now(),
-			Message:   fmt.Sprintf("Image downloaded: %s", pullLog),
-			Annotations: map[string]string{
-				"image": driverConfig.Image,
-			},
-		})
-		if err != nil {
-			d.logger.Warn("error emitting event", "error", err)
-		}
-
-	}
-
-	d.logger.Debug("Image created", "img_id", img.ID, "config", img.Config)
-
-	return img, nil
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {

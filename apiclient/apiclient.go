@@ -18,9 +18,12 @@ package apiclient
 
 import (
 	"context"
+	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -28,25 +31,44 @@ import (
 type APIClient struct {
 	baseUrl    string
 	httpClient *http.Client
+	logger     hclog.Logger
 }
 
-func NewClient(baseUrl string) *APIClient {
-	httpClient := http.Client{
+func NewClient(logger hclog.Logger) *APIClient {
+	ac := &APIClient{
+		logger: logger,
+	}
+	ac.SetSocketPath(GuessSocketPath())
+	return ac
+}
+
+func (c *APIClient) SetSocketPath(baseUrl string) {
+	c.logger.Debug("http baseurl", "url", baseUrl)
+	c.httpClient = &http.Client{
 		Timeout: 60 * time.Second,
 	}
 	if strings.HasPrefix(baseUrl, "unix:") {
+		c.baseUrl = "http://u"
 		path := strings.TrimPrefix(baseUrl, "unix:")
-		baseUrl = "http://localhost"
-		httpClient.Transport = &http.Transport{
+		c.httpClient.Transport = &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", path)
 			},
 		}
+	} else {
+		c.baseUrl = baseUrl
 	}
-	return &APIClient{
-		baseUrl:    baseUrl,
-		httpClient: &httpClient,
+}
+
+// GuessSocketPath returns the default unix domain socket path for root or non-root users
+func GuessSocketPath() string {
+	uid := os.Getuid()
+	// are we root?
+	if uid == 0 {
+		return "unix:/run/podman/podman.sock"
 	}
+	// not? then let's try the default per-user socket location
+	return fmt.Sprintf("unix:/run/user/%d/podman/podman.sock", uid)
 }
 
 func (c *APIClient) Do(req *http.Request) (*http.Response, error) {

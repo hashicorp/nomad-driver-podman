@@ -19,6 +19,7 @@ package apiclient
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -34,7 +35,8 @@ func (c *APIClient) ContainerStart(ctx context.Context, name string) error {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		body, _ := ioutil.ReadAll(res.Body)
+		return fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
 	}
 
 	// wait max 10 seconds for running state
