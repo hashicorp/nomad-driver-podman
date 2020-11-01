@@ -19,13 +19,14 @@ package apiclient
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 type APIClient struct {

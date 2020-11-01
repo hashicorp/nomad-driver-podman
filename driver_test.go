@@ -78,7 +78,6 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	}
 
 	d := NewPodmanDriver(logger).(*Driver)
-	d.podmanClient = newPodmanClient()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
@@ -794,12 +793,10 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
 
-	procFilesystems, err := getProcFilesystems()
-	if err == nil {
-		cgroupv2 := isCGroupV2(procFilesystems)
-		if cgroupv2 == false {
-			require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
-		}
+	v2, err := isCGroupV2()
+	require.NoError(t, err)
+	if !v2 {
+		require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 	}
 }
 
@@ -1084,22 +1081,6 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 		Command: command[0],
 		Args:    command[1:],
 	}
-}
-
-func newPodmanClient() *PodmanClient {
-	level := hclog.Info
-	if testing.Verbose() {
-		level = hclog.Trace
-	}
-	testLogger := hclog.New(&hclog.LoggerOptions{
-		Name:  "testClient",
-		Level: level,
-	})
-	client := &PodmanClient{
-		ctx:    context.Background(),
-		logger: testLogger,
-	}
-	return client
 }
 
 func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
