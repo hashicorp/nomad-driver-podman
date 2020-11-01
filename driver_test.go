@@ -18,12 +18,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 
 	"path/filepath"
 	"reflect"
@@ -33,7 +31,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/apiclient"
-	"github.com/hashicorp/nomad-driver-podman/iopodman"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
@@ -43,29 +40,13 @@ import (
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
 	"github.com/stretchr/testify/require"
-	"github.com/varlink/go/varlink"
 )
 
 var (
 	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
 	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
-	varlinkSocketPath     = ""
 )
-
-func init() {
-	user, _ := user.Current()
-	procFilesystems, err := getProcFilesystems()
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	socketPath := guessSocketPath(user, procFilesystems)
-
-	varlinkSocketPath = socketPath
-}
 
 func createBasicResources() *drivers.Resources {
 	res := drivers.Resources{
@@ -358,16 +339,9 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 	d.DestroyTask(task.ID, true)
 
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	// ... 1 means container could not be found (is deleted)
-	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-	require.Equal(t, 1, int(exists))
+	// see if the container does not exist (404)
+	_, err = getPodmanDriver(t, d).podmanClient2.ContainerStats(context.Background(), containerName)
+	require.Error(t, err, apiclient.ContainerNotFound)
 }
 
 // check if container is destroyed if gc.container=false
@@ -411,19 +385,13 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 	d.DestroyTask(task.ID, true)
 
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
+	// see if the stopped container can be inspected
+	_, err = getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	// ... 0 means container could be found (still exists)
-	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-	require.Equal(t, 0, int(exists))
 
 	// and cleanup after ourself
-	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true, true)
+	err = getPodmanDriver(t, d).podmanClient2.ContainerDelete(context.Background(), containerName, true, true)
+	require.NoError(t, err)
 }
 
 // Check stdout/stderr logging
@@ -560,34 +528,35 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
 
 	// Verify that the port environment variables are set
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
 
 	// Verify that the correct ports are bound
-	expectedPortBindings := map[string][]iopodman.InspectHostPort{
-		"8888/tcp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+	expectedPortBindings := map[string][]apiclient.InspectHostPort{
+		"8888/tcp": []apiclient.InspectHostPort{
+			apiclient.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"8888/udp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"8888/udp": []apiclient.InspectHostPort{
+			apiclient.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"6379/tcp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"6379/tcp": []apiclient.InspectHostPort{
+			apiclient.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
 		},
-		"6379/udp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"6379/udp": []apiclient.InspectHostPort{
+			apiclient.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
@@ -596,8 +565,6 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	}
 
 	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
-
-	// fmt.Printf("Inspect %v",inspectData.HostConfig.PortBindings)
 
 }
 
@@ -726,6 +693,9 @@ func TestPodmanDriver_OOM(t *testing.T) {
 
 // check setting a user for the task
 func TestPodmanDriver_User(t *testing.T) {
+	// if os.Getuid() != 0 {
+	// 	t.Skip("Skipping User test ")
+	// }
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -816,7 +786,8 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 	// inspect container to learn about the actual podman limits
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
 
 	// see if the configured values are set correctly
 	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
@@ -879,7 +850,9 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	}
 
 	// see if tmpfs was propagated to podman
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
 	expectedFilesystem := map[string]string{
 		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
 		"/tmpdata2": "rw,rprivate,nosuid,nodev,tmpcopyup",
@@ -1036,7 +1009,8 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 
 			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
 
-			inspectData := inspectContainer(t, containerName)
+			inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+			require.NoError(t, err)
 			if tc.mode == "host" {
 				require.Equal(t, "host", inspectData.HostConfig.NetworkMode)
 			}
@@ -1112,40 +1086,6 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 	}
 }
 
-func inspectContainer(t *testing.T, containerName string) iopodman.InspectContainerData {
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	inspectJSON, err := iopodman.InspectContainer().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-
-	var inspectData iopodman.InspectContainerData
-	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
-
-	return inspectData
-}
-
-func getContainer(t *testing.T, containerName string) iopodman.Container {
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	container, err := iopodman.GetContainer().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-
-	return container
-}
-
-func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
-	varlinkConnection, err := varlink.NewConnection(ctx, varlinkSocketPath)
-	return varlinkConnection, err
-}
-
 func newPodmanClient() *PodmanClient {
 	level := hclog.Info
 	if testing.Verbose() {
@@ -1156,9 +1096,8 @@ func newPodmanClient() *PodmanClient {
 		Level: level,
 	})
 	client := &PodmanClient{
-		ctx:               context.Background(),
-		logger:            testLogger,
-		varlinkSocketPath: varlinkSocketPath,
+		ctx:    context.Background(),
+		logger: testLogger,
 	}
 	return client
 }
@@ -1170,7 +1109,7 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 }
 
 // helper to start, destroy and inspect a long running container
-func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopodman.InspectContainerData {
+func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) apiclient.InspectContainerData {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -1203,7 +1142,8 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopo
 		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
-	// inspect container to learn about the actual podman limits
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
 	return inspectData
 }
