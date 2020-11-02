@@ -519,6 +519,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
+		// do we already have this image in local storage?
+		haveImage, err := d.podmanClient2.ImageExists(d.ctx, createOpts.Image)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to start task, unable to check for local image: %v", err)
+		}
+		if !haveImage {
+			// image is not in local storage, so we need to pull it
+			if err = d.podmanClient2.ImagePull(d.ctx, createOpts.Image); err != nil {
+				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", createOpts.Image, err)
+			}
+		}
+
 		createResponse, err := d.podmanClient2.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
 			d.logger.Warn("Create Warning", "warning", w)

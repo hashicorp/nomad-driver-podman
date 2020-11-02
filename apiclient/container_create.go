@@ -40,7 +40,7 @@ func (c *APIClient) ContainerCreate(ctx context.Context, create SpecGenerator) (
 	}
 	// fmt.Println(string(jsonString))
 
-	res, err := c.Post(ctx, "/v1.24/libpod/containers/create", bytes.NewBuffer(jsonString))
+	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/containers/create", PODMAN_API_VERSION), bytes.NewBuffer(jsonString))
 	if err != nil {
 		return response, err
 	}

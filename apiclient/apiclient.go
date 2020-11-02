@@ -29,6 +29,10 @@ import (
 	"github.com/hashicorp/go-hclog"
 )
 
+const (
+	PODMAN_API_VERSION = "v1.0.0"
+)
+
 type APIClient struct {
 	baseUrl    string
 	httpClient *http.Client
