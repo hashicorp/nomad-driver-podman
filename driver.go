@@ -677,7 +677,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	}
 
 	if handle.isRunning() {
-		d.logger.Info("Have to destroyTask but container is still running", "containerID", handle.containerID)
+		d.logger.Debug("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
 		err := d.podmanClient2.ContainerStop(d.ctx, handle.containerID, 60)
 		if err != nil {
@@ -708,7 +708,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 
 // InspectTask function returns detailed status information for the referenced taskID.
 func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
-	d.logger.Info("InspectTask called")
+	d.logger.Debug("InspectTask called")
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return nil, drivers.ErrTaskNotFound
