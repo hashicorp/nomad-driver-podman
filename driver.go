@@ -17,11 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -71,7 +69,7 @@ var (
 	capabilities = &drivers.Capabilities{
 		SendSignals: true,
 		Exec:        false,
-		FSIsolation: drivers.FSIsolationNone,
+		FSIsolation: drivers.FSIsolationImage,
 		NetIsolationModes: []drivers.NetIsolationMode{
 			drivers.NetIsolationModeGroup,
 			drivers.NetIsolationModeHost,
@@ -109,6 +107,11 @@ type Driver struct {
 
 	// podmanClient encapsulates podman remote calls
 	podmanClient2 *apiclient.APIClient
+
+	// SystemInfo collected at first fingerprint query
+	systemInfo apiclient.Info
+	// Queried from systemInfo: is podman running on a cgroupv2 system?
+	cgroupV2 bool
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -230,9 +233,16 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		// yay! we can enable the driver
 		health = drivers.HealthStateHealthy
 		desc = "ready"
-		// TODO: we would have more data here... maybe we can return more details to nomad
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version)
+		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
+		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Rootless)
+		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
+		if d.systemInfo.Version.Version == "" {
+			// keep first received systemInfo in driver struct
+			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
+			d.systemInfo = info
+			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+		}
 	}
 
 	return &drivers.Fingerprint{
@@ -325,6 +335,8 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
+	// d.logger.Warn("Env1", "env1", cfg.Env)
+
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
@@ -354,7 +366,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	containerName := BuildContainerName(cfg)
-	cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
@@ -408,17 +419,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
 	}
-
-	v2, err := isCGroupV2()
-	if err != nil {
-		return nil, nil, err
-	}
-	if !v2 {
+	if !d.cgroupV2 {
 		swappiness := uint64(driverConfig.MemorySwappiness)
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 	}
-	createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
-
+	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
+	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
+	if !d.systemInfo.Host.Rootless {
+		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
+		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
+	}
 	// -------------------------------------------------------------------------------------------
 	// SECURITY
 	// -------------------------------------------------------------------------------------------
@@ -848,30 +858,4 @@ func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mod
 func isParentPath(parent, path string) bool {
 	rel, err := filepath.Rel(parent, path)
 	return err == nil && !strings.HasPrefix(rel, "..")
-}
-
-func isCGroupV2() (bool, error) {
-	file, err := os.Open("/proc/filesystems")
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if scanner.Err() != nil {
-		return false, scanner.Err()
-	}
-
-	cgroupv2 := false
-	for _, l := range lines {
-		if strings.HasSuffix(l, "cgroup2") {
-			cgroupv2 = true
-		}
-	}
-
-	return cgroupv2, nil
 }

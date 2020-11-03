@@ -78,6 +78,7 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	}
 
 	d := NewPodmanDriver(logger).(*Driver)
+	d.buildFingerprint()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
@@ -793,9 +794,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
 
-	v2, err := isCGroupV2()
-	require.NoError(t, err)
-	if !v2 {
+	if !getPodmanDriver(t, d).cgroupV2 {
 		require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 	}
 }
