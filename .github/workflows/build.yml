@@ -9,9 +9,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-go@v2
-      with:
-        go-version: '^1.14.1'
+
+    - name: Show go version
+      run: go version
 
     - name: Lint Deps
       run: make lint-deps

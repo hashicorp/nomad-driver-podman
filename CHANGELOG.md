@@ -2,7 +2,12 @@
 
 FEATURES:
 
-* config: Ability to configure dns server list
+* config: [[GH-54](https://github.com/hashicorp/nomad-driver-podman/issues/54)] Ability to configure dns server list
+* runtime: [[GH-64](https://github.com/hashicorp/nomad-driver-podman/issues/64)] Add support for SignalTask
+
+BUG FIXES:
+
+* [[GH-67](https://github.com/hashicorp/nomad-driver-podman/issues/67)] run container from oci-archive image
 
 ## 0.1.0
 
