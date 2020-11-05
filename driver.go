@@ -19,11 +19,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/hashicorp/consul-template/signals"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/consul-template/signals"
 
 	"github.com/hashicorp/nomad/nomad/structs"
 
@@ -356,12 +357,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
-	img, err := d.createImage(cfg, &driverConfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Couldn't create image: %v", err)
-	}
-	d.logger.Debug("created/pulled image", "img_id", img.ID)
-
 	allArgs := []string{driverConfig.Image}
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
@@ -688,54 +683,6 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
 	return nil, fmt.Errorf("Podman driver does not support exec")
-}
-
-func (d *Driver) createImage(cfg *drivers.TaskConfig, driverConfig *TaskConfig) (iopodman.InspectImageData, error) {
-	img, err := d.podmanClient.InspectImage(driverConfig.Image)
-	if err != nil {
-		err = d.eventer.EmitEvent(&drivers.TaskEvent{
-			TaskID:    cfg.ID,
-			AllocID:   cfg.AllocID,
-			TaskName:  cfg.Name,
-			Timestamp: time.Now(),
-			Message:   "Downloading image",
-			Annotations: map[string]string{
-				"image": driverConfig.Image,
-			},
-		})
-		if err != nil {
-			d.logger.Warn("error emitting event", "error", err)
-		}
-
-		pullLog, err := d.podmanClient.PullImage(driverConfig.Image)
-		if err != nil {
-			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be downloaded: %v", driverConfig.Image, err)
-		}
-
-		img, err = d.podmanClient.InspectImage(driverConfig.Image)
-		if err != nil {
-			return iopodman.InspectImageData{}, fmt.Errorf("image %s couldn't be inspected: %v", driverConfig.Image, err)
-		}
-
-		err = d.eventer.EmitEvent(&drivers.TaskEvent{
-			TaskID:    cfg.ID,
-			AllocID:   cfg.AllocID,
-			TaskName:  cfg.Name,
-			Timestamp: time.Now(),
-			Message:   fmt.Sprintf("Image downloaded: %s", pullLog),
-			Annotations: map[string]string{
-				"image": driverConfig.Image,
-			},
-		})
-		if err != nil {
-			d.logger.Warn("error emitting event", "error", err)
-		}
-
-	}
-
-	d.logger.Debug("Image created", "img_id", img.ID, "config", img.Config)
-
-	return img, nil
 }
 
 func (d *Driver) containerBinds(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]string, error) {
