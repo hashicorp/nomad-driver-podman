@@ -529,6 +529,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
+		// FIXME: there are more variations of image sources, we should handle it
+		//        e.g. oci-archive:/... etc
+		//        see also https://github.com/containers/podman/issues/6744
 		// do we already have this image in local storage?
 		haveImage, err := d.podmanClient2.ImageExists(d.ctx, createOpts.Image)
 		if err != nil {
