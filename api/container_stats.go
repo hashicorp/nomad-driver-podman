@@ -33,7 +33,7 @@ var ContainerWrongState = errors.New("Container has wrong state")
 func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 
 	var stats Stats
-	res, err := c.Get(ctx, fmt.Sprintf("libpod/containers/%s/stats?stream=false", name))
+	res, err := c.Get(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/stats?stream=false", name))
 	if err != nil {
 		return stats, err
 	}

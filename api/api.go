@@ -29,10 +29,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 )
 
-const (
-	PODMAN_API_VERSION = "v1.0.0"
-)
-
 type API struct {
 	baseUrl    string
 	httpClient *http.Client
@@ -43,7 +39,7 @@ func NewClient(logger hclog.Logger) *API {
 	ac := &API{
 		logger: logger,
 	}
-	ac.SetSocketPath(GuessSocketPath())
+	ac.SetSocketPath(DefaultSocketPath())
 	return ac
 }
 
@@ -65,8 +61,8 @@ func (c *API) SetSocketPath(baseUrl string) {
 	}
 }
 
-// GuessSocketPath returns the default unix domain socket path for root or non-root users
-func GuessSocketPath() string {
+// DefaultSocketPath returns the default unix domain socket path for root or non-root users
+func DefaultSocketPath() string {
 	uid := os.Getuid()
 	// are we root?
 	if uid == 0 {

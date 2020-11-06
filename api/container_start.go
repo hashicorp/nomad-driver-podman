@@ -27,7 +27,7 @@ import (
 // ContainerStart starts a container via id or name
 func (c *API) ContainerStart(ctx context.Context, name string) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/containers/%s/start", PODMAN_API_VERSION, name), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/start", name), nil)
 	if err != nil {
 		return err
 	}

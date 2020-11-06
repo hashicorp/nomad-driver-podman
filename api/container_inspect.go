@@ -30,7 +30,7 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 
 	var inspectData InspectContainerData
 
-	res, err := c.Get(ctx, fmt.Sprintf("/%s/libpod/containers/%s/json", PODMAN_API_VERSION, name))
+	res, err := c.Get(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/json", name))
 	if err != nil {
 		return inspectData, err
 	}

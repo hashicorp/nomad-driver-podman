@@ -32,7 +32,7 @@ func (c *API) SystemInfo(ctx context.Context) (Info, error) {
 	// the libpod/info endpoint seems to have some trouble
 	// using "compat" endpoint and minimal struct
 	// until podman returns proper data.
-	res, err := c.Get(ctx, fmt.Sprintf("/%s/libpod/info", PODMAN_API_VERSION))
+	res, err := c.Get(ctx, "/v1.0.0/libpod/info")
 	if err != nil {
 		return infoData, err
 	}

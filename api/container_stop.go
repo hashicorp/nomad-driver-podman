@@ -28,7 +28,7 @@ import (
 // error will be returned instead.
 func (c *API) ContainerStop(ctx context.Context, name string, timeout int) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/stop?timeout=%d", name, timeout), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/stop?timeout=%d", name, timeout), nil)
 	if err != nil {
 		return err
 	}

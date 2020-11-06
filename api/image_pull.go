@@ -26,7 +26,7 @@ import (
 // ImagePull pulls a image from a remote location to local storage
 func (c *API) ImagePull(ctx context.Context, nameWithTag string) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/images/pull?reference=%s", PODMAN_API_VERSION, nameWithTag), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s", nameWithTag), nil)
 	if err != nil {
 		return err
 	}

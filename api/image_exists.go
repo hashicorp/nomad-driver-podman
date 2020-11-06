@@ -25,7 +25,7 @@ import (
 // ImageExists checks if image exists in local store
 func (c *API) ImageExists(ctx context.Context, nameWithTag string) (bool, error) {
 
-	res, err := c.Get(ctx, fmt.Sprintf("/libpod/images/%s/exists", nameWithTag))
+	res, err := c.Get(ctx, fmt.Sprintf("/v1.0.0/libpod/images/%s/exists", nameWithTag))
 	if err != nil {
 		return false, err
 	}

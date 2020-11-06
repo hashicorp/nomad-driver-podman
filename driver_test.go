@@ -702,7 +702,9 @@ func TestPodmanDriver_User(t *testing.T) {
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
-		"whoami",
+		"sh",
+		"-c",
+		"sleep 1; whoami",
 	})
 
 	task := &drivers.TaskConfig{
@@ -899,8 +901,9 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	}
 
 	taskCfg := newTaskConfig("", []string{
-		"cat",
-		"/etc/resolv.conf",
+		"sh",
+		"-c",
+		"sleep 1; cat /etc/resolv.conf",
 	})
 	// config {
 	//   dns = [
