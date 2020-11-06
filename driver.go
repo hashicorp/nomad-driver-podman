@@ -360,9 +360,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 
-	// -------------------------------------------------------------------------------------------
-	// BASIC
-	// -------------------------------------------------------------------------------------------
+	// Basic config options
 	createOpts.ContainerBasicConfig.Name = containerName
 	createOpts.ContainerBasicConfig.Command = allArgs
 	createOpts.ContainerBasicConfig.Env = cfg.Env
@@ -370,9 +368,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 
-	// -------------------------------------------------------------------------------------------
-	// STORAGE
-	// -------------------------------------------------------------------------------------------
+	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init
 	createOpts.ContainerStorageConfig.Image = driverConfig.Image
 	createOpts.ContainerStorageConfig.InitPath = driverConfig.InitPath
@@ -383,9 +379,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	createOpts.ContainerStorageConfig.Mounts = allMounts
 
-	// -------------------------------------------------------------------------------------------
-	// RESOURCES
-	// -------------------------------------------------------------------------------------------
+	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
 		Memory: &spec.LinuxMemory{},
 		CPU:    &spec.LinuxCPU{},
@@ -419,16 +413,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
-	// -------------------------------------------------------------------------------------------
-	// SECURITY
-	// -------------------------------------------------------------------------------------------
+
+	// Security config options
 	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
 	createOpts.ContainerSecurityConfig.User = cfg.User
 
-	// -------------------------------------------------------------------------------------------
-	// NETWORK
-	// -------------------------------------------------------------------------------------------
+	// Network config options
 	for _, strdns := range driverConfig.Dns {
 		ipdns := net.ParseIP(strdns)
 		if ipdns == nil {
@@ -452,7 +443,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else if driverConfig.NetworkMode == "slirp4netns" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
 		} else {
-			// FIXME: needs more work, parsing etc.
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
 	}
@@ -521,7 +511,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if !recoverRunningContainer {
 		// FIXME: there are more variations of image sources, we should handle it
 		//        e.g. oci-archive:/... etc
-		//        see also https://github.com/containers/podman/issues/6744
+		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
 		// do we already have this image in local storage?
 		haveImage, err := d.podman.ImageExists(d.ctx, createOpts.Image)
 		if err != nil {

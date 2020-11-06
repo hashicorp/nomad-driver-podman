@@ -1032,14 +1032,12 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	go func(t *testing.T) {
-		time.Sleep(300 * time.Millisecond)
-		// try to send non-existing singal, should yield an error
-		require.Error(t, d.SignalTask(task.ID, "FOO"))
-		time.Sleep(300 * time.Millisecond)
-		// send a friendly CTRL+C to busybox to stop the container
-		require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
-	}(t)
+	time.Sleep(300 * time.Millisecond)
+	// try to send non-existing singal, should yield an error
+	require.Error(t, d.SignalTask(task.ID, "FOO"))
+	time.Sleep(300 * time.Millisecond)
+	// send a friendly CTRL+C to busybox to stop the container
+	require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
