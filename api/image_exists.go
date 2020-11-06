@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 )
 
 // ImageExists checks if image exists in local store
-func (c *APIClient) ImageExists(ctx context.Context, nameWithTag string) (bool, error) {
+func (c *API) ImageExists(ctx context.Context, nameWithTag string) (bool, error) {
 
 	res, err := c.Get(ctx, fmt.Sprintf("/libpod/images/%s/exists", nameWithTag))
 	if err != nil {

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -30,7 +30,7 @@ var ContainerNotFound = errors.New("No such Container")
 var ContainerWrongState = errors.New("Container has wrong state")
 
 // ContainerStats data takes a name or ID of a container returns stats data
-func (c *APIClient) ContainerStats(ctx context.Context, name string) (Stats, error) {
+func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 
 	var stats Stats
 	res, err := c.Get(ctx, fmt.Sprintf("libpod/containers/%s/stats?stream=false", name))

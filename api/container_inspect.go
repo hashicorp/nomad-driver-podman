@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -26,7 +26,7 @@ import (
 )
 
 // ContainerInspect data takes a name or ID of a container returns the inspection data
-func (c *APIClient) ContainerInspect(ctx context.Context, name string) (InspectContainerData, error) {
+func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContainerData, error) {
 
 	var inspectData InspectContainerData
 

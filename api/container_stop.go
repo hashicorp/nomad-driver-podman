@@ -14,35 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"time"
 )
 
-// ContainerStart starts a container via id or name
-func (c *APIClient) ContainerStart(ctx context.Context, name string) error {
+// ContainerStop stops a container given a timeout.  It takes the name or ID of a container as well as a
+// timeout value.  The timeout value the time before a forcible stop to the container is applied.
+// If the container cannot be found, a [ContainerNotFound](#ContainerNotFound)
+// error will be returned instead.
+func (c *API) ContainerStop(ctx context.Context, name string, timeout int) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/containers/%s/start", PODMAN_API_VERSION, name), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/stop?timeout=%d", name, timeout), nil)
 	if err != nil {
 		return err
 	}
 
 	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusNoContent {
-		body, _ := ioutil.ReadAll(res.Body)
-		return fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+	if res.StatusCode == http.StatusNoContent {
+		return nil
 	}
-
-	// wait max 10 seconds for running state
-	timeout, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	err = c.ContainerWait(timeout, name, "running")
-	return err
+	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 }

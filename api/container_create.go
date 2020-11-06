@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ import (
 )
 
 // ContainerCreate creates a new container
-func (c *APIClient) ContainerCreate(ctx context.Context, create SpecGenerator) (ContainerCreateResponse, error) {
+func (c *API) ContainerCreate(ctx context.Context, create SpecGenerator) (ContainerCreateResponse, error) {
 
 	response := ContainerCreateResponse{}
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 )
 
 // SystemInfo returns information on the system and libpod configuration
-func (c *APIClient) SystemInfo(ctx context.Context) (Info, error) {
+func (c *API) SystemInfo(ctx context.Context) (Info, error) {
 
 	var infoData Info
 

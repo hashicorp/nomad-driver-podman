@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 )
 
 // ContainerKill sends a signal to a container
-func (c *APIClient) ContainerKill(ctx context.Context, name string, signal string) error {
+func (c *API) ContainerKill(ctx context.Context, name string, signal string) error {
 
 	res, err := c.Post(ctx, fmt.Sprintf("/containers/%s/kill?signal=%s", name, signal), nil)
 	if err != nil {

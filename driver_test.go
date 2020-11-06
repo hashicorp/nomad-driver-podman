@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad-driver-podman/apiclient"
+	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
@@ -226,7 +226,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	// the case of dockerd getting restarted and stopping containers while
 	// Nomad is watching them.
 	containerName := BuildContainerName(task)
-	createOpts := apiclient.SpecGenerator{}
+	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.Name = containerName
 	createOpts.ContainerStorageConfig.Image = taskCfg.Image
 	createOpts.ContainerBasicConfig.Command = []string{
@@ -234,7 +234,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 		"5",
 	}
 
-	_, err := getPodmanDriver(t, d).podmanClient2.ContainerCreate(context.Background(), createOpts)
+	_, err := getPodmanDriver(t, d).podman.ContainerCreate(context.Background(), createOpts)
 	require.NoError(t, err)
 
 	_, _, err = d.StartTask(task)
@@ -340,8 +340,8 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 	d.DestroyTask(task.ID, true)
 
 	// see if the container does not exist (404)
-	_, err = getPodmanDriver(t, d).podmanClient2.ContainerStats(context.Background(), containerName)
-	require.Error(t, err, apiclient.ContainerNotFound)
+	_, err = getPodmanDriver(t, d).podman.ContainerStats(context.Background(), containerName)
+	require.Error(t, err, api.ContainerNotFound)
 }
 
 // check if container is destroyed if gc.container=false
@@ -386,11 +386,11 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	d.DestroyTask(task.ID, true)
 
 	// see if the stopped container can be inspected
-	_, err = getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	_, err = getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
 	// and cleanup after ourself
-	err = getPodmanDriver(t, d).podmanClient2.ContainerDelete(context.Background(), containerName, true, true)
+	err = getPodmanDriver(t, d).podman.ContainerDelete(context.Background(), containerName, true, true)
 	require.NoError(t, err)
 }
 
@@ -528,7 +528,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
 	// Verify that the port environment variables are set
@@ -536,27 +536,27 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
 
 	// Verify that the correct ports are bound
-	expectedPortBindings := map[string][]apiclient.InspectHostPort{
-		"8888/tcp": []apiclient.InspectHostPort{
-			apiclient.InspectHostPort{
+	expectedPortBindings := map[string][]api.InspectHostPort{
+		"8888/tcp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"8888/udp": []apiclient.InspectHostPort{
-			apiclient.InspectHostPort{
+		"8888/udp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"6379/tcp": []apiclient.InspectHostPort{
-			apiclient.InspectHostPort{
+		"6379/tcp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
 		},
-		"6379/udp": []apiclient.InspectHostPort{
-			apiclient.InspectHostPort{
+		"6379/udp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
@@ -786,7 +786,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 	// inspect container to learn about the actual podman limits
-	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
 	// see if the configured values are set correctly
@@ -846,7 +846,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	}
 
 	// see if tmpfs was propagated to podman
-	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
 	expectedFilesystem := map[string]string{
@@ -1005,7 +1005,7 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 
 			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
 
-			inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+			inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 			require.NoError(t, err)
 			if tc.mode == "host" {
 				require.Equal(t, "host", inspectData.HostConfig.NetworkMode)
@@ -1089,7 +1089,7 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 }
 
 // helper to start, destroy and inspect a long running container
-func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) apiclient.InspectContainerData {
+func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.InspectContainerData {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -1122,7 +1122,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) apic
 		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
-	inspectData, err := getPodmanDriver(t, d).podmanClient2.ContainerInspect(context.Background(), containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
 	return inspectData

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad-driver-podman/apiclient"
+	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
@@ -55,7 +55,7 @@ type TaskHandle struct {
 
 	removeContainerOnExit bool
 
-	containerStats apiclient.Stats
+	containerStats api.Stats
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -176,18 +176,18 @@ func (h *TaskHandle) runContainerMonitor() {
 			timer.Reset(interval)
 		}
 
-		containerStats, statsErr := h.driver.podmanClient2.ContainerStats(h.driver.ctx, h.containerID)
+		containerStats, statsErr := h.driver.podman.ContainerStats(h.driver.ctx, h.containerID)
 		if statsErr != nil {
 			gone := false
-			if errors.Is(statsErr, apiclient.ContainerNotFound) {
+			if errors.Is(statsErr, api.ContainerNotFound) {
 				gone = true
-			} else if errors.Is(statsErr, apiclient.ContainerWrongState) {
+			} else if errors.Is(statsErr, api.ContainerWrongState) {
 				gone = true
 			}
 			if gone {
 				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", statsErr)
 				// container was stopped, get exit code and other post mortem infos
-				inspectData, err := h.driver.podmanClient2.ContainerInspect(h.driver.ctx, h.containerID)
+				inspectData, err := h.driver.podman.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
 				h.completedAt = time.Now()
 				if err != nil {

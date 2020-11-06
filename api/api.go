@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
@@ -33,21 +33,21 @@ const (
 	PODMAN_API_VERSION = "v1.0.0"
 )
 
-type APIClient struct {
+type API struct {
 	baseUrl    string
 	httpClient *http.Client
 	logger     hclog.Logger
 }
 
-func NewClient(logger hclog.Logger) *APIClient {
-	ac := &APIClient{
+func NewClient(logger hclog.Logger) *API {
+	ac := &API{
 		logger: logger,
 	}
 	ac.SetSocketPath(GuessSocketPath())
 	return ac
 }
 
-func (c *APIClient) SetSocketPath(baseUrl string) {
+func (c *API) SetSocketPath(baseUrl string) {
 	c.logger.Debug("http baseurl", "url", baseUrl)
 	c.httpClient = &http.Client{
 		Timeout: 60 * time.Second,
@@ -76,35 +76,32 @@ func GuessSocketPath() string {
 	return fmt.Sprintf("unix:/run/user/%d/podman/podman.sock", uid)
 }
 
-func (c *APIClient) Do(req *http.Request) (*http.Response, error) {
+func (c *API) Do(req *http.Request) (*http.Response, error) {
 	res, err := c.httpClient.Do(req)
 	return res, err
 }
 
-func (c *APIClient) Get(ctx context.Context, path string) (*http.Response, error) {
-	req, err := http.NewRequest("GET", c.baseUrl+path, nil)
+func (c *API) Get(ctx context.Context, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseUrl+path, nil)
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
 	return c.Do(req)
 }
 
-func (c *APIClient) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest("POST", c.baseUrl+path, body)
+func (c *API) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseUrl+path, body)
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
 	req.Header.Set("Content-Type", "application/json")
 	return c.Do(req)
 }
 
-func (c *APIClient) Delete(ctx context.Context, path string) (*http.Response, error) {
-	req, err := http.NewRequest("DELETE", c.baseUrl+path, nil)
+func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "DELETE", c.baseUrl+path, nil)
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
 	return c.Do(req)
 }

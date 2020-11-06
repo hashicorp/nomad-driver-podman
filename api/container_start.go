@@ -14,29 +14,35 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apiclient
+package api
 
 import (
 	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
-// ImagePull pulls a image from a remote location to local storage
-func (c *APIClient) ImagePull(ctx context.Context, nameWithTag string) error {
+// ContainerStart starts a container via id or name
+func (c *API) ContainerStart(ctx context.Context, name string) error {
 
-	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/images/pull?reference=%s", PODMAN_API_VERSION, nameWithTag), nil)
+	res, err := c.Post(ctx, fmt.Sprintf("/%s/libpod/containers/%s/start", PODMAN_API_VERSION, name), nil)
 	if err != nil {
 		return err
 	}
 
 	defer res.Body.Close()
-	body, _ := ioutil.ReadAll(res.Body)
 
-	if res.StatusCode != http.StatusOK {
+	if res.StatusCode != http.StatusNoContent {
+		body, _ := ioutil.ReadAll(res.Body)
 		return fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
 	}
 
-	return nil
+	// wait max 10 seconds for running state
+	timeout, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	err = c.ContainerWait(timeout, name, "running")
+	return err
 }
