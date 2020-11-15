@@ -124,7 +124,6 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
-		podman:         api.NewClient(logger),
 	}
 }
 
@@ -145,22 +144,24 @@ func (d *Driver) ConfigSchema() (*hclspec.Spec, error) {
 // is an encoded configuration from the plugin block of the client config.
 // The second, AgentConfig, is the Nomad agent's configuration which is given to all plugins.
 func (d *Driver) SetConfig(cfg *base.Config) error {
-	var config PluginConfig
+	var pluginConfig PluginConfig
 	if len(cfg.PluginConfig) != 0 {
-		if err := base.MsgPackDecode(cfg.PluginConfig, &config); err != nil {
+		if err := base.MsgPackDecode(cfg.PluginConfig, &pluginConfig); err != nil {
 			return err
 		}
 	}
 
-	d.config = &config
+	d.config = &pluginConfig
 	if cfg.AgentConfig != nil {
 		d.nomadConfig = cfg.AgentConfig.Driver
 	}
 
-	if config.SocketPath != "" {
-		d.podman.SetSocketPath(config.SocketPath)
+	clientConfig := api.DefaultClientConfig()
+	if pluginConfig.SocketPath != "" {
+		clientConfig.SocketPath = pluginConfig.SocketPath
 	}
 
+	d.podman = api.NewClient(d.logger, clientConfig)
 	return nil
 }
 

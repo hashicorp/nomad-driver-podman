@@ -26,6 +26,7 @@ import (
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
+	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
@@ -67,7 +68,14 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 		logger.SetLevel(hclog.Info)
 	}
 
+	baseConfig := base.Config{}
+	pluginConfig := PluginConfig{}
+	if err := base.MsgPackEncode(&baseConfig.PluginConfig, &pluginConfig); err != nil {
+		t.Error("Unable to encode plugin config", err)
+	}
+
 	d := NewPodmanDriver(logger).(*Driver)
+	d.SetConfig(&baseConfig)
 	d.buildFingerprint()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {

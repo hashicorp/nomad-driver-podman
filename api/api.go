@@ -19,41 +19,49 @@ type API struct {
 	logger     hclog.Logger
 }
 
-func NewClient(logger hclog.Logger) *API {
+type ClientConfig struct {
+	SocketPath  string
+	HttpTimeout time.Duration
+}
+
+func DefaultClientConfig() ClientConfig {
+	cfg := ClientConfig{
+		HttpTimeout: 60 * time.Second,
+	}
+	uid := os.Getuid()
+	// are we root?
+	if uid == 0 {
+		cfg.SocketPath = "unix:/run/podman/podman.sock"
+	} else {
+		// not? then let's try the default per-user socket location
+		cfg.SocketPath = fmt.Sprintf("unix:/run/user/%d/podman/podman.sock", uid)
+	}
+	return cfg
+}
+
+func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
 		logger: logger,
 	}
-	ac.SetSocketPath(DefaultSocketPath())
-	return ac
-}
 
-func (c *API) SetSocketPath(baseUrl string) {
-	c.logger.Debug("http baseurl", "url", baseUrl)
-	c.httpClient = &http.Client{
-		Timeout: 60 * time.Second,
+	baseUrl := config.SocketPath
+	ac.logger.Debug("http baseurl", "url", baseUrl)
+	ac.httpClient = &http.Client{
+		Timeout: config.HttpTimeout,
 	}
 	if strings.HasPrefix(baseUrl, "unix:") {
-		c.baseUrl = "http://u"
+		ac.baseUrl = "http://u"
 		path := strings.TrimPrefix(baseUrl, "unix:")
-		c.httpClient.Transport = &http.Transport{
+		ac.httpClient.Transport = &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", path)
 			},
 		}
 	} else {
-		c.baseUrl = baseUrl
+		ac.baseUrl = baseUrl
 	}
-}
 
-// DefaultSocketPath returns the default unix domain socket path for root or non-root users
-func DefaultSocketPath() string {
-	uid := os.Getuid()
-	// are we root?
-	if uid == 0 {
-		return "unix:/run/podman/podman.sock"
-	}
-	// not? then let's try the default per-user socket location
-	return fmt.Sprintf("unix:/run/user/%d/podman/podman.sock", uid)
+	return ac
 }
 
 func (c *API) Do(req *http.Request) (*http.Response, error) {
