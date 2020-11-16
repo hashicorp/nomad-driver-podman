@@ -24,6 +24,7 @@ func (c *API) ContainerStart(ctx context.Context, name string) error {
 	}
 
 	// wait max 10 seconds for running state
+	// TODO: make timeout configurable
 	timeout, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 

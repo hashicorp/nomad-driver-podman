@@ -1,9 +1,3 @@
-/*
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at https://mozilla.org/MPL/2.0/.
-*/
-
 package main
 
 import (
@@ -326,7 +320,6 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
-	// d.logger.Warn("Env1", "env1", cfg.Env)
 
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
@@ -487,7 +480,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
 	}
-	// -------------------------------------------------------------------------------------------
 
 	containerID := ""
 	recoverRunningContainer := false

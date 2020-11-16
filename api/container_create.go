@@ -18,7 +18,6 @@ func (c *API) ContainerCreate(ctx context.Context, create SpecGenerator) (Contai
 	if err != nil {
 		return response, err
 	}
-	// fmt.Println(string(jsonString))
 
 	res, err := c.Post(ctx, "/v1.0.0/libpod/containers/create", bytes.NewBuffer(jsonString))
 	if err != nil {
