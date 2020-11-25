@@ -1,29 +1,11 @@
-/*
-Copyright 2019 Thomas Weber
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 
 	"path/filepath"
 	"reflect"
@@ -32,39 +14,24 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad-driver-podman/iopodman"
+	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
+	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
 	"github.com/stretchr/testify/require"
-	"github.com/varlink/go/varlink"
 )
 
 var (
 	// busyboxLongRunningCmd is a busybox command that runs indefinitely, and
 	// ideally responds to SIGINT/SIGTERM.  Sadly, busybox:1.29.3 /bin/sleep doesn't.
 	busyboxLongRunningCmd = []string{"nc", "-l", "-p", "3000", "127.0.0.1"}
-	varlinkSocketPath     = ""
 )
-
-func init() {
-	user, _ := user.Current()
-	procFilesystems, err := getProcFilesystems()
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	socketPath := guessSocketPath(user, procFilesystems)
-
-	varlinkSocketPath = socketPath
-}
 
 func createBasicResources() *drivers.Resources {
 	res := drivers.Resources{
@@ -88,8 +55,22 @@ func createBasicResources() *drivers.Resources {
 // A driver plugin interface and cleanup function is returned
 func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.DriverHarness {
 
-	d := NewPodmanDriver(testlog.HCLogger(t)).(*Driver)
-	d.podmanClient = newPodmanClient()
+	logger := testlog.HCLogger(t)
+	if testing.Verbose() {
+		logger.SetLevel(hclog.Trace)
+	} else {
+		logger.SetLevel(hclog.Info)
+	}
+
+	baseConfig := base.Config{}
+	pluginConfig := PluginConfig{}
+	if err := base.MsgPackEncode(&baseConfig.PluginConfig, &pluginConfig); err != nil {
+		t.Error("Unable to encode plugin config", err)
+	}
+
+	d := NewPodmanDriver(logger).(*Driver)
+	d.SetConfig(&baseConfig)
+	d.buildFingerprint()
 	d.config.Volumes.Enabled = true
 	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
@@ -237,17 +218,15 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	// the case of dockerd getting restarted and stopping containers while
 	// Nomad is watching them.
 	containerName := BuildContainerName(task)
-	createOpts := iopodman.Create{
-		Args: []string{
-			taskCfg.Image,
-			"sleep",
-			"5",
-		},
-		Name: &containerName,
+	createOpts := api.SpecGenerator{}
+	createOpts.ContainerBasicConfig.Name = containerName
+	createOpts.ContainerStorageConfig.Image = taskCfg.Image
+	createOpts.ContainerBasicConfig.Command = []string{
+		"sleep",
+		"5",
 	}
 
-	podman := newPodmanClient()
-	_, err := podman.CreateContainer(createOpts)
+	_, err := getPodmanDriver(t, d).podman.ContainerCreate(context.Background(), createOpts)
 	require.NoError(t, err)
 
 	_, _, err = d.StartTask(task)
@@ -265,7 +244,6 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 
 	exp := []byte{'w', 'i', 'n'}
 	file := "output.txt"
-	allocDir := "/mnt/alloc"
 
 	taskCfg := newTaskConfig("", []string{
 		"sh",
@@ -273,7 +251,6 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 		fmt.Sprintf(`echo -n %s > $%s/%s; sleep 1`,
 			string(exp), taskenv.AllocDir, file),
 	})
-	taskCfg.Volumes = []string{fmt.Sprintf("alloc/:%s", allocDir)}
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "start_wait_allocDir",
@@ -354,16 +331,9 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 	d.DestroyTask(task.ID, true)
 
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	// ... 1 means container could not be found (is deleted)
-	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-	require.Equal(t, 1, int(exists))
+	// see if the container does not exist (404)
+	_, err = getPodmanDriver(t, d).podman.ContainerStats(context.Background(), containerName)
+	require.Error(t, err, api.ContainerNotFound)
 }
 
 // check if container is destroyed if gc.container=false
@@ -407,19 +377,13 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 	d.DestroyTask(task.ID, true)
 
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
+	// see if the stopped container can be inspected
+	_, err = getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	// ... 0 means container could be found (still exists)
-	exists, err := iopodman.ContainerExists().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-	require.Equal(t, 0, int(exists))
 
 	// and cleanup after ourself
-	iopodman.RemoveContainer().Call(ctx, varlinkConnection, containerName, true, true)
+	err = getPodmanDriver(t, d).podman.ContainerDelete(context.Background(), containerName, true, true)
+	require.NoError(t, err)
 }
 
 // Check stdout/stderr logging
@@ -556,34 +520,35 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 	defer d.DestroyTask(task.ID, true)
 
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
 
 	// Verify that the port environment variables are set
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
 	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
 
 	// Verify that the correct ports are bound
-	expectedPortBindings := map[string][]iopodman.InspectHostPort{
-		"8888/tcp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+	expectedPortBindings := map[string][]api.InspectHostPort{
+		"8888/tcp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"8888/udp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"8888/udp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[0]),
 			},
 		},
-		"6379/tcp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"6379/tcp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
 		},
-		"6379/udp": []iopodman.InspectHostPort{
-			iopodman.InspectHostPort{
+		"6379/udp": []api.InspectHostPort{
+			api.InspectHostPort{
 				HostIP:   "127.0.0.1",
 				HostPort: strconv.Itoa(ports[1]),
 			},
@@ -592,8 +557,6 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	}
 
 	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
-
-	// fmt.Printf("Inspect %v",inspectData.HostConfig.PortBindings)
 
 }
 
@@ -659,6 +622,9 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 // test oom flag propagation
 func TestPodmanDriver_OOM(t *testing.T) {
+
+	t.Skip("Skipping oom test because of podman cgroup v2 bugs")
+
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -690,7 +656,7 @@ func TestPodmanDriver_OOM(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	// limit memory to 10MB to trigger oom soon enough
+	// limit memory to 5MB to trigger oom soon enough
 	task.Resources.NomadResources.Memory.MemoryMB = 10
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -712,20 +678,25 @@ func TestPodmanDriver_OOM(t *testing.T) {
 		require.False(t, res.Successful(), "Should have failed because of oom but was successful")
 		require.True(t, res.OOMKilled, "OOM Flag not set")
 		require.Contains(t, res.Err.Error(), "OOM killer")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(time.Duration(tu.TestMultiplier()*3) * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 }
 
 // check setting a user for the task
 func TestPodmanDriver_User(t *testing.T) {
+	// if os.Getuid() != 0 {
+	// 	t.Skip("Skipping User test ")
+	// }
 	if !tu.IsCI() {
 		t.Parallel()
 	}
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
-		"whoami",
+		"sh",
+		"-c",
+		"sleep 1; whoami",
 	})
 
 	task := &drivers.TaskConfig{
@@ -809,19 +780,16 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 	// inspect container to learn about the actual podman limits
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
 
 	// see if the configured values are set correctly
 	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
 	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
 	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
 
-	procFilesystems, err := getProcFilesystems()
-	if err == nil {
-		cgroupv2 := isCGroupV2(procFilesystems)
-		if cgroupv2 == false {
-			require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
-		}
+	if !getPodmanDriver(t, d).cgroupV2 {
+		require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
 	}
 }
 
@@ -872,7 +840,9 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	}
 
 	// see if tmpfs was propagated to podman
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
 	expectedFilesystem := map[string]string{
 		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
 		"/tmpdata2": "rw,rprivate,nosuid,nodev,tmpcopyup",
@@ -881,8 +851,8 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, " tmpfs on /tmpdata1 type tmpfs ")
-	require.Contains(t, tasklog, " tmpfs on /tmpdata2 type tmpfs ")
+	require.Contains(t, tasklog, " on /tmpdata1 type tmpfs ")
+	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
 // check default capabilities
@@ -923,8 +893,9 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	}
 
 	taskCfg := newTaskConfig("", []string{
-		"cat",
-		"/etc/resolv.conf",
+		"sh",
+		"-c",
+		"sleep 1; cat /etc/resolv.conf",
 	})
 	// config {
 	//   dns = [
@@ -1029,12 +1000,56 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 
 			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
 
-			inspectData := inspectContainer(t, containerName)
+			inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+			require.NoError(t, err)
 			if tc.mode == "host" {
 				require.Equal(t, "host", inspectData.HostConfig.NetworkMode)
 			}
 			require.Equal(t, tc.gateway, inspectData.NetworkSettings.Gateway)
 		})
+	}
+}
+
+// test kill / signal support
+func TestPodmanDriver_SignalTask(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "signal_task",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	time.Sleep(300 * time.Millisecond)
+	// try to send non-existing singal, should yield an error
+	require.Error(t, d.SignalTask(task.ID, "FOO"))
+	time.Sleep(300 * time.Millisecond)
+	// send a friendly CTRL+C to busybox to stop the container
+	require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		require.Equal(t, 130, res.ExitCode, "Should have got exit code 130")
+	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
+		t.Fatalf("Container did not exit in time")
 	}
 }
 
@@ -1060,53 +1075,6 @@ func newTaskConfig(variant string, command []string) TaskConfig {
 	}
 }
 
-func inspectContainer(t *testing.T, containerName string) iopodman.InspectContainerData {
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	inspectJSON, err := iopodman.InspectContainer().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-
-	var inspectData iopodman.InspectContainerData
-	require.NoError(t, json.Unmarshal([]byte(inspectJSON), &inspectData))
-
-	return inspectData
-}
-
-func getContainer(t *testing.T, containerName string) iopodman.Container {
-	ctx := context.Background()
-	varlinkConnection, err := getPodmanConnection(ctx)
-	require.NoError(t, err)
-
-	defer varlinkConnection.Close()
-
-	container, err := iopodman.GetContainer().Call(ctx, varlinkConnection, containerName)
-	require.NoError(t, err)
-
-	return container
-}
-
-func getPodmanConnection(ctx context.Context) (*varlink.Connection, error) {
-	varlinkConnection, err := varlink.NewConnection(ctx, varlinkSocketPath)
-	return varlinkConnection, err
-}
-
-func newPodmanClient() *PodmanClient {
-	testLogger := hclog.New(&hclog.LoggerOptions{
-		Name:  "testClient",
-		Level: hclog.LevelFromString("DEBUG"),
-	})
-	client := &PodmanClient{
-		ctx:               context.Background(),
-		logger:            testLogger,
-		varlinkSocketPath: varlinkSocketPath,
-	}
-	return client
-}
-
 func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 	driver, ok := harness.Impl().(*Driver)
 	require.True(t, ok)
@@ -1114,7 +1082,7 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 }
 
 // helper to start, destroy and inspect a long running container
-func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopodman.InspectContainerData {
+func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.InspectContainerData {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -1147,7 +1115,8 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) iopo
 		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
-	// inspect container to learn about the actual podman limits
-	inspectData := inspectContainer(t, containerName)
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
 	return inspectData
 }

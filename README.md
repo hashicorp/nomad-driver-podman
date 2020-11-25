@@ -44,11 +44,11 @@ cd nomad-driver-podman
 - Linux host with `podman` installed
 - For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
-You need a varlink enabled podman binary and a system socket activation unit,
-see https://podman.io/blogs/2019/01/16/podman-varlink.html.
+You need a 2.x podman binary and a system socket activation unit,
+see https://www.redhat.com/sysadmin/podmans-new-rest-api
 
 nomad agent, nomad-driver-podman and podman will reside on the same host, so you
-do not have to worry about the ssh aspects of podman varlink.
+do not have to worry about the ssh aspects of the podman api.
 
 Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
 
@@ -334,22 +334,16 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.uni
 
 `sudo update-grub`
 
-ensure that podman varlink is running
+ensure that podman socket is running
 ```
-$ systemctl --user status io.podman
-● io.podman.service - Podman Remote API Service
-     Loaded: loaded (/usr/lib/systemd/user/io.podman.service; disabled; vendor preset: enabled)
-     Active: active (running) since Wed 2020-07-01 16:01:41 EDT; 7s ago
-TriggeredBy: ● io.podman.socket
-       Docs: man:podman-varlink(1)
-   Main PID: 25091 (podman)
-      Tasks: 29 (limit: 18808)
-     Memory: 17.5M
-        CPU: 184ms
-     CGroup: /user.slice/user-1000.slice/user@1000.service/io.podman.service
-             ├─25091 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
-             ├─25121 /usr/bin/podman varlink unix:/run/user/1000/podman/io.podman --timeout=60000 --cgroup-manager=systemd
-             └─25125 /usr/bin/podman
+$ systemctl --user status podman.socket
+* podman.socket - Podman API Socket
+     Loaded: loaded (/usr/lib/systemd/user/podman.socket; disabled; vendor preset: disabled)
+     Active: active (listening) since Sat 2020-10-31 19:21:29 CET; 22h ago
+   Triggers: * podman.service
+       Docs: man:podman-system-service(1)
+     Listen: /run/user/1000/podman/podman.sock (Stream)
+     CGroup: /user.slice/user-1000.slice/user@1000.service/podman.socket             
 ```
 
 ensure that you have a recent version of [crun](https://github.com/containers/crun/)
