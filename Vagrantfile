@@ -15,24 +15,32 @@ Vagrant.configure("2") do |config|
       vb.cpus = 2
       vb.memory = 2048
   end
-  config.vm.provision "shell", inline: <<-SHELL
-    apt-get update
-    apt-get install -y unzip gcc runc podman
-    source /home/vagrant/.bashrc
-    # Install golang-1.15.6
-    if [ ! -f "/usr/local/go/bin/go" ]; then
-      curl -s -L -o go1.15.6.linux-amd64.tar.gz https://dl.google.com/go/go1.15.6.linux-amd64.tar.gz
-      sudo tar -C /usr/local -xzf go1.15.6.linux-amd64.tar.gz
-      rm -f go1.15.6.linux-amd64.tar.gz
-    fi
-    # Install nomad-1.0.0
-    if [ ! -f "/usr/bin/nomad" ]; then
-      wget --quiet https://releases.hashicorp.com/nomad/1.0.0/nomad_1.0.0_linux_amd64.zip
-      unzip nomad_1.0.0_linux_amd64.zip -d /usr/bin
-      rm -f nomad_1.0.0_linux_amd64.zip
-    fi
-    # Run setup
-    cd /home/vagrant/go/src/nomad-driver-containerd/vagrant
-    ./setup.sh
-  SHELL
+
+  config.vm.provision "shell" do |p|
+    p.name = "machinesetup.sh"
+    p.path = ".github/machinesetup.sh"
+  end
+
+  config.vm.provision "shell" do |p|
+    p.name = "Install go"
+    p.privileged = false
+    p.inline = <<-SHELL
+      go_version=1.14.12
+      if [ ! -f /usr/local/go/bin/go ]; then
+        curl -sSL -o go.tgz "https://dl.google.com/go/go${go_version}.linux-amd64.tar.gz"
+        sudo tar -C /usr/local -xzf go.tgz
+        rm -f go.tgz
+        echo "export PATH=/usr/local/go/bin:\$PATH" >> $HOME/.bashprofile
+      fi
+
+      . $HOME/.bashprofile
+
+      if ! command -v gcc >/dev/null; then
+        apt-get install -y gcc
+      fi
+
+      cd nomad-driver-podman
+      make lint-deps
+    SHELL
+  end
 end
