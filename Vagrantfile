@@ -1,6 +1,6 @@
 
 # Specify minimum Vagrant version and Vagrant API version
-Vagrant.require_version ">= 1.6.0"
+Vagrant.require_version ">= 2.2.0"
 VAGRANTFILE_API_VERSION = "2"
 
 # Create box
@@ -22,7 +22,6 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "shell" do |p|
-    p.name = "Install go"
     p.privileged = false
     p.inline = <<-SHELL
       go_version=1.14.12
@@ -31,6 +30,17 @@ Vagrant.configure("2") do |config|
         sudo tar -C /usr/local -xzf go.tgz
         rm -f go.tgz
         echo "export PATH=/usr/local/go/bin:\$PATH" >> $HOME/.bash_profile
+      fi
+
+      if ! command -v unzip >/dev/null; then
+        sudo apt-get install -y unzip
+      fi
+
+      nomad_version=1.0.0
+      if [ ! -f /usr/bin/nomad ]; then
+        curl -o nomad.zip -sSL https://releases.hashicorp.com/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip
+        sudo unzip nomad.zip -d /usr/bin
+        rm -f nomad.zip
       fi
 
       . $HOME/.bash_profile
