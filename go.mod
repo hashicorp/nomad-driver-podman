@@ -29,6 +29,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2-0.20200307132014-f49fed0d6290
 	github.com/opencontainers/selinux v1.5.1 // indirect
 	github.com/stretchr/testify v1.6.1
+	golang.org/x/sys v0.0.0-20201214210602-f9fddec55a1e // indirect
 	golang.org/x/tools v0.0.0-20200724022722-7017fd6b1305 // indirect
 	google.golang.org/grpc v1.29.1 // indirect
 
