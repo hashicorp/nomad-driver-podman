@@ -30,13 +30,13 @@ Vagrant.configure("2") do |config|
         curl -sSL -o go.tgz "https://dl.google.com/go/go${go_version}.linux-amd64.tar.gz"
         sudo tar -C /usr/local -xzf go.tgz
         rm -f go.tgz
-        echo "export PATH=/usr/local/go/bin:\$PATH" >> $HOME/.bashprofile
+        echo "export PATH=/usr/local/go/bin:\$PATH" >> $HOME/.bash_profile
       fi
 
-      . $HOME/.bashprofile
+      . $HOME/.bash_profile
 
       if ! command -v gcc >/dev/null; then
-        apt-get install -y gcc
+        sudo apt-get install -y gcc
       fi
 
       cd nomad-driver-podman
