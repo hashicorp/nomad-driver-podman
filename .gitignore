@@ -1,3 +1,5 @@
 build
 nomad-driver-podman
 pkg/
+.vagrant
+*.log

@@ -402,3 +402,39 @@ $ podman ps
 CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
 2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
 ```
+
+### Local Development
+
+#### Requirements
+
+  - Vagrant >= 2.2
+  - VirtualBox >= v6.0
+
+#### Vagrant Environment Setup
+
+```
+# create the vm
+vagrant up
+
+# ssh into the vm
+vagrant ssh
+
+# Build the task driver plugin
+sudo -E ./build.sh
+
+# Copy the build nomad-driver-plugin executable to examples/plugins/
+cp nomad-driver-podman examples/plugins/
+
+# Start Nomad
+nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
+
+nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
+
+# Run a job
+nomad job run examples/redis.nomad
+
+# Verify
+nomad job status redis
+
+sudo podman ps
+```

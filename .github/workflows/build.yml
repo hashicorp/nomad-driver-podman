@@ -13,8 +13,8 @@ jobs:
     - name: Show go version
       run: go version
 
-    - name: Lint Deps
-      run: make lint-deps
+    - name: Install deps
+      run: make deps
 
     - name: Lint
       run: make check
