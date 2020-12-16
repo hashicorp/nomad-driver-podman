@@ -428,7 +428,8 @@ cp nomad-driver-podman examples/plugins/
 # Start Nomad
 nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
 
-nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
+# Run the client as sudo
+sudo nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
 
 # Run a job
 nomad job run examples/redis.nomad

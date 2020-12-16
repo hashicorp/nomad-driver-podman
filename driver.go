@@ -320,7 +320,6 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
-
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
