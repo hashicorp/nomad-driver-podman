@@ -10,6 +10,4 @@ mkdir -p build/test
 # ensure to build in a isolated GOPATH in order to get predictable dependencies
 export GOPATH=$project/build 
 
-go install gotest.tools/gotestsum
-
 go build

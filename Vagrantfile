@@ -40,7 +40,7 @@ Vagrant.configure("2") do |config|
       fi
 
       cd nomad-driver-podman
-      make lint-deps
+      make deps
     SHELL
   end
 end
