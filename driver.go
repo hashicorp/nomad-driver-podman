@@ -767,12 +767,12 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 }
 
 func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig) ([]api.PortMapping, error) {
-	if len(driverCfg.PortMap) > 0 && len(taskCfg.Resources.NomadResources.Networks) == 0 {
-		return nil, fmt.Errorf("Trying to map ports but no network interface is available")
-	}
-
 	if taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0 && len(driverCfg.PortMap) > 0 {
 		return nil, errors.New("Invalid port declaration; use of port_map and ports")
+	}
+
+	if len(driverCfg.PortMap) > 0 && len(taskCfg.Resources.NomadResources.Networks) == 0 {
+		return nil, fmt.Errorf("Trying to map ports but no network interface is available")
 	}
 
 	if taskCfg.Resources.Ports == nil && len(driverCfg.Ports) > 0 {
