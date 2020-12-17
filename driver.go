@@ -440,71 +440,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
-	switch {
-	case cfg.Resources.Ports != nil && len(driverConfig.Ports) > 0:
-		publishedPorts := []api.PortMapping{}
-		for _, port := range driverConfig.Ports {
-			mapping, ok := cfg.Resources.Ports.Get(port)
-			if !ok {
-				return nil, nil, fmt.Errorf("Port %q not found, check network stanza", port)
-			}
-			to := mapping.To
-			if to == 0 {
-				to = mapping.Value
-			}
-			publishedPorts = append(publishedPorts, api.PortMapping{
-				HostIP:        mapping.HostIP,
-				HostPort:      uint16(mapping.Value),
-				ContainerPort: uint16(to),
-				Protocol:      "tcp",
-			})
-			publishedPorts = append(publishedPorts, api.PortMapping{
-				HostIP:        mapping.HostIP,
-				HostPort:      uint16(mapping.Value),
-				ContainerPort: uint16(to),
-				Protocol:      "udp",
-			})
-		}
-		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
-	case len(cfg.Resources.NomadResources.Networks) > 0:
-		// Setup port mapping and exposed ports
-		publishedPorts := []api.PortMapping{}
-		network := cfg.Resources.NomadResources.Networks[0]
-		allPorts := []structs.Port{}
-		allPorts = append(allPorts, network.ReservedPorts...)
-		allPorts = append(allPorts, network.DynamicPorts...)
-
-		for _, port := range allPorts {
-			hostPort := uint16(port.Value)
-			// By default we will map the allocated port 1:1 to the container
-			containerPort := uint16(port.Value)
-
-			// If the user has mapped a port using port_map we'll change it here
-			if mapped, ok := driverConfig.PortMap[port.Label]; ok {
-				containerPort = uint16(mapped)
-			}
-
-			// we map both udp and tcp ports
-			publishedPorts = append(publishedPorts, api.PortMapping{
-				HostIP:        network.IP,
-				HostPort:      hostPort,
-				ContainerPort: containerPort,
-				Protocol:      "tcp",
-			})
-			publishedPorts = append(publishedPorts, api.PortMapping{
-				HostIP:        network.IP,
-				HostPort:      hostPort,
-				ContainerPort: containerPort,
-				Protocol:      "udp",
-			})
-		}
-		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
-	default:
-		d.logger.Debug("no network interfaces are available")
-		if len(driverConfig.PortMap) > 0 {
-			return nil, nil, fmt.Errorf("Trying to map ports but no network interface is available")
-		}
+	portMappings, err := d.portMappings(cfg, driverConfig)
+	if err != nil {
+		return nil, nil, err
 	}
+	createOpts.ContainerNetworkConfig.PortMappings = portMappings
 
 	containerID := ""
 	recoverRunningContainer := false
@@ -823,6 +763,75 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	}
 
 	return binds, nil
+}
+
+func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig) ([]api.PortMapping, error) {
+	switch {
+	case taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0:
+		publishedPorts := []api.PortMapping{}
+		for _, port := range driverCfg.Ports {
+			mapping, ok := taskCfg.Resources.Ports.Get(port)
+			if !ok {
+				return nil, fmt.Errorf("Port %q not found, check network stanza", port)
+			}
+			to := mapping.To
+			if to == 0 {
+				to = mapping.Value
+			}
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        mapping.HostIP,
+				HostPort:      uint16(mapping.Value),
+				ContainerPort: uint16(to),
+				Protocol:      "tcp",
+			})
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        mapping.HostIP,
+				HostPort:      uint16(mapping.Value),
+				ContainerPort: uint16(to),
+				Protocol:      "udp",
+			})
+		}
+		return publishedPorts, nil
+	case len(taskCfg.Resources.NomadResources.Networks) > 0:
+		// Setup port mapping and exposed ports
+		publishedPorts := []api.PortMapping{}
+		network := taskCfg.Resources.NomadResources.Networks[0]
+		allPorts := []structs.Port{}
+		allPorts = append(allPorts, network.ReservedPorts...)
+		allPorts = append(allPorts, network.DynamicPorts...)
+
+		for _, port := range allPorts {
+			hostPort := uint16(port.Value)
+			// By default we will map the allocated port 1:1 to the container
+			containerPort := uint16(port.Value)
+
+			// If the user has mapped a port using port_map we'll change it here
+			if mapped, ok := driverCfg.PortMap[port.Label]; ok {
+				containerPort = uint16(mapped)
+			}
+
+			// we map both udp and tcp ports
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        network.IP,
+				HostPort:      hostPort,
+				ContainerPort: containerPort,
+				Protocol:      "tcp",
+			})
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        network.IP,
+				HostPort:      hostPort,
+				ContainerPort: containerPort,
+				Protocol:      "udp",
+			})
+		}
+		return publishedPorts, nil
+	default:
+		d.logger.Debug("no network interfaces are available")
+		if len(driverCfg.PortMap) > 0 {
+			return nil, fmt.Errorf("Trying to map ports but no network interface is available")
+		}
+	}
+	return nil, nil
 }
 
 // expandPath returns the absolute path of dir, relative to base if dir is relative path.

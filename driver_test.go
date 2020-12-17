@@ -560,7 +560,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 }
 
-func TestPodmanDriver_PortMapV2(t *testing.T) {
+func TestPodmanDriver_Ports(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -573,7 +573,6 @@ func TestPodmanDriver_PortMapV2(t *testing.T) {
 	taskCfg.Ports = []string{
 		"redis",
 		"other",
-		"missing",
 	}
 
 	hostIP := "127.0.0.1"
@@ -657,7 +656,7 @@ func TestPodmanDriver_PortMapV2(t *testing.T) {
 	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
 }
 
-func TestPodmanDriver_PortMapLabelMissingFromGroup(t *testing.T) {
+func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
