@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -770,8 +771,16 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 		return nil, fmt.Errorf("Trying to map ports but no network interface is available")
 	}
 
+	if taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0 && len(driverCfg.PortMap) > 0 {
+		return nil, errors.New("Invalid port declaration; use of port_map and ports")
+	}
+
+	if taskCfg.Resources.Ports == nil && len(driverCfg.Ports) > 0 {
+		return nil, errors.New("No ports defined in network stanza")
+	}
+
 	var publishedPorts []api.PortMapping
-	if taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0 {
+	if len(driverCfg.Ports) > 0 {
 		for _, port := range driverCfg.Ports {
 			mapping, ok := taskCfg.Resources.Ports.Get(port)
 			if !ok {
@@ -794,7 +803,6 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 				Protocol:      "udp",
 			})
 		}
-
 	} else if len(driverCfg.PortMap) > 0 {
 		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
