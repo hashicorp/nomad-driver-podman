@@ -440,13 +440,34 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
-	// Setup port mapping and exposed ports
-	if len(cfg.Resources.NomadResources.Networks) == 0 {
-		d.logger.Debug("no network interfaces are available")
-		if len(driverConfig.PortMap) > 0 {
-			return nil, nil, fmt.Errorf("Trying to map ports but no network interface is available")
+	switch {
+	case cfg.Resources.Ports != nil && len(driverConfig.Ports) > 0:
+		publishedPorts := []api.PortMapping{}
+		for _, port := range driverConfig.Ports {
+			mapping, ok := cfg.Resources.Ports.Get(port)
+			if !ok {
+				return nil, nil, fmt.Errorf("Port %q not found, check network stanza", port)
+			}
+			to := mapping.To
+			if to == 0 {
+				to = mapping.Value
+			}
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        mapping.HostIP,
+				HostPort:      uint16(mapping.Value),
+				ContainerPort: uint16(to),
+				Protocol:      "tcp",
+			})
+			publishedPorts = append(publishedPorts, api.PortMapping{
+				HostIP:        mapping.HostIP,
+				HostPort:      uint16(mapping.Value),
+				ContainerPort: uint16(to),
+				Protocol:      "udp",
+			})
 		}
-	} else {
+		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
+	case len(cfg.Resources.NomadResources.Networks) > 0:
+		// Setup port mapping and exposed ports
 		publishedPorts := []api.PortMapping{}
 		network := cfg.Resources.NomadResources.Networks[0]
 		allPorts := []structs.Port{}
@@ -478,6 +499,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			})
 		}
 		createOpts.ContainerNetworkConfig.PortMappings = publishedPorts
+	default:
+		d.logger.Debug("no network interfaces are available")
+		if len(driverConfig.PortMap) > 0 {
+			return nil, nil, fmt.Errorf("Trying to map ports but no network interface is available")
+		}
 	}
 
 	containerID := ""
