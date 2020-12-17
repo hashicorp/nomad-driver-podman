@@ -3,6 +3,9 @@ job "redis" {
   type        = "service"
 
   group "cache" {
+    network {
+      port "redis" { to = 6379 }
+    }
     task "redis" {
       driver = "podman"
 
@@ -10,18 +13,11 @@ job "redis" {
         foo = "bar"
       }
       config {
-        port_map {
-          redis = 6379
-        }
-
         image = "docker://redis"
-      }
-      resources {
-        network {
-          port "redis" {}
-        }
+        ports = ["redis"]
       }
     }
   }
 }
+
 

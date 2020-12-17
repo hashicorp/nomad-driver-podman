@@ -560,6 +560,250 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 }
 
+func TestPodmanDriver_Ports(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	ports := freeport.MustTake(2)
+	defer freeport.Return(ports)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+
+	taskCfg.Ports = []string{
+		"redis",
+		"other",
+	}
+
+	hostIP := "127.0.0.1"
+
+	resources := createBasicResources()
+	resources.Ports = &structs.AllocatedPorts{
+		{
+			Label:  "redis",
+			HostIP: hostIP,
+			To:     8888,
+			Value:  ports[0],
+		},
+		{
+			Label:  "other",
+			HostIP: hostIP,
+			Value:  ports[1],
+		},
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "ports",
+		AllocID:   uuid.Generate(),
+		Resources: resources,
+	}
+
+	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
+		{
+			IP: "127.0.0.1",
+			DynamicPorts: []structs.Port{
+				{Label: "redis", Value: ports[0]},
+				{Label: "other", Value: ports[1]},
+			},
+		},
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
+	require.Contains(t, inspectData.Config.Env, fmt.Sprintf("NOMAD_PORT_redis=%d", ports[0]))
+
+	require.Len(t, inspectData.HostConfig.PortBindings, 4)
+	expectedPortBindings := map[string][]api.InspectHostPort{
+		fmt.Sprintf("%d/tcp", 8888): []api.InspectHostPort{
+			api.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[0]),
+			},
+		},
+		fmt.Sprintf("%d/udp", 8888): []api.InspectHostPort{
+			api.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[0]),
+			},
+		},
+		fmt.Sprintf("%d/tcp", ports[1]): []api.InspectHostPort{
+			api.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[1]),
+			},
+		},
+		fmt.Sprintf("%d/udp", ports[1]): []api.InspectHostPort{
+			api.InspectHostPort{
+				HostIP:   "127.0.0.1",
+				HostPort: strconv.Itoa(ports[1]),
+			},
+		},
+	}
+	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
+}
+
+func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	ports := freeport.MustTake(1)
+	defer freeport.Return(ports)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+
+	taskCfg.Ports = []string{
+		"redis",
+		"missing",
+	}
+
+	hostIP := "127.0.0.1"
+
+	resources := createBasicResources()
+	resources.Ports = &structs.AllocatedPorts{
+		{
+			Label:  "redis",
+			HostIP: hostIP,
+			Value:  ports[0],
+		},
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "ports",
+		AllocID:   uuid.Generate(),
+		Resources: resources,
+	}
+
+	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
+		{
+			IP: "127.0.0.1",
+			DynamicPorts: []structs.Port{
+				{Label: "redis", Value: ports[0]},
+			},
+		},
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Port \"missing\" not found, check network stanza")
+}
+
+func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	ports := freeport.MustTake(1)
+	defer freeport.Return(ports)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Ports = []string{
+		"redis",
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "ports",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+
+	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
+		{
+			IP: "127.0.0.1",
+			DynamicPorts: []structs.Port{
+				{Label: "redis", Value: ports[0]},
+			},
+		},
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "No ports defined in network stanza")
+}
+
+func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	ports := freeport.MustTake(1)
+	defer freeport.Return(ports)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+
+	taskCfg.Ports = []string{
+		"redis",
+	}
+
+	taskCfg.PortMap = map[string]int{
+		"main":  8888,
+		"REDIS": 6379,
+	}
+
+	hostIP := "127.0.0.1"
+
+	resources := createBasicResources()
+	resources.Ports = &structs.AllocatedPorts{
+		{
+			Label:  "redis",
+			HostIP: hostIP,
+			To:     8888,
+			Value:  ports[0],
+		},
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "ports",
+		AllocID:   uuid.Generate(),
+		Resources: resources,
+	}
+
+	task.Resources.NomadResources.Networks = []*structs.NetworkResource{
+		{
+			IP: "127.0.0.1",
+			DynamicPorts: []structs.Port{
+				{Label: "redis", Value: ports[0]},
+			},
+		},
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid port declaration; use of port_map and ports")
+}
+
 // check --init with default path
 func TestPodmanDriver_Init(t *testing.T) {
 	if !tu.IsCI() {
