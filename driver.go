@@ -766,9 +766,12 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 }
 
 func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig) ([]api.PortMapping, error) {
-	switch {
-	case taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0:
-		publishedPorts := []api.PortMapping{}
+	if len(driverCfg.PortMap) > 0 && len(taskCfg.Resources.NomadResources.Networks) == 0 {
+		return nil, fmt.Errorf("Trying to map ports but no network interface is available")
+	}
+
+	var publishedPorts []api.PortMapping
+	if taskCfg.Resources.Ports != nil && len(driverCfg.Ports) > 0 {
 		for _, port := range driverCfg.Ports {
 			mapping, ok := taskCfg.Resources.Ports.Get(port)
 			if !ok {
@@ -791,10 +794,9 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 				Protocol:      "udp",
 			})
 		}
-		return publishedPorts, nil
-	case len(taskCfg.Resources.NomadResources.Networks) > 0:
-		// Setup port mapping and exposed ports
-		publishedPorts := []api.PortMapping{}
+
+	} else if len(driverCfg.PortMap) > 0 {
+		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
 		allPorts := []structs.Port{}
 		allPorts = append(allPorts, network.ReservedPorts...)
@@ -810,7 +812,6 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 				containerPort = uint16(mapped)
 			}
 
-			// we map both udp and tcp ports
 			publishedPorts = append(publishedPorts, api.PortMapping{
 				HostIP:        network.IP,
 				HostPort:      hostPort,
@@ -824,14 +825,8 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 				Protocol:      "udp",
 			})
 		}
-		return publishedPorts, nil
-	default:
-		d.logger.Debug("no network interfaces are available")
-		if len(driverCfg.PortMap) > 0 {
-			return nil, fmt.Errorf("Trying to map ports but no network interface is available")
-		}
 	}
-	return nil, nil
+	return publishedPorts, nil
 }
 
 // expandPath returns the absolute path of dir, relative to base if dir is relative path.
