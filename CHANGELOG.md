@@ -1,13 +1,21 @@
-## Unreleased
+## 0.2.0
 
 FEATURES:
 
-* config: [[GH-54](https://github.com/hashicorp/nomad-driver-podman/issues/54)] Ability to configure dns server list
-* runtime: [[GH-64](https://github.com/hashicorp/nomad-driver-podman/issues/64)] Add support for SignalTask
+* core: Support for Podman V2 HTTP API [[GH-51](https://github.com/hashicorp/nomad-driver-podman/issues/51)]
+* config: Support for group allocated ports [[GH-74](https://github.com/hashicorp/nomad-driver-podman/issues/74)]
+* config:  Ability to configure dns server list [[GH-54](https://github.com/hashicorp/nomad-driver-podman/issues/54)]
+* runtime:  Add support for SignalTask [[GH-64](https://github.com/hashicorp/nomad-driver-podman/issues/64)]
 
 BUG FIXES:
 
 * [[GH-67](https://github.com/hashicorp/nomad-driver-podman/issues/67)] run container from oci-archive image
+
+
+__BACKWARDS INCOMPATIBILITIES:__
+
+* core: The driver no longer supports varlink communication with Podman
+* config: `port_map` is deprecated in favor or group network ports and labels 
 
 ## 0.1.0
 
