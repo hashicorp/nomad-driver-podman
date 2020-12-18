@@ -1,3 +1,5 @@
+# The following example redis job uses the old deprecated port map
+
 job "redis" {
   datacenters = ["dc1"]
   type        = "service"

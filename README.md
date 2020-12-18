@@ -1,8 +1,6 @@
 Nomad podman Driver
 ==================
 
-
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/hashicorp/nomad-driver-podman/blob/master/LICENSE)
 ![](https://github.com/hashicorp/nomad-driver-podman/workflows/build/badge.svg)
 
 Many thanks to [@towe75](https://github.com/towe75) and [Pascom](https://www.pascom.net/) for contributing
@@ -13,7 +11,7 @@ this plugin to Nomad!
 * Use the jobs driver config to define the image for your container
 * Start/stop containers with default or customer entrypoint and arguments
 * [Nomad runtime environment](https://www.nomadproject.io/docs/runtime/environment.html) is populated
-* Use nomad alloc data in the container.
+* Use Nomad alloc data in the container.
 * Bind mount custom volumes into the container
 * Publish ports
 * Monitor the memory consumption
@@ -22,7 +20,7 @@ this plugin to Nomad!
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html)
 * Utilize podmans --init feature
 * Set username or UID used for the specified command within the container (podman --user option).
-* Fine tune memory usage: standard [nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
+* Fine tune memory usage: standard [Nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
 * Supports rootless containers with cgroup V2
 
 
@@ -40,17 +38,17 @@ cd nomad-driver-podman
 
 ## Runtime dependencies
 
-- [Nomad](https://www.nomadproject.io/downloads.html) 0.9+
+- [Nomad](https://www.nomadproject.io/downloads.html) 0.12.9+
 - Linux host with `podman` installed
 - For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
 You need a 2.x podman binary and a system socket activation unit,
 see https://www.redhat.com/sysadmin/podmans-new-rest-api
 
-nomad agent, nomad-driver-podman and podman will reside on the same host, so you
+Nomad agent, nomad-driver-podman and podman will reside on the same host, so you
 do not have to worry about the ssh aspects of the podman api.
 
-Ensure that nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
+Ensure that Nomad can find the plugin, see [plugin_dir](https://www.nomadproject.io/docs/configuration/index.html#plugin_dir)
 
 ## Driver Configuration
 
@@ -287,23 +285,21 @@ job "redis" {
   type        = "service"
 
   group "redis" {
+    network {
+      port "redis" { to = 6379 }
+    }
+
     task "redis" {
       driver = "podman"
 
         config {
           image = "docker://redis"
-          port_map {
-              redis = 6379
-          }
+          ports = ["redis"]
         }
 
       resources {
         cpu    = 500
         memory = 256
-        network {
-          mbits = 20
-          port "redis" {}
-        }
       }
     }
   }
@@ -370,25 +366,20 @@ job "example" {
       delay    = "15s"
       mode     = "fail"
     }
+    network {
+      port "redis" { to = 6379 }
+    }
     task "redis" {
       driver = "podman"
 
       config {
         image = "redis"
-
-        port_map {
-          db = 6379
-        }
+        ports = ["redis"]
       }
 
       resources {
         cpu    = 500 # 500 MHz
         memory = 256 # 256MB
-
-        network {
-          # mbits = 10
-          port "db" {}
-        }
       }
     }
   }
