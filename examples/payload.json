@@ -1,0 +1,8 @@
+{
+  "AttachStdin": false,
+  "AttachStdout": true,
+  "AttachStderr": true,
+  "Cmd": ["sh"],
+  "Privileged": true,
+  "Tty": true
+}

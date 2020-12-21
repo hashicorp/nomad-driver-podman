@@ -12,8 +12,10 @@ replace (
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 	github.com/container-storage-interface/spec v1.2.0 // indirect
 	github.com/containernetworking/plugins v0.8.5 // indirect
+	github.com/docker/docker v17.12.0-ce-rc1.0.20200330121334-7f8b4b621b5d+incompatible
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/google/go-cmp v0.5.0 // indirect

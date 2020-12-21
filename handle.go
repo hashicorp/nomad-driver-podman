@@ -141,7 +141,6 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 }
 
 func (h *TaskHandle) runContainerMonitor() {
-
 	timer := time.NewTimer(0)
 	interval := time.Second * 1
 	h.logger.Debug("Monitoring container", "container", h.containerID)
@@ -209,3 +208,46 @@ func (h *TaskHandle) runContainerMonitor() {
 		h.stateLock.Unlock()
 	}
 }
+
+func (h *TaskHandle) Exec(ctx context.Context, cmd string, args []string) (*drivers.ExecTaskResult, error) {
+	fullCmd := make([]string, len(args)+1)
+	fullCmd[0] = cmd
+	copy(fullCmd[1:], args)
+
+	createExecOpts := api.ExecCreateConfig{}
+	createExecOpts.AttachStderr = true
+	createExecOpts.AttachStdout = true
+	createExecOpts.AttachStdin = false
+	createExecOpts.Tty = false
+	createExecOpts.Cmd = fullCmd
+
+	createResp, err := h.driver.podman.CreateExec(ctx, h.containerID, createExecOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &drivers.ExecTaskResult{Stdout: []byte(createResp.ID)}, nil
+}
+
+// execResult := &drivers.ExecTaskResult{ExitResult: &drivers.ExitResult{}}
+// stdout, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+// stderr, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+// startOpts := docker.StartExecOptions{
+// 	Detach:       false,
+// 	Tty:          false,
+// 	OutputStream: stdout,
+// 	ErrorStream:  stderr,
+// 	Context:      ctx,
+// }
+// if err := client.StartExec(exec.ID, startOpts); err != nil {
+// 	return nil, err
+// }
+// execResult.Stdout = stdout.Bytes()
+// execResult.Stderr = stderr.Bytes()
+// res, err := client.InspectExec(exec.ID)
+// if err != nil {
+// 	return execResult, err
+// }
+
+// execResult.ExitResult.ExitCode = res.ExitCode
+// return execResult, nil

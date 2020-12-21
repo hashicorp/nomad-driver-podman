@@ -701,7 +701,19 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 
 // ExecTask function is used by the Nomad client to execute commands inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
-	return nil, fmt.Errorf("Podman driver does not support exec")
+	task, ok := d.tasks.Get(taskID)
+	if !ok {
+		return nil, drivers.ErrTaskNotFound
+	}
+
+	if len(cmd) == 0 {
+		return nil, fmt.Errorf("cmd is required, but was empty")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return task.Exec(ctx, cmd[0], cmd[1:])
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
