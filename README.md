@@ -423,7 +423,7 @@ nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
 sudo nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
 
 # Run a job
-nomad job run examples/redis.nomad
+nomad job run examples/redis_ports.nomad
 
 # Verify
 nomad job status redis
