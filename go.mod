@@ -21,6 +21,7 @@ require (
 	github.com/hashicorp/nomad v1.0.0
 	github.com/hashicorp/nomad/api v0.0.0-20201208134522-a480eed0815c
 	github.com/mattn/go-colorable v0.1.7 // indirect
+	github.com/mitchellh/go-linereader v0.0.0-20190213213312-1b945b3263eb
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200728170252-4d89ac9fbff6

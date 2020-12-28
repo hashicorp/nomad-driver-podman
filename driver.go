@@ -228,6 +228,11 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
 			d.systemInfo = info
 			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+			err = d.runStatsStreamer()
+			if err != nil {
+				d.logger.Error("Could not open stats stream", "err", err)
+				health = drivers.HealthStateUnhealthy
+			}
 		}
 	}
 
@@ -236,6 +241,41 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		Health:            health,
 		HealthDescription: desc,
 	}
+}
+
+func (d *Driver) runStatsStreamer() error {
+	var err error
+	var statsChannel chan api.ContainerStats
+
+	statsChannel, err = d.podman.ContainerStatsStream(d.ctx)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			select {
+			case <-d.ctx.Done():
+				return
+			case stats, ok := <-statsChannel:
+				if !ok {
+					// re-run api request on http timeout/connection loss
+					statsChannel, err = d.podman.ContainerStatsStream(d.ctx)
+					if err != nil {
+						// throttle retries on error
+						d.logger.Warn("Failed to rerun stats stream api request", "err", err)
+						time.Sleep(time.Second * 3)
+					}
+					d.logger.Debug("Rerun stats stream")
+					continue
+				}
+				d.logger.Info("GOT", "stats", stats)
+			}
+		}
+
+	}()
+
+	return nil
 }
 
 // RecoverTask detects running tasks when nomad client or task driver is restarted.

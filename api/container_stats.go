@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/mitchellh/go-linereader"
 )
 
 var ContainerNotFound = errors.New("No such Container")
@@ -44,4 +46,52 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 	}
 
 	return stats, nil
+}
+
+// ContainerStatsStream streams stats for all containers
+func (c *API) ContainerStatsStream(ctx context.Context) (chan ContainerStats, error) {
+
+	res, err := c.Get(ctx, "/v1.0.0/libpod/containers/stats?stream=true")
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+	}
+
+	statsChannel := make(chan ContainerStats, 5)
+	lr := linereader.New(res.Body)
+
+	go func() {
+		c.logger.Info("Running stats stream")
+		defer func() {
+			res.Body.Close()
+			close(statsChannel)
+			c.logger.Info("Stopped stats stream")
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				c.logger.Debug("Stopping stats stream")
+				return
+			case line, ok := <-lr.Ch:
+				if !ok {
+					c.logger.Warn("Stats reader channel was closed")
+					return
+				}
+				var statsReport ContainerStatsReport
+				json.Unmarshal([]byte(line), &statsReport)
+				if statsReport.Error != nil {
+					c.logger.Error("Stats stream is broken", "error", statsReport.Error)
+					return
+				}
+				for _, stat := range statsReport.Stats {
+					statsChannel <- stat
+				}
+			}
+		}
+	}()
+
+	return statsChannel, nil
 }
