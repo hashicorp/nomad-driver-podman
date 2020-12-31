@@ -243,6 +243,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	}
 }
 
+// stream stats from a global podman listener into task handles
 func (d *Driver) runStatsStreamer() error {
 	var err error
 	var statsChannel chan api.ContainerStats
@@ -257,7 +258,7 @@ func (d *Driver) runStatsStreamer() error {
 			select {
 			case <-d.ctx.Done():
 				return
-			case stats, ok := <-statsChannel:
+			case containerStats, ok := <-statsChannel:
 				if !ok {
 					// re-run api request on http timeout/connection loss
 					statsChannel, err = d.podman.ContainerStatsStream(d.ctx)
@@ -269,10 +270,11 @@ func (d *Driver) runStatsStreamer() error {
 					d.logger.Debug("Rerun stats stream")
 					continue
 				}
-				d.logger.Info("GOT", "stats", stats)
+				if !d.tasks.UpdateContainerStats(containerStats) {
+					d.logger.Debug("Ignore stats for unknown container", "container", containerStats.Name)
+				}
 			}
 		}
-
 	}()
 
 	return nil

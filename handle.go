@@ -15,7 +15,7 @@ import (
 
 var (
 	measuredCPUStats = []string{"System Mode", "User Mode", "Percent"}
-	measuredMemStats = []string{"Usage", "Max Usage"}
+	measuredMemStats = []string{"Usage"}
 )
 
 // TaskHandle is the podman specific handle for exactly one container
@@ -39,7 +39,7 @@ type TaskHandle struct {
 
 	removeContainerOnExit bool
 
-	containerStats api.Stats
+	containerStats api.ContainerStats
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -108,10 +108,10 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		t := time.Now()
 
 		//FIXME implement cpu stats correctly
-		totalPercent := h.totalCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.TotalUsage))
+		totalPercent := h.containerStats.CPU
 		cs := &drivers.CpuStats{
-			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.UsageInKernelmode)),
-			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.UsageInUsermode)),
+			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.CPUSystemNano)),
+			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.CPUNano)),
 			Percent:    totalPercent,
 			TotalTicks: h.systemCPUStats.TicksConsumed(totalPercent),
 			Measured:   measuredCPUStats,
@@ -120,9 +120,8 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
 
 		ms := &drivers.MemoryStats{
-			MaxUsage: h.containerStats.MemoryStats.MaxUsage,
-			Usage:    h.containerStats.MemoryStats.Usage,
-			RSS:      h.containerStats.MemoryStats.Usage,
+			Usage:    h.containerStats.MemUsage,
+			RSS:      h.containerStats.MemUsage,
 			Measured: measuredMemStats,
 		}
 		h.stateLock.Unlock()
@@ -160,7 +159,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			timer.Reset(interval)
 		}
 
-		containerStats, statsErr := h.driver.podman.ContainerStats(h.driver.ctx, h.containerID)
+		_, statsErr := h.driver.podman.ContainerStats(h.driver.ctx, h.containerID)
 		if statsErr != nil {
 			gone := false
 			if errors.Is(statsErr, api.ContainerNotFound) {
@@ -201,11 +200,5 @@ func (h *TaskHandle) runContainerMonitor() {
 			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", statsErr))
 			continue
 		}
-
-		h.stateLock.Lock()
-		// keep last known containerStats in handle to
-		// have it available in the stats emitter
-		h.containerStats = containerStats
-		h.stateLock.Unlock()
 	}
 }
