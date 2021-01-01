@@ -573,11 +573,28 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		containerID = createResponse.Id
 	}
 
+	h := &TaskHandle{
+		containerID: containerID,
+		driver:      d,
+		taskConfig:  cfg,
+		procState:   drivers.TaskStateRunning,
+		startedAt:   time.Now().Round(time.Millisecond),
+		logger:      d.logger.Named("podmanHandle"),
+
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
+	}
+	d.tasks.Set(cfg.ID, h)
+
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
 		if err := d.podman.ContainerDelete(d.ctx, containerID, true, true); err != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
+		d.tasks.Delete(cfg.ID)
 	}
 
 	if !recoverRunningContainer {
@@ -600,21 +617,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		AutoAdvertise: true,
 	}
 
-	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger.Named("podmanHandle"),
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
-		removeContainerOnExit: d.config.GC.Container,
-	}
-
 	driverState := TaskState{
 		ContainerID: containerID,
 		TaskConfig:  cfg,
@@ -628,7 +630,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to set driver state: %v", err)
 	}
 
-	d.tasks.Set(cfg.ID, h)
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil

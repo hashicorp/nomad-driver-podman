@@ -14,9 +14,10 @@ import (
 )
 
 type API struct {
-	baseUrl    string
-	httpClient *http.Client
-	logger     hclog.Logger
+	baseUrl          string
+	httpClient       *http.Client
+	httpStreamClient *http.Client
+	logger           hclog.Logger
 }
 
 type ClientConfig struct {
@@ -49,6 +50,8 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac.httpClient = &http.Client{
 		Timeout: config.HttpTimeout,
 	}
+	// we do not want a timeout for streaming requests.
+	ac.httpStreamClient = &http.Client{}
 	if strings.HasPrefix(baseUrl, "unix:") {
 		ac.baseUrl = "http://u"
 		path := strings.TrimPrefix(baseUrl, "unix:")
@@ -57,6 +60,7 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 				return net.Dial("unix", path)
 			},
 		}
+		ac.httpStreamClient.Transport = ac.httpClient.Transport
 	} else {
 		ac.baseUrl = baseUrl
 	}
@@ -75,6 +79,14 @@ func (c *API) Get(ctx context.Context, path string) (*http.Response, error) {
 		return nil, err
 	}
 	return c.Do(req)
+}
+
+func (c *API) GetStream(ctx context.Context, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseUrl+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.httpStreamClient.Do(req)
 }
 
 func (c *API) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {

@@ -51,7 +51,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 // ContainerStatsStream streams stats for all containers
 func (c *API) ContainerStatsStream(ctx context.Context) (chan ContainerStats, error) {
 
-	res, err := c.Get(ctx, "/v1.0.0/libpod/containers/stats?stream=true")
+	res, err := c.GetStream(ctx, "/v1.0.0/libpod/containers/stats?stream=true")
 	if err != nil {
 		return nil, err
 	}
