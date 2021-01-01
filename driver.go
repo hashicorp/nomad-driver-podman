@@ -115,7 +115,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	return &Driver{
 		eventer:        eventer.NewEventer(ctx, logger),
 		config:         &PluginConfig{},
-		tasks:          newTaskStore(),
+		tasks:          newTaskStore(logger),
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
@@ -230,7 +230,12 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
 			err = d.runStatsStreamer()
 			if err != nil {
-				d.logger.Error("Could not open stats stream", "err", err)
+				d.logger.Error("Could not start stats stream", "err", err)
+				health = drivers.HealthStateUnhealthy
+			}
+			err = d.runEventStreamer()
+			if err != nil {
+				d.logger.Error("Could not start event stream", "err", err)
 				health = drivers.HealthStateUnhealthy
 			}
 		}
@@ -280,6 +285,41 @@ func (d *Driver) runStatsStreamer() error {
 	return nil
 }
 
+// stream events from a global podman listener into task handles
+func (d *Driver) runEventStreamer() error {
+	var err error
+	var eventsChannel chan interface{}
+
+	eventsChannel, err = d.podman.LibpodEventStream(d.ctx)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			select {
+			case <-d.ctx.Done():
+				return
+			case event, ok := <-eventsChannel:
+				if !ok {
+					// re-run api request on http timeout/connection loss
+					eventsChannel, err = d.podman.LibpodEventStream(d.ctx)
+					if err != nil {
+						// throttle retries on error
+						d.logger.Warn("Failed to rerun event stream api request", "err", err)
+						time.Sleep(time.Second * 3)
+					}
+					d.logger.Debug("Rerun event stream")
+					continue
+				}
+				d.tasks.HandleLibpodEvent(event)
+			}
+		}
+	}()
+
+	return nil
+}
+
 // RecoverTask detects running tasks when nomad client or task driver is restarted.
 // When a driver is restarted it is not expected to persist any internal state to disk.
 // To support this, Nomad will attempt to recover a task that was previously started
@@ -312,7 +352,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		taskConfig:  taskState.TaskConfig,
 		procState:   drivers.TaskStateUnknown,
 		startedAt:   taskState.StartedAt,
-		exitResult:  &drivers.ExitResult{},
 		logger:      d.logger.Named("podmanHandle"),
 
 		totalCPUStats:  stats.NewCpuStats(),
@@ -350,7 +389,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	d.tasks.Set(taskState.TaskConfig.ID, h)
 
-	go h.runContainerMonitor()
 	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
 
 	return nil
@@ -567,7 +605,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		driver:      d,
 		taskConfig:  cfg,
 		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
 		startedAt:   time.Now().Round(time.Millisecond),
 		logger:      d.logger.Named("podmanHandle"),
 
@@ -592,9 +629,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	d.tasks.Set(cfg.ID, h)
-
-	go h.runContainerMonitor()
-
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil
@@ -661,6 +695,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 // DestroyTask function cleans up and removes a task that has terminated.
 // If force is set to true, the driver must destroy the task even if it is still running.
 func (d *Driver) DestroyTask(taskID string, force bool) error {
+	d.logger.Info("Destroy task", "taskID", taskID)
 	handle, ok := d.tasks.Get(taskID)
 	if !ok {
 		return drivers.ErrTaskNotFound

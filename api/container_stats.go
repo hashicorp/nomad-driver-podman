@@ -64,11 +64,11 @@ func (c *API) ContainerStatsStream(ctx context.Context) (chan ContainerStats, er
 	lr := linereader.New(res.Body)
 
 	go func() {
-		c.logger.Info("Running stats stream")
+		c.logger.Debug("Running stats stream")
 		defer func() {
 			res.Body.Close()
 			close(statsChannel)
-			c.logger.Info("Stopped stats stream")
+			c.logger.Debug("Stopped stats stream")
 		}()
 		for {
 			select {
@@ -77,7 +77,7 @@ func (c *API) ContainerStatsStream(ctx context.Context) (chan ContainerStats, er
 				return
 			case line, ok := <-lr.Ch:
 				if !ok {
-					c.logger.Warn("Stats reader channel was closed")
+					c.logger.Debug("Stats reader channel was closed")
 					return
 				}
 				var statsReport ContainerStatsReport
