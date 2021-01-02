@@ -165,5 +165,4 @@ func (h *TaskHandle) onContainerDied(event api.ContainerDiedEvent) {
 	h.stateLock.Unlock()
 	// unblock exitWatcher go routine
 	close(h.diedChannel)
-	return
 }

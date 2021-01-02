@@ -81,7 +81,10 @@ func (c *API) ContainerStatsStream(ctx context.Context) (chan ContainerStats, er
 					return
 				}
 				var statsReport ContainerStatsReport
-				json.Unmarshal([]byte(line), &statsReport)
+				if jerr := json.Unmarshal([]byte(line), &statsReport); jerr != nil {
+					c.logger.Error("Unable to unmarshal statsreport", "err", err)
+					return
+				}
 				if statsReport.Error != nil {
 					c.logger.Error("Stats stream is broken", "error", statsReport.Error)
 					return

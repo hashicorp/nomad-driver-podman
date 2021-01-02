@@ -70,13 +70,11 @@ func (ts *taskStore) UpdateContainerStats(containerStats api.ContainerStats) boo
 
 // Manage task handle state by consuming libpod events
 func (ts *taskStore) HandleLibpodEvent(e interface{}) {
-	switch e.(type) {
+	switch event := e.(type) {
 	case api.ContainerDiedEvent:
-		event, _ := e.(api.ContainerDiedEvent)
 		taskHandle, ok := ts.GetByContainerId(event.ID)
 		if ok {
 			taskHandle.onContainerDied(event)
 		}
 	}
-
 }
