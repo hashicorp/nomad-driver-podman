@@ -23,10 +23,10 @@ type TaskHandle struct {
 	logger      hclog.Logger
 	driver      *Driver
 
-	totalCPUStats  *stats.CpuStats
-	userCPUStats   *stats.CpuStats
-	systemCPUStats *stats.CpuStats
-	diedChannel    chan bool
+	diedChannel chan bool
+
+	// receive container stats from global podman stats streamer
+	containerStatsChannel chan api.ContainerStats
 
 	// stateLock syncs access to all fields below
 	stateLock sync.RWMutex
@@ -38,8 +38,6 @@ type TaskHandle struct {
 	exitResult  *drivers.ExitResult
 
 	removeContainerOnExit bool
-
-	containerStats api.ContainerStats
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -95,45 +93,50 @@ func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drive
 
 func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
 	timer := time.NewTimer(0)
+
+	containerStats := api.ContainerStats{}
+	userCPUStats := stats.NewCpuStats()
+	systemCPUStats := stats.NewCpuStats()
+
 	h.logger.Debug("Starting statsEmitter", "container", h.containerID)
 	for {
 		select {
+
 		case <-ctx.Done():
 			h.logger.Debug("Stopping statsEmitter", "container", h.containerID)
 			return
+
+		case containerStats = <-h.containerStatsChannel:
+			continue
+
 		case <-timer.C:
 			timer.Reset(interval)
-		}
 
-		h.stateLock.Lock()
-		t := time.Now()
+			totalPercent := containerStats.CPU
 
-		totalPercent := h.containerStats.CPU
-		cs := &drivers.CpuStats{
-			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.CPUSystemNano)),
-			UserMode:   h.userCPUStats.Percent(float64(h.containerStats.CPUNano)),
-			Percent:    totalPercent,
-			TotalTicks: h.systemCPUStats.TicksConsumed(totalPercent),
-			Measured:   measuredCPUStats,
-		}
+			cs := &drivers.CpuStats{
+				SystemMode: systemCPUStats.Percent(float64(containerStats.CPUSystemNano)),
+				UserMode:   userCPUStats.Percent(float64(containerStats.CPUNano)),
+				Percent:    totalPercent,
+				TotalTicks: systemCPUStats.TicksConsumed(totalPercent),
+				Measured:   measuredCPUStats,
+			}
 
-		ms := &drivers.MemoryStats{
-			Usage:    h.containerStats.MemUsage,
-			RSS:      h.containerStats.MemUsage,
-			Measured: measuredMemStats,
-		}
-		h.stateLock.Unlock()
+			ms := &drivers.MemoryStats{
+				Usage:    containerStats.MemUsage,
+				RSS:      containerStats.MemUsage,
+				Measured: measuredMemStats,
+			}
 
-		// update uasge
-		usage := drivers.TaskResourceUsage{
-			ResourceUsage: &drivers.ResourceUsage{
-				CpuStats:    cs,
-				MemoryStats: ms,
-			},
-			Timestamp: t.UTC().UnixNano(),
+			// send stats to nomad
+			statsChannel <- &drivers.TaskResourceUsage{
+				ResourceUsage: &drivers.ResourceUsage{
+					CpuStats:    cs,
+					MemoryStats: ms,
+				},
+				Timestamp: time.Now().UTC().UnixNano(),
+			}
 		}
-		// send stats to nomad
-		statsChannel <- &usage
 	}
 }
 

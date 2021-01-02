@@ -15,7 +15,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/version"
-	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
 	nstructs "github.com/hashicorp/nomad/nomad/structs"
@@ -354,10 +353,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		startedAt:   taskState.StartedAt,
 		logger:      d.logger.Named("podmanHandle"),
 
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
 		removeContainerOnExit: d.config.GC.Container,
 	}
 
@@ -580,10 +575,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		procState:   drivers.TaskStateRunning,
 		startedAt:   time.Now().Round(time.Millisecond),
 		logger:      d.logger.Named("podmanHandle"),
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
 
 		removeContainerOnExit: d.config.GC.Container,
 	}

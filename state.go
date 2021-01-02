@@ -28,6 +28,7 @@ func (ts *taskStore) Set(id string, handle *TaskHandle) {
 	defer ts.lock.Unlock()
 	handle.exitResult = new(drivers.ExitResult)
 	handle.diedChannel = make(chan bool)
+	handle.containerStatsChannel = make(chan api.ContainerStats, 5)
 	ts.taskIdToHandle[id] = handle
 	ts.containerIdToHandle[handle.containerID] = handle
 }
@@ -56,14 +57,11 @@ func (ts *taskStore) Delete(id string) {
 	delete(ts.taskIdToHandle, id)
 }
 
-// keep last known containerStats in handle to
-// have it available in the stats emitter
+// UpdateContainerStats forwards containerStats to handle
 func (ts *taskStore) UpdateContainerStats(containerStats api.ContainerStats) bool {
 	taskHandle, ok := ts.GetByContainerId(containerStats.ContainerID)
 	if ok {
-		taskHandle.stateLock.Lock()
-		taskHandle.containerStats = containerStats
-		taskHandle.stateLock.Unlock()
+		taskHandle.containerStatsChannel <- containerStats
 	}
 	return ok
 }
