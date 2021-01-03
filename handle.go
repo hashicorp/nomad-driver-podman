@@ -28,8 +28,6 @@ type TaskHandle struct {
 	// receive container stats from global podman stats streamer
 	containerStatsChannel chan api.ContainerStats
 
-	statsEmitterRunning bool
-
 	// stateLock syncs access to all fields below
 	stateLock sync.RWMutex
 
@@ -40,6 +38,7 @@ type TaskHandle struct {
 	exitResult  *drivers.ExitResult
 
 	removeContainerOnExit bool
+	statsEmitterRunning   bool
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
