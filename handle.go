@@ -28,6 +28,8 @@ type TaskHandle struct {
 	// receive container stats from global podman stats streamer
 	containerStatsChannel chan api.ContainerStats
 
+	statsEmitterRunning bool
+
 	// stateLock syncs access to all fields below
 	stateLock sync.RWMutex
 
@@ -91,7 +93,7 @@ func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drive
 	}
 }
 
-func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
+func (h *TaskHandle) runStatsEmitter(ctx context.Context, taskResourceChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
 	timer := time.NewTimer(0)
 
 	containerStats := api.ContainerStats{}
@@ -106,7 +108,10 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 			h.logger.Debug("Stopping statsEmitter", "container", h.containerID)
 			return
 
-		case containerStats = <-h.containerStatsChannel:
+		case s := <-h.containerStatsChannel:
+			// keep latest known container stats in this go routine
+			// and convert/emit it to nomad based on interval
+			containerStats = s
 			continue
 
 		case <-timer.C:
@@ -129,7 +134,7 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 			}
 
 			// send stats to nomad
-			statsChannel <- &drivers.TaskResourceUsage{
+			taskResourceChannel <- &drivers.TaskResourceUsage{
 				ResourceUsage: &drivers.ResourceUsage{
 					CpuStats:    cs,
 					MemoryStats: ms,
@@ -140,8 +145,8 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 	}
 }
 
-func (h *TaskHandle) onContainerDied(event api.ContainerDiedEvent) {
-	h.logger.Debug("Container is not running anymore", "event", event)
+func (h *TaskHandle) onContainerDied() {
+	h.logger.Debug("Container is not running anymore")
 	// container was stopped, get exit code and other post mortem infos
 	inspectData, err := h.driver.podman.ContainerInspect(h.driver.ctx, h.containerID)
 	h.stateLock.Lock()

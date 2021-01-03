@@ -91,6 +91,7 @@ func (c *API) LibpodEventStream(ctx context.Context) (chan interface{}, error) {
 					// no need to stop the stream, maybe we can parse the next event
 					continue
 				}
+				c.logger.Trace("libpod event", "event", line)
 				if podmanEvent.Type == "container" {
 					var containerEvent ContainerEvent
 					err := json.Unmarshal([]byte(line), &containerEvent)

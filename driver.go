@@ -75,9 +75,6 @@ type Driver struct {
 	// nomadConfig is the client config from nomad
 	nomadConfig *base.ClientDriverConfig
 
-	// tasks is the in memory datastore mapping taskIDs to rawExecDriverHandles
-	tasks *taskStore
-
 	// ctx is the context for the driver. It is passed to other subsystems to
 	// coordinate shutdown
 	ctx context.Context
@@ -96,6 +93,9 @@ type Driver struct {
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
 	cgroupV2 bool
+
+	// state actor inbox
+	stateActorChannel chan interface{}
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -112,12 +112,27 @@ type TaskState struct {
 func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Driver{
-		eventer:        eventer.NewEventer(ctx, logger),
-		config:         &PluginConfig{},
-		tasks:          newTaskStore(logger),
-		ctx:            ctx,
-		signalShutdown: cancel,
-		logger:         logger.Named(pluginName),
+		eventer:           eventer.NewEventer(ctx, logger),
+		config:            &PluginConfig{},
+		ctx:               ctx,
+		signalShutdown:    cancel,
+		logger:            logger.Named(pluginName),
+		stateActorChannel: make(chan interface{}, 5),
+	}
+}
+
+// NewTaskHandle creates a new TaskHandle struct
+func (d *Driver) NewTaskHandle(cfg *drivers.TaskConfig) *TaskHandle {
+	return &TaskHandle{
+		driver:                d,
+		taskConfig:            cfg,
+		logger:                d.logger.Named("podmanHandle"),
+		procState:             drivers.TaskStateUnknown,
+		startedAt:             time.Now().Round(time.Millisecond),
+		exitResult:            new(drivers.ExitResult),
+		diedChannel:           make(chan bool),
+		containerStatsChannel: make(chan api.ContainerStats, 5),
+		removeContainerOnExit: d.config.GC.Container,
 	}
 }
 
@@ -215,8 +230,6 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	if err != nil {
 		d.logger.Error("Could not get podman info", "err", err)
 	} else {
-		// yay! we can enable the driver
-		health = drivers.HealthStateHealthy
 		desc = "ready"
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
@@ -227,16 +240,8 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
 			d.systemInfo = info
 			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
-			err = d.runStatsStreamer()
-			if err != nil {
-				d.logger.Error("Could not start stats stream", "err", err)
-				health = drivers.HealthStateUnhealthy
-			}
-			err = d.runEventStreamer()
-			if err != nil {
-				d.logger.Error("Could not start event stream", "err", err)
-				health = drivers.HealthStateUnhealthy
-			}
+			// run some final initialization after first podman contact
+			health = d.onInit()
 		}
 	}
 
@@ -245,6 +250,28 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		Health:            health,
 		HealthDescription: desc,
 	}
+}
+
+// onInit is called after first successful podman api request.
+func (d *Driver) onInit() drivers.HealthState {
+	var err error
+
+	err = d.runStatsStreamer()
+	if err != nil {
+		d.logger.Error("Could not start stats stream", "err", err)
+		return drivers.HealthStateHealthy
+	}
+	err = d.runEventStreamer()
+	if err != nil {
+		d.logger.Error("Could not start event stream", "err", err)
+		return drivers.HealthStateHealthy
+	}
+	err = runStateActor(d.ctx, d.stateActorChannel, d.logger.Named("stateActor"))
+	if err != nil {
+		return drivers.HealthStateUnhealthy
+	}
+	// yay! we can enable the driver
+	return drivers.HealthStateHealthy
 }
 
 // stream stats from a global podman listener into task handles
@@ -274,9 +301,7 @@ func (d *Driver) runStatsStreamer() error {
 					d.logger.Debug("Rerun stats stream")
 					continue
 				}
-				if !d.tasks.UpdateContainerStats(containerStats) {
-					d.logger.Debug("Ignore stats for unknown container", "container", containerStats.Name)
-				}
+				d.stateActorChannel <- containerStats
 			}
 		}
 	}()
@@ -311,7 +336,7 @@ func (d *Driver) runEventStreamer() error {
 					d.logger.Debug("Rerun event stream")
 					continue
 				}
-				d.tasks.HandleLibpodEvent(event)
+				d.stateActorChannel <- event
 			}
 		}
 	}()
@@ -329,7 +354,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		return fmt.Errorf("error: handle cannot be nil")
 	}
 
-	if _, ok := d.tasks.Get(handle.Config.ID); ok {
+	if _, err := d.GetTaskHandle(handle.Config.ID); err == drivers.ErrTaskNotFound {
 		return nil
 	}
 
@@ -345,16 +370,9 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		return nil
 	}
 
-	h := &TaskHandle{
-		containerID: taskState.ContainerID,
-		driver:      d,
-		taskConfig:  taskState.TaskConfig,
-		procState:   drivers.TaskStateUnknown,
-		startedAt:   taskState.StartedAt,
-		logger:      d.logger.Named("podmanHandle"),
-
-		removeContainerOnExit: d.config.GC.Container,
-	}
+	h := d.NewTaskHandle(taskState.TaskConfig)
+	h.containerID = taskState.ContainerID
+	h.startedAt = taskState.StartedAt
 
 	if inspectData.State.Running {
 		d.logger.Info("Recovered a still running container", "container", inspectData.State.Pid)
@@ -381,8 +399,14 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID)
 		h.procState = drivers.TaskStateUnknown
 	}
-
-	d.tasks.Set(taskState.TaskConfig.ID, h)
+	msg := TaskStartedMsg{
+		TaskID:     taskState.TaskConfig.ID,
+		TaskHandle: h,
+		Done:       make(chan bool),
+	}
+	d.stateActorChannel <- msg
+	// wait until actor processed the request
+	<-msg.Done
 
 	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
 
@@ -396,7 +420,8 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
-	if _, ok := d.tasks.Get(cfg.ID); ok {
+
+	if _, err := d.GetTaskHandle(cfg.ID); err != drivers.ErrTaskNotFound {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
 
@@ -568,24 +593,25 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		containerID = createResponse.Id
 	}
 
-	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger.Named("podmanHandle"),
+	h := d.NewTaskHandle(cfg)
+	h.containerID = containerID
+	h.procState = drivers.TaskStateRunning
 
-		removeContainerOnExit: d.config.GC.Container,
+	msg := TaskStartedMsg{
+		TaskID:     cfg.ID,
+		TaskHandle: h,
+		Done:       make(chan bool),
 	}
-	d.tasks.Set(cfg.ID, h)
+	d.stateActorChannel <- msg
+	// wait until actor processed the request
+	<-msg.Done
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
 		if err := d.podman.ContainerDelete(d.ctx, containerID, true, true); err != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
-		d.tasks.Delete(cfg.ID)
+		d.stateActorChannel <- TaskDeletedMsg{cfg.ID}
 	}
 
 	if !recoverRunningContainer {
@@ -657,12 +683,13 @@ func memoryInBytes(strmem string) (int64, error) {
 // If WaitTask is called after DestroyTask, it should return drivers.ErrTaskNotFound as no task state should exist after DestroyTask is called.
 func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.ExitResult, error) {
 	d.logger.Debug("WaitTask called", "task", taskID)
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
-		return nil, drivers.ErrTaskNotFound
-	}
 	ch := make(chan *drivers.ExitResult)
-	go handle.runExitWatcher(ctx, ch)
+	// forward the request into the taskHandle
+	d.stateActorChannel <- WaitTaskMsg{
+		TaskID:            taskID,
+		Ctx:               ctx,
+		ExitResultChannel: ch,
+	}
 	return ch, nil
 }
 
@@ -671,12 +698,12 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 // StopTask does not clean up resources of the task or remove it from the driver's internal state.
 func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) error {
 	d.logger.Info("Stopping task", "taskID", taskID, "signal", signal)
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
-		return drivers.ErrTaskNotFound
+	handle, err := d.GetTaskHandle(taskID)
+	if err != nil {
+		return err
 	}
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
+	err = d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
 	if err != nil {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
@@ -688,9 +715,9 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 // If force is set to true, the driver must destroy the task even if it is still running.
 func (d *Driver) DestroyTask(taskID string, force bool) error {
 	d.logger.Info("Destroy task", "taskID", taskID)
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
-		return drivers.ErrTaskNotFound
+	handle, err := d.GetTaskHandle(taskID)
+	if err != nil {
+		return err
 	}
 
 	if handle.isRunning() && !force {
@@ -722,17 +749,16 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 			d.logger.Warn("Could not remove container", "container", handle.containerID, "error", err)
 		}
 	}
-
-	d.tasks.Delete(taskID)
+	d.stateActorChannel <- TaskDeletedMsg{taskID}
 	return nil
 }
 
 // InspectTask function returns detailed status information for the referenced taskID.
 func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 	d.logger.Debug("InspectTask called")
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
-		return nil, drivers.ErrTaskNotFound
+	handle, err := d.GetTaskHandle(taskID)
+	if err != nil {
+		return nil, err
 	}
 
 	return handle.taskStatus(), nil
@@ -742,13 +768,13 @@ func (d *Driver) InspectTask(taskID string) (*drivers.TaskStatus, error) {
 // The driver must send stats at the given interval until the given context is canceled or the task terminates.
 func (d *Driver) TaskStats(ctx context.Context, taskID string, interval time.Duration) (<-chan *drivers.TaskResourceUsage, error) {
 	d.logger.Debug("TaskStats called", "taskID", taskID)
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
-		return nil, drivers.ErrTaskNotFound
+	taskResourceChannel := make(chan *drivers.TaskResourceUsage)
+	d.stateActorChannel <- StartStatesEmitterMsg{
+		TaskID:              taskID,
+		Interval:            interval,
+		TaskResourceChannel: taskResourceChannel,
 	}
-	statsChannel := make(chan *drivers.TaskResourceUsage)
-	go handle.runStatsEmitter(ctx, statsChannel, interval)
-	return statsChannel, nil
+	return taskResourceChannel, nil
 }
 
 // TaskEvents function allows the driver to publish driver specific events about tasks and
@@ -760,8 +786,8 @@ func (d *Driver) TaskEvents(ctx context.Context) (<-chan *drivers.TaskEvent, err
 // SignalTask function is used by drivers which support sending OS signals (SIGHUP, SIGKILL, SIGUSR1 etc.) to the task.
 // It is an optional function and is listed as a capability in the driver Capabilities struct.
 func (d *Driver) SignalTask(taskID string, signal string) error {
-	handle, ok := d.tasks.Get(taskID)
-	if !ok {
+	handle, err := d.GetTaskHandle(taskID)
+	if err != nil {
 		return drivers.ErrTaskNotFound
 	}
 
@@ -904,6 +930,20 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 		}
 	}
 	return publishedPorts, nil
+}
+
+// Get a TaskHandle from the state store
+func (d *Driver) GetTaskHandle(id string) (*TaskHandle, error) {
+	msg := GetTaskHandleMsg{
+		TaskID: id,
+		Result: make(chan *TaskHandle),
+	}
+	d.stateActorChannel <- msg
+	handle, ok := <-msg.Result
+	if !ok {
+		return nil, drivers.ErrTaskNotFound
+	}
+	return handle, nil
 }
 
 // expandPath returns the absolute path of dir, relative to base if dir is relative path.
