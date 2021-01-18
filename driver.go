@@ -93,6 +93,7 @@ type Driver struct {
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
 	cgroupV2 bool
+	health   drivers.HealthState
 
 	// state actor inbox
 	stateActorChannel chan interface{}
@@ -206,8 +207,10 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 	for {
 		select {
 		case <-ctx.Done():
+			d.logger.Info("Fingerprint context is done")
 			return
 		case <-d.ctx.Done():
+			d.logger.Info("Driver context is done")
 			return
 		case <-ticker.C:
 			ticker.Reset(fingerprintPeriod)
@@ -217,18 +220,17 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 }
 
 func (d *Driver) buildFingerprint() *drivers.Fingerprint {
-	var health drivers.HealthState
 	var desc string
 	attrs := map[string]*pstructs.Attribute{}
 
 	// be negative and guess that we will not be able to get a podman connection
-	health = drivers.HealthStateUndetected
 	desc = "disabled"
 
 	// try to connect and get version info
 	info, err := d.podman.SystemInfo(d.ctx)
 	if err != nil {
 		d.logger.Error("Could not get podman info", "err", err)
+		d.health = drivers.HealthStateUndetected
 	} else {
 		desc = "ready"
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
@@ -236,18 +238,19 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Rootless)
 		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
 		if d.systemInfo.Version.Version == "" {
+			d.logger.Info("Initializing podman streams")
 			// keep first received systemInfo in driver struct
 			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
 			d.systemInfo = info
 			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
 			// run some final initialization after first podman contact
-			health = d.onInit()
+			d.health = d.onInit()
 		}
 	}
 
 	return &drivers.Fingerprint{
 		Attributes:        attrs,
-		Health:            health,
+		Health:            d.health,
 		HealthDescription: desc,
 	}
 }
