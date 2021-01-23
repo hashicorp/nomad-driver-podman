@@ -277,6 +277,16 @@ config {
 }
 ```
 
+* **sysctl** - (Optional)  A key-value map of sysctl configurations to set to the containers on start.
+
+```
+config {
+  sysctl = {
+    "net.core.somaxconn" = "16384"
+  }
+}
+```
+
 ## Example job
 
 ```

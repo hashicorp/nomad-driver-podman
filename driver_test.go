@@ -1106,8 +1106,8 @@ func TestPodmanDriver_DefaultCaps(t *testing.T) {
 
 	// a default container should not have SYS_TIME
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
-	// a default container gets MKNOD cap
-	require.Contains(t, inspectData.EffectiveCaps, "CAP_MKNOD")
+	// a default container gets CHOWN cap
+	require.Contains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 }
 
 // check modified capabilities (CapAdd/CapDrop)
@@ -1120,14 +1120,14 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	// 	cap_drop = [
 	//     "MKNOD",
 	//   ]
-	taskCfg.CapDrop = []string{"MKNOD"}
+	taskCfg.CapDrop = []string{"CHOWN"}
 
 	inspectData := startDestroyInspect(t, taskCfg, "caps")
 
 	// we added SYS_TIME, so we should see it in inspect
 	require.Contains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
-	// we dropped CAP_MKNOD, so we should NOT see it in inspect
-	require.NotContains(t, inspectData.EffectiveCaps, "CAP_MKNOD")
+	// we dropped CAP_CHOWN, so we should NOT see it in inspect
+	require.NotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 }
 
 // check dns server configuration
@@ -1295,6 +1295,50 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
+}
+
+func TestPodmanDriver_Sysctl(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	// set a uncommon somaxconn value and echo the effective
+	// in-container value
+	taskCfg := newTaskConfig("", []string{
+		"sysctl",
+		"net.core.somaxconn",
+	})
+	taskCfg.Sysctl = map[string]string{"net.core.somaxconn": "12321"}
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sysctl",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, "net.core.somaxconn = 12321")
+
 }
 
 // read a tasks logfile into a string, fail on error
