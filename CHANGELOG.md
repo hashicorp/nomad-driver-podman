@@ -1,5 +1,6 @@
 ## Unreleased
 
+* config: Added tty option
 * config: Support for sysctl configuration [[GH-82](https://github.com/hashicorp/nomad-driver-podman/issues/82)]
 
 ## 0.2.0

@@ -1130,6 +1130,15 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 }
 
+// check enabled tty option
+func TestPodmanDriver_Tty(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Tty = true
+	inspectData := startDestroyInspect(t, taskCfg, "tty")
+
+	require.True(t, inspectData.Config.Tty)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {
