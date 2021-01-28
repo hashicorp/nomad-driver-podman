@@ -83,25 +83,25 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
+	Args              []string           `codec:"args"`
+	Ports             []string           `codec:"ports"`
+	Tmpfs             []string           `codec:"tmpfs"`
+	Volumes           []string           `codec:"volumes"`
+	CapAdd            []string           `codec:"cap_add"`
+	CapDrop           []string           `codec:"cap_drop"`
+	Dns               []string           `codec:"dns"`
 	Command           string             `codec:"command"`
 	Entrypoint        string             `codec:"entrypoint"`
-	Args              []string           `codec:"args"`
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
-	Init              bool               `codec:"init"`
 	InitPath          string             `codec:"init_path"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
-	Ports             []string           `codec:"ports"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
-	Tmpfs             []string           `codec:"tmpfs"`
+	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
-	Volumes           []string           `codec:"volumes"`
-	CapAdd            []string           `codec:"cap_add"`
-	CapDrop           []string           `codec:"cap_drop"`
-	Dns               []string           `codec:"dns"`
 }
