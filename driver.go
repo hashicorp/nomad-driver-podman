@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/armon/circbuf"
 	"github.com/hashicorp/nomad/nomad/structs"
 
 	"github.com/hashicorp/go-hclog"
@@ -53,7 +54,7 @@ var (
 	// optional features this driver supports
 	capabilities = &drivers.Capabilities{
 		SendSignals: true,
-		Exec:        false,
+		Exec:        true,
 		FSIsolation: drivers.FSIsolationImage,
 		NetIsolationModes: []drivers.NetIsolationMode{
 			drivers.NetIsolationModeGroup,
@@ -701,9 +702,107 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 	return d.podman.ContainerKill(d.ctx, handle.containerID, signal)
 }
 
-// ExecTask function is used by the Nomad client to execute commands inside the task execution context.
+// ExecTask function is used by the Nomad client to execute scripted health checks inside the task execution context.
 func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*drivers.ExecTaskResult, error) {
-	return nil, fmt.Errorf("Podman driver does not support exec")
+	handle, ok := d.tasks.Get(taskID)
+	if !ok {
+		return nil, drivers.ErrTaskNotFound
+	}
+	createRequest := api.ExecConfig{
+		Command:      cmd,
+		Tty:          false,
+		AttachStdin:  false,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+	ctx, cancel := context.WithTimeout(d.ctx, timeout)
+	defer cancel()
+	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
+	if err != nil {
+		d.logger.Error("Unable to create ExecTask session", "err", err)
+		return nil, err
+	}
+	stdout, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+	stderr, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+	startRequest := api.ExecStartRequest{
+		Tty:          false,
+		AttachInput:  false,
+		AttachOutput: true,
+		Stdout:       stdout,
+		AttachError:  true,
+		Stderr:       stderr,
+	}
+	err = d.podman.ExecStart(ctx, sessionId, startRequest)
+	if err != nil {
+		d.logger.Error("ExecTask session returned with error", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
+
+	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
+	if err != nil {
+		d.logger.Error("Unable to inspect finished ExecTask session", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
+	execResult := &drivers.ExecTaskResult{
+		ExitResult: &drivers.ExitResult{
+			ExitCode: inspectData.ExitCode,
+		},
+		Stdout: stdout.Bytes(),
+		Stderr: stderr.Bytes(),
+	}
+	d.logger.Trace("ExecTask result", "code", execResult.ExitResult.ExitCode, "out", string(execResult.Stdout), "err", string(execResult.Stderr))
+
+	return execResult, nil
+}
+
+// ExecTask function is used by the Nomad client to execute commands inside the task execution context.
+// i.E. nomad alloc exec ....
+func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptions *drivers.ExecOptions) (*drivers.ExitResult, error) {
+	handle, ok := d.tasks.Get(taskID)
+	if !ok {
+		return nil, drivers.ErrTaskNotFound
+	}
+
+	createRequest := api.ExecConfig{
+		Command:      execOptions.Command,
+		Tty:          execOptions.Tty,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
+	if err != nil {
+		d.logger.Error("Unable to create exec session", "err", err)
+		return nil, err
+	}
+
+	startRequest := api.ExecStartRequest{
+		Tty:          execOptions.Tty,
+		AttachInput:  createRequest.AttachStdin,
+		Stdin:        execOptions.Stdin,
+		AttachOutput: createRequest.AttachStdout,
+		Stdout:       execOptions.Stdout,
+		AttachError:  createRequest.AttachStderr,
+		Stderr:       execOptions.Stderr,
+		ResizeCh:     execOptions.ResizeCh,
+	}
+	err = d.podman.ExecStart(ctx, sessionId, startRequest)
+	if err != nil {
+		d.logger.Error("Exec session returned with error", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
+
+	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
+	if err != nil {
+		d.logger.Error("Unable to inspect finished exec session", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
+	exitResult := drivers.ExitResult{
+		ExitCode: inspectData.ExitCode,
+		Err:      err,
+	}
+	return &exitResult, nil
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
