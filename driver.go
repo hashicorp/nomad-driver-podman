@@ -361,6 +361,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Env = cfg.Env
 	createOpts.ContainerBasicConfig.Hostname = driverConfig.Hostname
 	createOpts.ContainerBasicConfig.Sysctl = driverConfig.Sysctl
+	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
 
 	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 

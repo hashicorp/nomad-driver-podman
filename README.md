@@ -287,6 +287,9 @@ config {
 }
 ```
 
+* **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
+
+
 ## Example job
 
 ```

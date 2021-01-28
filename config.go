@@ -99,6 +99,7 @@ type TaskConfig struct {
 	Ports             []string           `codec:"ports"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Tmpfs             []string           `codec:"tmpfs"`
+	Tty               bool               `codec:"tty"`
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
