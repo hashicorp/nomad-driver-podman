@@ -47,9 +47,9 @@ type ExecConfig struct {
 	Privileged bool `json:"Privileged,omitempty"`
 }
 
-//
+// ExecSessionResponse contains the ID of a newly created exec session
 type ExecSessionResponse struct {
-	Id string
+	ID string
 }
 
 // ExecCreate creates an exec session to run a command inside a running container
@@ -81,5 +81,5 @@ func (c *API) ExecCreate(ctx context.Context, name string, config ExecConfig) (s
 	if err != nil {
 		return "", err
 	}
-	return execResponse.Id, err
+	return execResponse.ID, err
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
+// ExecStartRequest prepares to stream a exec session
 type ExecStartRequest struct {
 
 	// streams
@@ -87,7 +88,7 @@ func (c *API) attachHandleResize(ctx context.Context, resizeChannel <-chan drive
 			c.logger.Warn("Resize handler is done")
 			return
 		case size := <-resizeChannel:
-			c.logger.Debug("Resize terminal", "sessionId", sessionId, "height", size.Height, "width", size.Width)
+			c.logger.Trace("Resize terminal", "sessionId", sessionId, "height", size.Height, "width", size.Width)
 			rerr := c.ExecResize(ctx, sessionId, size.Height, size.Width)
 			if rerr != nil {
 				c.logger.Warn("failed to resize TTY", "err", rerr)
@@ -98,7 +99,8 @@ func (c *API) attachHandleResize(ctx context.Context, resizeChannel <-chan drive
 
 // ExecStartAndAttach starts and attaches to a given exec session.
 func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStartRequest) error {
-	client := *c.httpClient
+	client := new(http.Client)
+	*client = *c.httpClient
 	client.Timeout = 0
 
 	var socket net.Conn
@@ -170,7 +172,6 @@ func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStart
 			return err
 		}
 	} else {
-		// logrus.Debugf("Handling non-terminal attach to exec")
 		for {
 			// Read multiplexed channels and write to appropriate stream
 			fd, l, err := DemuxHeader(socket, buffer)
