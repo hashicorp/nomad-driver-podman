@@ -22,5 +22,8 @@ func (c *API) ImageExists(ctx context.Context, nameWithTag string) (bool, error)
 	if res.StatusCode == http.StatusNoContent {
 		return true, nil
 	}
+	if res.StatusCode == http.StatusInternalServerError {
+		return true, nil
+	}
 	return false, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 }

@@ -477,7 +477,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		// do we already have this image in local storage?
 		haveImage, err := d.podman.ImageExists(d.ctx, createOpts.Image)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, unable to check for local image: %v", err)
+			// we assume that we do NOT have a local image if something goes wrong
+			// it could work to pull/start a container
+			d.logger.Warn("failed to check for local image", "image", createOpts.Image, "err", err)
 		}
 		if !haveImage {
 			// image is not in local storage, so we need to pull it
