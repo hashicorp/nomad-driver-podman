@@ -762,8 +762,16 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 		d.logger.Error("Unable to create ExecTask session", "err", err)
 		return nil, err
 	}
-	stdout, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
-	stderr, _ := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+	stdout, err := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+	if err != nil {
+		d.logger.Error("ExecTask session failed, unable to allocate stdout buffer", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
+	stderr, err := circbuf.NewBuffer(int64(drivers.CheckBufSize))
+	if err != nil {
+		d.logger.Error("ExecTask session failed, unable to allocate stderr buffer", "sessionId", sessionId, "err", err)
+		return nil, err
+	}
 	startRequest := api.ExecStartRequest{
 		Tty:          false,
 		AttachInput:  false,
