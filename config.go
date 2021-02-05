@@ -58,7 +58,7 @@ var (
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
-		"tty":                hclspec.NewAttr("tty", "bool", false),		
+		"tty":                hclspec.NewAttr("tty", "bool", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 	})
 )
