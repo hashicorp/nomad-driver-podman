@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -139,6 +141,37 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		statsChannel <- &usage
 	}
 }
+func (h *TaskHandle) runLogStreamer(ctx context.Context, stdout bool) {
+
+	var path string
+
+	if stdout {
+		path = h.taskConfig.StdoutPath
+	} else {
+		path = h.taskConfig.StderrPath
+	}
+	file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open logfile", "err", err)
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			err = h.driver.podman.ContainerLogs(ctx, h.containerID, stdout, !stdout, file)
+			if err != nil {
+				h.logger.Warn("Unable to stream logs", "err", err)
+				time.Sleep(2 * time.Second)
+			} else {
+				return
+			}
+		}
+	}
+
+}
 
 func (h *TaskHandle) runContainerMonitor() {
 
@@ -146,8 +179,14 @@ func (h *TaskHandle) runContainerMonitor() {
 	interval := time.Second * 1
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
+	logctx, logcancel := context.WithCancel(h.driver.ctx)
+	go h.runLogStreamer(logctx, false)
+	go h.runLogStreamer(logctx, true)
+
 	cleanup := func() {
 		h.logger.Debug("Container monitor exits", "container", h.containerID)
+		// stop log streamers
+		logcancel()
 	}
 	defer cleanup()
 

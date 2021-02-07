@@ -397,7 +397,7 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		"echo " + check,
+		"sleep 5; echo " + check,
 	})
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
