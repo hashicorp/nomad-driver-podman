@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 
+	dockerref "github.com/docker/distribution/reference"
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -469,19 +470,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		// FIXME: there are more variations of image sources, we should handle it
-		//        e.g. oci-archive:/... etc
-		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
-		// do we already have this image in local storage?
-		haveImage, err := d.podman.ImageExists(d.ctx, createOpts.Image)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, unable to check for local image: %v", err)
-		}
-		if !haveImage {
-			// image is not in local storage, so we need to pull it
-			if err = d.podman.ImagePull(d.ctx, createOpts.Image); err != nil {
-				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", createOpts.Image, err)
-			}
+		if err = d.ensureImage(createOpts.Image); err != nil {
+			return nil, nil, fmt.Errorf("failed to start task, unable to handle image %s: %v", createOpts.Image, err)
 		}
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
@@ -581,6 +571,55 @@ func memoryInBytes(strmem string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("Invalid memory string: %s", strmem)
 	}
+}
+
+func (d *Driver) ensureImage(image string) error {
+
+	// FIXME: there are more variations of image sources, we should handle it
+	//        e.g. oci-archive:/... etc
+	//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
+
+	// strip http/https and docker transport prefix
+	for _, prefix := range []string{"http://", "https://", "docker://"} {
+		if strings.HasPrefix(image, prefix) {
+			image = strings.Replace(image, prefix, "", 1)
+		}
+	}
+
+	named, err := dockerref.ParseNormalizedNamed(image)
+	if err != nil {
+		return err
+	}
+
+	var tag, digest string
+
+	tagged, ok := named.(dockerref.Tagged)
+	if ok {
+		tag = tagged.Tag()
+	}
+
+	digested, ok := named.(dockerref.Digested)
+	if ok {
+		digest = digested.Digest().String()
+	}
+	if len(tag) == 0 && len(digest) == 0 {
+		tag = "latest"
+	}
+
+	// do we already have this image in local storage?
+	haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", named.Name(), tag))
+	if err != nil {
+		return err
+	}
+	if !haveImage {
+		d.logger.Debug("Pull image", "image", image)
+		// image is not in local storage, so we need to pull it
+		if err = d.podman.ImagePull(d.ctx, image); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
