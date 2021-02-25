@@ -609,7 +609,9 @@ func (d *Driver) ensureImage(image string) error {
 	// do we already have this image in local storage?
 	haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", named.Name(), tag))
 	if err != nil {
-		return err
+		d.logger.Warn("Unable to check for local image", "image", named.Name(), "err", err)
+		// do NOT fail this operation, instead try to pull the image
+		haveImage = false
 	}
 	if !haveImage {
 		d.logger.Debug("Pull image", "image", image)
