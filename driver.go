@@ -470,8 +470,28 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		if err = d.ensureImage(createOpts.Image); err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, unable to handle image %s: %v", createOpts.Image, err)
+		// FIXME: there are more variations of image sources, we should handle it
+		//        e.g. oci-archive:/... etc
+		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
+
+		imageName, tag, err := parseImage(createOpts.Image)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to start task, unable to parse image reference %s: %v", createOpts.Image, err)
+		}
+
+		// do we already have this image in local storage?
+		haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", imageName, tag))
+		if err != nil {
+			d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
+			// do NOT fail this operation, instead try to pull the image
+			haveImage = false
+		}
+		if !haveImage {
+			d.logger.Debug("Pull image", "image", imageName)
+			// image is not in local storage, so we need to pull it
+			if err = d.podman.ImagePull(d.ctx, imageName); err != nil {
+				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", imageName, err)
+			}
 		}
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
@@ -601,36 +621,6 @@ func parseImage(image string) (string, string, error) {
 		tag = "latest"
 	}
 	return named.Name(), tag, nil
-}
-
-func (d *Driver) ensureImage(image string) error {
-
-	// FIXME: there are more variations of image sources, we should handle it
-	//        e.g. oci-archive:/... etc
-	//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
-
-	name, tag, err := parseImage(image)
-	if err != nil {
-		d.logger.Error("Unable to parse image reference", "image", name, "err", err)
-		return err
-	}
-
-	// do we already have this image in local storage?
-	haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", name, tag))
-	if err != nil {
-		d.logger.Warn("Unable to check for local image", "image", name, "err", err)
-		// do NOT fail this operation, instead try to pull the image
-		haveImage = false
-	}
-	if !haveImage {
-		d.logger.Debug("Pull image", "image", image)
-		// image is not in local storage, so we need to pull it
-		if err = d.podman.ImagePull(d.ctx, image); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
