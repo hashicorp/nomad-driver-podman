@@ -1350,6 +1350,38 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 }
 
+func Test_parseImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		Input string
+		Repo  string
+		Tag   string
+	}{
+		{Input: "quay.io/prometheus/busybox:glibc", Repo: "quay.io/prometheus/busybox", Tag: "glibc"},
+		{Input: "root", Repo: "docker.io/library/root", Tag: "latest"},
+		{Input: "root:tag", Repo: "docker.io/library/root", Tag: "tag"},
+		{Input: "docker://root", Repo: "docker.io/library/root", Tag: "latest"},
+		{Input: "user/repo", Repo: "docker.io/user/repo", Tag: "latest"},
+		{Input: "https://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
+		{Input: "user/repo:tag", Repo: "docker.io/user/repo", Tag: "tag"},
+		{Input: "url:5000/repo", Repo: "url:5000/repo", Tag: "latest"},
+		{Input: "http://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
+		{Input: "url:5000/repo:tag", Repo: "url:5000/repo", Tag: "tag"},
+		{Input: "https://quay.io/busybox", Repo: "quay.io/busybox", Tag: "latest"},
+	}
+	for _, testCase := range testCases {
+		repo, tag, err := parseImage(testCase.Input)
+		if err != nil {
+			t.Errorf("parseImage(%s) failed: %v", testCase.Input, err)
+		} else if repo != testCase.Repo || tag != testCase.Tag {
+			t.Errorf("Expected repo: %q, tag: %q, but got %q and %q", testCase.Repo, testCase.Tag, repo, tag)
+		}
+	}
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))

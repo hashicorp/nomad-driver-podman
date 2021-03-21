@@ -15,6 +15,8 @@ require (
 	github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 	github.com/container-storage-interface/spec v1.2.0 // indirect
 	github.com/containernetworking/plugins v0.8.5 // indirect
+	github.com/distribution/distribution v2.7.1+incompatible // indirect
+	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/go-metrics v0.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/google/go-cmp v0.5.0 // indirect

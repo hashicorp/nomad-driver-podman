@@ -132,6 +132,8 @@ github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgf
 github.com/grpc-ecosystem/grpc-gateway v1.9.0/go.mod h1:vNeuVxBJEsws4ogUvrchl83t/GYV9WGTSLVdBhOQFDY=
 github.com/hashicorp/go-hclog/hclogvet v0.1.4-0.20201116205511-59fbd7b93270 h1:sf11XTIhELLKzn/M8CLKYp1RhH4cSBzRPOMg4Tv4CUA=
 github.com/hashicorp/go-hclog/hclogvet v0.1.4-0.20201116205511-59fbd7b93270/go.mod h1:f0uAs1kAopX4JXFgR4kMixWftM8qLha6edaFVawdNtg=
+github.com/hashicorp/go-hclog/hclogvet v0.1.4-0.20210108181059-a2184e57a2d4 h1:enjElMLR8g18mbWLgwkgoz5+V4hAsX8uniIJoLKnbd0=
+github.com/hashicorp/go-hclog/hclogvet v0.1.4-0.20210108181059-a2184e57a2d4/go.mod h1:f0uAs1kAopX4JXFgR4kMixWftM8qLha6edaFVawdNtg=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/hpcloud/tail v1.0.0 h1:nfCOvKYfkgYP8hkirhJocXT2+zOD8yUNjXaWfTlyFKI=
@@ -395,6 +397,8 @@ gopkg.in/yaml.v2 v2.2.7 h1:VUgggvou5XRW9mHwD/yXxIYSMtY0zoKQf/v226p2nyo=
 gopkg.in/yaml.v2 v2.2.7/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gotest.tools/gotestsum v0.6.0 h1:0zIxynXq9gkAcRpboAi3qOQIkZkCt/stfQzd7ab7Czs=
 gotest.tools/gotestsum v0.6.0/go.mod h1:LEX+ioCVdeWhZc8GYfiBRag360eBhwixWJ62R9eDQtI=
+gotest.tools/gotestsum v1.6.1 h1:stfd/+B+OaI9CEKHP6uiSNYhmMwT6RnzMp8LyDjnYYQ=
+gotest.tools/gotestsum v1.6.1/go.mod h1:LEX+ioCVdeWhZc8GYfiBRag360eBhwixWJ62R9eDQtI=
 gotest.tools/v3 v3.0.3 h1:4AuOwCGf4lLR9u3YOe2awrHygurzhO/HeQ6laiA6Sx0=
 gotest.tools/v3 v3.0.3/go.mod h1:Z7Lb0S5l+klDB31fvDQX8ss/FlKDxtlFlw3Oa8Ymbl8=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=

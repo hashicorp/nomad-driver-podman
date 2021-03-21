@@ -2,6 +2,7 @@
 
 * config: Added tty option
 * config: Support for sysctl configuration [[GH-82](https://github.com/hashicorp/nomad-driver-podman/issues/82)]
+* config: Fixed a bug where we always pulled an image if image name has a transport prefix [[GH-88](https://github.com/hashicorp/nomad-driver-podman/pull/88)]
 
 ## 0.2.0
 

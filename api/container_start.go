@@ -28,6 +28,6 @@ func (c *API) ContainerStart(ctx context.Context, name string) error {
 	timeout, cancel := context.WithTimeout(ctx, time.Second*10)
 	defer cancel()
 
-	err = c.ContainerWait(timeout, name, "running")
+	err = c.ContainerWait(timeout, name, []string{"running", "exited"})
 	return err
 }
