@@ -222,7 +222,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		desc = "ready"
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
-		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Rootless)
+		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
 		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
 		if d.systemInfo.Version.Version == "" {
 			// keep first received systemInfo in driver struct
@@ -322,6 +322,8 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
+	rootless := d.systemInfo.Host.Security.Rootless
+
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
@@ -406,7 +408,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
 	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
-	if !d.systemInfo.Host.Rootless {
+	if !rootless {
 		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
@@ -430,7 +432,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
 	} else {
 		if driverConfig.NetworkMode == "" {
-			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			if !rootless {
+				// bridge is default for rootful podman
+				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			} else {
+				// slirp4netns is default for rootless podman
+				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+			}
 		} else if driverConfig.NetworkMode == "bridge" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
 		} else if driverConfig.NetworkMode == "host" {
