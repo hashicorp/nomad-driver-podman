@@ -42,7 +42,7 @@ cd nomad-driver-podman
 - Linux host with `podman` installed
 - For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
-You need a 2.x podman binary and a system socket activation unit,
+You need a 3.0.x podman binary and a system socket activation unit,
 see https://www.redhat.com/sysadmin/podmans-new-rest-api
 
 Nomad agent, nomad-driver-podman and podman will reside on the same host, so you
