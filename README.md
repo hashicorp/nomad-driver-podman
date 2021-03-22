@@ -22,6 +22,7 @@ this plugin to Nomad!
 * Set username or UID used for the specified command within the container (podman --user option).
 * Fine tune memory usage: standard [Nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
 * Supports rootless containers with cgroup V2
+* Set DNS servers, searchlist and options via [Nomad dns parameters](https://www.nomadproject.io/docs/job-specification/network#dns-parameters)
 
 
 ## Building The Driver from source
@@ -263,16 +264,6 @@ config {
 config {
   cap_add = [
     "MKNOD"
-  ]
-}
-```
-
-* **dns** - (Optional)  A list of dns servers. Replaces the default from podman binary and containers.conf.
-
-```
-config {
-  dns = [
-    "1.1.1.1"
   ]
 }
 ```

@@ -1150,18 +1150,23 @@ func TestPodmanDriver_Dns(t *testing.T) {
 		"-c",
 		"sleep 1; cat /etc/resolv.conf",
 	})
-	// config {
-	//   dns = [
-	//     "1.1.1.1"
-	//   ]
+	// network {
+	//   dns {
+	//     servers = ["1.1.1.1"]
+	// 	   searches = ["internal.corp"]
+	//     options = ["ndots:2"]
+	//   }
 	// }
-	taskCfg.Dns = []string{"1.1.1.1"}
-
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "dns",
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
+		DNS: &drivers.DNSConfig{
+			Servers:  []string{"1.1.1.1"},
+			Searches: []string{"internal.corp"},
+			Options:  []string{"ndots:2"},
+		},
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -1189,6 +1194,8 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	// see if stdout was populated with the correct output
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "nameserver 1.1.1.1")
+	require.Contains(t, tasklog, "search internal.corp")
+	require.Contains(t, tasklog, "options ndots:2")
 
 }
 

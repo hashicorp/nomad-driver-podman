@@ -419,12 +419,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.User = cfg.User
 
 	// Network config options
-	for _, strdns := range driverConfig.Dns {
-		ipdns := net.ParseIP(strdns)
-		if ipdns == nil {
-			return nil, nil, fmt.Errorf("Invald dns server address")
+	if cfg.DNS != nil {
+		for _, strdns := range cfg.DNS.Servers {
+			ipdns := net.ParseIP(strdns)
+			if ipdns == nil {
+				return nil, nil, fmt.Errorf("Invald dns server address")
+			}
+			createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
 		}
-		createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
+		createOpts.ContainerNetworkConfig.DNSSearch = append(createOpts.ContainerNetworkConfig.DNSSearch, cfg.DNS.Searches...)
+		createOpts.ContainerNetworkConfig.DNSOptions = append(createOpts.ContainerNetworkConfig.DNSOptions, cfg.DNS.Options...)
 	}
 	// Configure network
 	if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Path != "" {
