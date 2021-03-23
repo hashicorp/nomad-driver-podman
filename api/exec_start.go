@@ -85,13 +85,13 @@ func (c *API) attachHandleResize(ctx context.Context, resizeChannel <-chan drive
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Warn("Resize handler is done")
+			c.logger.Trace("Resize handler is done")
 			return
 		case size := <-resizeChannel:
 			c.logger.Trace("Resize terminal", "sessionId", sessionId, "height", size.Height, "width", size.Width)
 			rerr := c.ExecResize(ctx, sessionId, size.Height, size.Width)
 			if rerr != nil {
-				c.logger.Warn("failed to resize TTY", "err", rerr)
+				c.logger.Error("Failed to resize TTY", "err", rerr)
 			}
 		}
 	}
