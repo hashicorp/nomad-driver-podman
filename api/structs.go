@@ -1193,7 +1193,7 @@ type InspectContainerData struct {
 // InspectExecSession contains information about a given exec session.
 type InspectExecSession struct {
 	// ProcessConfig contains information about the exec session's process.
-	ProcessConfig *InspectExecProcess `json:"ProcessConfig"`
+	// ProcessConfig *InspectExecProcess `json:"ProcessConfig"`
 	// ContainerID is the ID of the container this exec session is attached
 	// to.
 	ContainerID string `json:"ContainerID"`

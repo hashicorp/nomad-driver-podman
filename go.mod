@@ -12,6 +12,7 @@ replace (
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e
 	github.com/container-storage-interface/spec v1.2.0 // indirect
 	github.com/containernetworking/plugins v0.8.5 // indirect
 	github.com/distribution/distribution v2.7.1+incompatible // indirect
