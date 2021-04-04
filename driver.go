@@ -501,10 +501,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			haveImage = false
 		}
 		if !haveImage {
-			d.logger.Debug("Pull image", "image", imageName)
+			d.logger.Debug("Pull image", "image", fmt.Sprintf("%s:%s", imageName, tag))
 			// image is not in local storage, so we need to pull it
-			if err = d.podman.ImagePull(d.ctx, imageName); err != nil {
-				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", imageName, err)
+			if err = d.podman.ImagePull(d.ctx, fmt.Sprintf("%s:%s", imageName, tag)); err != nil {
+				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s:%s : %v", imageName, tag, err)
 			}
 		}
 

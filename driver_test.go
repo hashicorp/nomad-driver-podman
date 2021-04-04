@@ -1357,6 +1357,35 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 }
 
+// Make sure we can pull and start "non-latest" containers
+func TestPodmanDriver_Pull(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		Image    string
+		TaskName string
+	}{
+		{Image: "busybox:unstable", TaskName: "pull_tag"},
+		{Image: "busybox", TaskName: "pull_non_tag"},
+		{Image: "busybox@sha256:ce98b632acbcbdf8d6fdc50d5f91fea39c770cd5b3a2724f52551dde4d088e96", TaskName: "pull_digest"},
+	}
+
+	for _, testCase := range testCases {
+		startDestroyInspectImage(t, testCase.Image, testCase.TaskName)
+	}
+}
+
+func startDestroyInspectImage(t *testing.T, image string, taskName string) {
+	taskCfg := newTaskConfig(image, busyboxLongRunningCmd)
+	inspectData := startDestroyInspect(t, taskCfg, taskName)
+
+	imageName, tag, err := parseImage(image)
+	require.NoError(t, err)
+	require.Equal(t, imageName+":"+tag, inspectData.Config.Image)
+}
+
 func Test_parseImage(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
