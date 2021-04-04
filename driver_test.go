@@ -1381,9 +1381,9 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 	taskCfg := newTaskConfig(image, busyboxLongRunningCmd)
 	inspectData := startDestroyInspect(t, taskCfg, taskName)
 
-	imageName, tag, err := parseImage(image)
+	parsedImage, err := parseImage(image)
 	require.NoError(t, err)
-	require.Equal(t, imageName+":"+tag, inspectData.Config.Image)
+	require.Equal(t, parsedImage, inspectData.Config.Image)
 }
 
 func Test_parseImage(t *testing.T) {
@@ -1391,29 +1391,30 @@ func Test_parseImage(t *testing.T) {
 		t.Parallel()
 	}
 
+	digest := "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testCases := []struct {
 		Input string
-		Repo  string
-		Tag   string
+		Image string
 	}{
-		{Input: "quay.io/prometheus/busybox:glibc", Repo: "quay.io/prometheus/busybox", Tag: "glibc"},
-		{Input: "root", Repo: "docker.io/library/root", Tag: "latest"},
-		{Input: "root:tag", Repo: "docker.io/library/root", Tag: "tag"},
-		{Input: "docker://root", Repo: "docker.io/library/root", Tag: "latest"},
-		{Input: "user/repo", Repo: "docker.io/user/repo", Tag: "latest"},
-		{Input: "https://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
-		{Input: "user/repo:tag", Repo: "docker.io/user/repo", Tag: "tag"},
-		{Input: "url:5000/repo", Repo: "url:5000/repo", Tag: "latest"},
-		{Input: "http://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
-		{Input: "url:5000/repo:tag", Repo: "url:5000/repo", Tag: "tag"},
-		{Input: "https://quay.io/busybox", Repo: "quay.io/busybox", Tag: "latest"},
+		{Input: "quay.io/prometheus/busybox:glibc", Image: "quay.io/prometheus/busybox:glibc"},
+		{Input: "root", Image: "docker.io/library/root:latest"},
+		{Input: "root:tag", Image: "docker.io/library/root:tag"},
+		{Input: "root@" + digest, Image: "docker.io/library/root@" + digest},
+		{Input: "docker://root", Image: "docker.io/library/root:latest"},
+		{Input: "user/repo", Image: "docker.io/user/repo:latest"},
+		{Input: "https://busybox", Image: "docker.io/library/busybox:latest"},
+		{Input: "user/repo:tag", Image: "docker.io/user/repo:tag"},
+		{Input: "url:5000/repo", Image: "url:5000/repo:latest"},
+		{Input: "http://busybox@" + digest, Image: "docker.io/library/busybox@" + digest},
+		{Input: "url:5000/repo:tag", Image: "url:5000/repo:tag"},
+		{Input: "https://quay.io/busybox", Image: "quay.io/busybox:latest"},
 	}
 	for _, testCase := range testCases {
-		repo, tag, err := parseImage(testCase.Input)
+		image, err := parseImage(testCase.Input)
 		if err != nil {
 			t.Errorf("parseImage(%s) failed: %v", testCase.Input, err)
-		} else if repo != testCase.Repo || tag != testCase.Tag {
-			t.Errorf("Expected repo: %q, tag: %q, but got %q and %q", testCase.Repo, testCase.Tag, repo, tag)
+		} else if image != testCase.Image {
+			t.Errorf("Expected image: %q, but got %q", testCase.Image, image)
 		}
 	}
 }
@@ -1427,10 +1428,10 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	return string(stdout)
 }
 
-func newTaskConfig(variant string, command []string) TaskConfig {
-	busyboxImageID := "docker://docker.io/library/busybox:latest"
-
-	image := busyboxImageID
+func newTaskConfig(image string, command []string) TaskConfig {
+	if len(image) == 0 {
+		image = "docker://docker.io/library/busybox:latest"
+	}
 
 	return TaskConfig{
 		Image: image,
