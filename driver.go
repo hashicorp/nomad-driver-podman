@@ -488,13 +488,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		//        e.g. oci-archive:/... etc
 		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
 
-		imageName, tag, err := parseImage(createOpts.Image)
+		imageName, err := parseImage(createOpts.Image)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to start task, unable to parse image reference %s: %v", createOpts.Image, err)
 		}
 
 		// do we already have this image in local storage?
-		haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", imageName, tag))
+		haveImage, err := d.podman.ImageExists(d.ctx, imageName)
 		if err != nil {
 			d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
 			// do NOT fail this operation, instead try to pull the image
@@ -504,9 +504,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			d.logger.Debug("Pull image", "image", imageName)
 			// image is not in local storage, so we need to pull it
 			if err = d.podman.ImagePull(d.ctx, imageName); err != nil {
-				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", imageName, err)
+				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s : %v", imageName, err)
 			}
 		}
+		createOpts.Image = imageName
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
@@ -607,7 +608,7 @@ func memoryInBytes(strmem string) (int64, error) {
 	}
 }
 
-func parseImage(image string) (string, string, error) {
+func parseImage(image string) (string, error) {
 	// strip http/https and docker transport prefix
 	for _, prefix := range []string{"http://", "https://", "docker://"} {
 		if strings.HasPrefix(image, prefix) {
@@ -617,7 +618,7 @@ func parseImage(image string) (string, string, error) {
 
 	named, err := dockerref.ParseNormalizedNamed(image)
 	if err != nil {
-		return "", "", nil
+		return "", err
 	}
 
 	var tag, digest string
@@ -625,16 +626,17 @@ func parseImage(image string) (string, string, error) {
 	tagged, ok := named.(dockerref.Tagged)
 	if ok {
 		tag = tagged.Tag()
+		return fmt.Sprintf("%s:%s", named.Name(), tag), nil
 	}
 
 	digested, ok := named.(dockerref.Digested)
 	if ok {
 		digest = digested.Digest().String()
+		return fmt.Sprintf("%s@%s", named.Name(), digest), nil
 	}
-	if len(tag) == 0 && len(digest) == 0 {
-		tag = "latest"
-	}
-	return named.Name(), tag, nil
+
+	// Image is neither diggested, nor tagged. Default to 'latest'
+	return fmt.Sprintf("%s:%s", named.Name(), "latest"), nil
 }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
