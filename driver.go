@@ -507,6 +507,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s : %v", imageName, err)
 			}
 		}
+		createOpts.Image = imageName
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
