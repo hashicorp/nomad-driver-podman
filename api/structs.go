@@ -1244,6 +1244,18 @@ type InspectExecProcess struct {
 	User string `json:"user"`
 }
 
+// ImagePullReport is the response from pulling one or more images.
+type ImagePullReport struct {
+	// Stream used to provide output from c/image
+	Stream string `json:"stream,omitempty"`
+	// Error contains text of errors from c/image
+	Error string `json:"error,omitempty"`
+	// Images contains the ID's of the images pulled
+	Images []string `json:"images,omitempty"`
+	// ID contains image id (retained for backwards compatibility)
+	ID string `json:"id,omitempty"`
+}
+
 // -------------------------------------------------------------------------------------------------------
 // structs loosly copied from https://github.com/containers/podman/blob/master/pkg/api/handlers/compat/types.go
 //         and https://github.com/moby/moby/blob/master/api/types/stats.go
