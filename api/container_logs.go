@@ -2,17 +2,16 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/mitchellh/go-linereader"
 )
 
 // ContainerLogs gets stdout and stderr logs from a container.
-func (c *API) ContainerLogs(ctx context.Context, name string, stdout bool, stderr bool, target io.Writer) error {
+func (c *API) ContainerLogs(ctx context.Context, name string, stdout io.Writer, stderr io.Writer) error {
 
-	res, err := c.GetStream(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/logs?follow=true&tail=5&stdout=%t&stderr=%t", name, stdout, stderr))
+	res, err := c.GetStream(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/logs?follow=true&tail=5&stdout=true&stderr=true", name))
 	if err != nil {
 		return err
 	}
@@ -21,28 +20,42 @@ func (c *API) ContainerLogs(ctx context.Context, name string, stdout bool, stder
 		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}
 
-	lr := linereader.New(res.Body)
-
-	go func() {
-		c.logger.Debug("Running log stream", "container", name, "stdout", stdout, "stderr", stderr)
-		defer func() {
-			res.Body.Close()
-			c.logger.Debug("Stopped log stream", "container", name, "stdout", stdout, "stderr", stderr)
-		}()
-		for {
-			select {
-			case <-ctx.Done():
-				c.logger.Debug("Stopping log stream", "container", name, "stdout", stdout, "stderr", stderr)
-				return
-			case line, ok := <-lr.Ch:
-				if !ok {
-					c.logger.Debug("Log stream was closed", "container", name, "stdout", stdout, "stderr", stderr)
-					return
-				}
-				target.Write([]byte(line + "\n"))
-			}
-		}
+	c.logger.Debug("Running log stream", "container", name)
+	defer func() {
+		res.Body.Close()
+		c.logger.Debug("Stopped log stream", "container", name)
 	}()
+	buffer := make([]byte, 1024)
+	for {
+		fd, l, err := DemuxHeader(res.Body, buffer)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		frame, err := DemuxFrame(res.Body, buffer, l)
+		if err != nil {
+			return err
+		}
 
-	return nil
+		c.logger.Debug("logger", "frame", string(frame), "fd", fd)
+
+		switch fd {
+		case 0:
+			stdout.Write(frame)
+			stdout.Write([]byte("\n"))
+		case 1:
+			stdout.Write(frame)
+			stdout.Write([]byte("\n"))
+		case 2:
+			stderr.Write(frame)
+			stderr.Write([]byte("\n"))
+		case 3:
+			return fmt.Errorf("Error from log service: %s", string(frame))
+		default:
+			return fmt.Errorf("Unknown log stream identifier: %d", fd)
+		}
+	}
+
 }

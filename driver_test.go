@@ -387,17 +387,18 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 }
 
 // Check stdout/stderr logging
-func TestPodmanDriver_Stdout(t *testing.T) {
+func TestPodmanDriver_StdOutErr(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
 
-	check := uuid.Generate()
+	stdoutMagic := uuid.Generate()
+	stderrMagic := uuid.Generate()
 
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		"sleep 5; echo " + check,
+		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
 	})
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
@@ -426,8 +427,13 @@ func TestPodmanDriver_Stdout(t *testing.T) {
 		t.Fatalf("Container did not exit in time")
 	}
 
-	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, check)
+	stdoutLog := readStdoutLog(t, task)
+	require.Contains(t, stdoutLog, stdoutMagic, "stdoutMagic in stdout")
+	require.NotContains(t, stdoutLog, stderrMagic, "stderrMagic NOT in stdout")
+
+	stderrLog := readStderrLog(t, task)
+	require.Contains(t, stderrLog, stderrMagic, "stderrMagic in stderr")
+	require.NotContains(t, stderrLog, stdoutMagic, "stderrMagic NOT in stderr")
 
 }
 
@@ -474,7 +480,7 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 	}
 
 	// check if the hostname was visible in the container
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, shouldHaveHostname)
 
 }
@@ -859,7 +865,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 	}
 
 	// podman maps init process to /dev/init, so we should see this
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, "/dev/init")
 
 }
@@ -975,7 +981,7 @@ func TestPodmanDriver_User(t *testing.T) {
 	}
 
 	// see if stdout was populated with the "whoami" output
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, "www-data")
 
 }
@@ -1094,7 +1100,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Exactly(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
 
 	// see if stdout was populated with expected "mount" output
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, " on /tmpdata1 type tmpfs ")
 	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
@@ -1192,7 +1198,7 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	}
 
 	// see if stdout was populated with the correct output
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, "nameserver 1.1.1.1")
 	require.Contains(t, tasklog, "search internal.corp")
 	require.Contains(t, tasklog, "options ndots:2")
@@ -1425,7 +1431,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 		t.Fatalf("Container did not exit in time")
 	}
 
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, "net.core.somaxconn = 12321")
 
 }
@@ -1631,13 +1637,20 @@ func Test_parseImage(t *testing.T) {
 	}
 }
 
-// read a tasks logfile into a string, fail on error
-func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
+// read a tasks stdout logfile into a string, fail on error
+func readStdoutLog(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
-	// Get the stdout of the process and assert that it's not empty
 	stdout, err := ioutil.ReadFile(logfile)
 	require.NoError(t, err)
 	return string(stdout)
+}
+
+// read a tasks stderr logfile into a string, fail on error
+func readStderrLog(t *testing.T, task *drivers.TaskConfig) string {
+	logfile := filepath.Join(filepath.Dir(task.StderrPath), fmt.Sprintf("%s.stderr.0", task.Name))
+	stderr, err := ioutil.ReadFile(logfile)
+	require.NoError(t, err)
+	return string(stderr)
 }
 
 func newTaskConfig(image string, command []string) TaskConfig {

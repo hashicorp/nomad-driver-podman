@@ -141,30 +141,35 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		statsChannel <- &usage
 	}
 }
-func (h *TaskHandle) runLogStreamer(ctx context.Context, stdout bool) {
+func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 
-	var path string
-
-	if stdout {
-		path = h.taskConfig.StdoutPath
-	} else {
-		path = h.taskConfig.StderrPath
-	}
-	file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NONBLOCK, 0600)
+	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		h.logger.Warn("Unable to open logfile", "err", err)
+		h.logger.Warn("Unable to open stdout fifo", "err", err)
 		return
 	}
+	defer stdout.Close()
+	stderr, err := os.OpenFile(h.taskConfig.StderrPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open stderr fifo", "err", err)
+		return
+	}
+	defer stderr.Close()
 
+	init := true
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			err = h.driver.podman.ContainerLogs(ctx, h.containerID, stdout, !stdout, file)
-			if err != nil {
-				h.logger.Warn("Unable to stream logs", "err", err)
+			if !init {
+				// throttle logger reconciliation
 				time.Sleep(2 * time.Second)
+			}
+			err = h.driver.podman.ContainerLogs(ctx, h.containerID, stdout, stderr)
+			if err != nil {
+				h.logger.Warn("Log stream was interrupted", "err", err)
+				init = false
 			} else {
 				return
 			}
@@ -180,8 +185,7 @@ func (h *TaskHandle) runContainerMonitor() {
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
 	logctx, logcancel := context.WithCancel(h.driver.ctx)
-	go h.runLogStreamer(logctx, false)
-	go h.runLogStreamer(logctx, true)
+	go h.runLogStreamer(logctx)
 
 	cleanup := func() {
 		h.logger.Debug("Container monitor exits", "container", h.containerID)
