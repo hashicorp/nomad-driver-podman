@@ -39,7 +39,7 @@ func (c *API) ContainerLogs(ctx context.Context, name string, stdout io.Writer, 
 			return err
 		}
 
-		c.logger.Debug("logger", "frame", string(frame), "fd", fd)
+		c.logger.Trace("logger", "frame", string(frame), "fd", fd)
 
 		switch fd {
 		case 0:

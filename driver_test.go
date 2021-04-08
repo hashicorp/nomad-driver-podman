@@ -1053,7 +1053,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 		// print our username to stdout
 		"sh",
 		"-c",
-		"mount|grep tmpfs",
+		"sleep 1;mount|grep tmpfs",
 	})
 	taskCfg.Tmpfs = []string{
 		"/tmpdata1",
