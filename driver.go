@@ -277,6 +277,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		taskConfig:  taskState.TaskConfig,
 		procState:   drivers.TaskStateUnknown,
 		startedAt:   taskState.StartedAt,
+		logPointer:  time.Now(), // do not rewind log to the startetAt date.
 		exitResult:  &drivers.ExitResult{},
 		logger:      d.logger.Named("podmanHandle"),
 
@@ -508,6 +509,22 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
+	h := &TaskHandle{
+		containerID: containerID,
+		driver:      d,
+		taskConfig:  cfg,
+		procState:   drivers.TaskStateRunning,
+		exitResult:  &drivers.ExitResult{},
+		startedAt:   time.Now(),
+		logPointer:  time.Now(),
+		logger:      d.logger.Named("podmanHandle"),
+
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
+	}
 
 	if !recoverRunningContainer {
 		if err = d.podman.ContainerStart(d.ctx, containerID); err != nil {
@@ -527,22 +544,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		PortMap:       driverConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
-	}
-
-	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
-		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger.Named("podmanHandle"),
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
-		removeContainerOnExit: d.config.GC.Container,
 	}
 
 	driverState := TaskState{

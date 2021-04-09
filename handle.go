@@ -36,6 +36,7 @@ type TaskHandle struct {
 	taskConfig  *drivers.TaskConfig
 	procState   drivers.TaskState
 	startedAt   time.Time
+	logPointer  time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 
@@ -157,6 +158,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 	defer stderr.Close()
 
 	init := true
+	since := h.logPointer
 	for {
 		select {
 		case <-ctx.Done():
@@ -166,10 +168,15 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 				// throttle logger reconciliation
 				time.Sleep(2 * time.Second)
 			}
-			err = h.driver.podman.ContainerLogs(ctx, h.containerID, stdout, stderr)
+			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
 			if err != nil {
 				h.logger.Warn("Log stream was interrupted", "err", err)
 				init = false
+				since = time.Now()
+				// increment logPointer
+				h.stateLock.Lock()
+				h.logPointer = since
+				h.stateLock.Unlock()
 			} else {
 				return
 			}

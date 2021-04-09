@@ -248,7 +248,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		fmt.Sprintf(`echo -n %s > $%s/%s; sleep 1`,
+		fmt.Sprintf(`echo -n %s > $%s/%s`,
 			string(exp), taskenv.AllocDir, file),
 	})
 	task := &drivers.TaskConfig{
@@ -946,7 +946,7 @@ func TestPodmanDriver_User(t *testing.T) {
 		// print our username to stdout
 		"sh",
 		"-c",
-		"sleep 1; whoami",
+		"whoami",
 	})
 
 	task := &drivers.TaskConfig{
@@ -1053,7 +1053,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 		// print our username to stdout
 		"sh",
 		"-c",
-		"sleep 1;mount|grep tmpfs",
+		"mount|grep tmpfs",
 	})
 	taskCfg.Tmpfs = []string{
 		"/tmpdata1",
@@ -1154,7 +1154,7 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		"sleep 1; cat /etc/resolv.conf",
+		"cat /etc/resolv.conf",
 	})
 	// network {
 	//   dns {

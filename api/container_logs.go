@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // ContainerLogs gets stdout and stderr logs from a container.
-func (c *API) ContainerLogs(ctx context.Context, name string, stdout io.Writer, stderr io.Writer) error {
+func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, stdout io.Writer, stderr io.Writer) error {
 
-	res, err := c.GetStream(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/logs?follow=true&tail=5&stdout=true&stderr=true", name))
+	res, err := c.GetStream(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/logs?follow=true&since=%d&stdout=true&stderr=true", name, since.Unix()))
 	if err != nil {
 		return err
 	}
