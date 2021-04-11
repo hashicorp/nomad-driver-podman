@@ -22,9 +22,10 @@ func TestApi_Image_Pull(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		err := api.ImagePull(ctx, testCase.Image)
+		id, err := api.ImagePull(ctx, testCase.Image)
 		if testCase.Exists {
 			assert.NoError(t, err)
+			assert.NotEqual(t, "", id)
 		} else {
 			assert.Error(t, err)
 		}

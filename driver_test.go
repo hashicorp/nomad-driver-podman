@@ -1381,9 +1381,39 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 	taskCfg := newTaskConfig(image, busyboxLongRunningCmd)
 	inspectData := startDestroyInspect(t, taskCfg, taskName)
 
-	parsedImage, err := parseImage(image)
+	d := podmanDriverHarness(t, nil)
+
+	imageID, err := getPodmanDriver(t, d).createImage(image)
 	require.NoError(t, err)
-	require.Equal(t, parsedImage, inspectData.Config.Image)
+	require.Equal(t, imageID, inspectData.Image)
+}
+
+func Test_createImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	d := podmanDriverHarness(t, nil)
+	// Need to test: shortname, longname with/without transport
+	// TODO: Also test oci/docker archives
+	// TODO: Make sure that images do NOT exist before some tests
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{Image: "busybox:musl", Reference: "docker.io/library/busybox:musl"},
+		{Image: "docker://busybox:unstable", Reference: "docker.io/library/busybox:unstable"},
+		{Image: "docker.io/library/busybox", Reference: "docker.io/library/busybox:latest"},
+	}
+
+	for _, testCase := range testCases {
+		idTest, err := getPodmanDriver(t, d).createImage(testCase.Image)
+		require.NoError(t, err)
+
+		idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), testCase.Reference)
+		require.NoError(t, err)
+		require.Equal(t, idRef, idTest)
+	}
 }
 
 func Test_memoryLimits(t *testing.T) {
@@ -1471,29 +1501,30 @@ func Test_parseImage(t *testing.T) {
 
 	digest := "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testCases := []struct {
-		Input string
-		Image string
+		Input     string
+		Name      string
+		Transport string
 	}{
-		{Input: "quay.io/prometheus/busybox:glibc", Image: "quay.io/prometheus/busybox:glibc"},
-		{Input: "root", Image: "docker.io/library/root:latest"},
-		{Input: "root:tag", Image: "docker.io/library/root:tag"},
-		{Input: "root@" + digest, Image: "docker.io/library/root@" + digest},
-		{Input: "docker://root", Image: "docker.io/library/root:latest"},
-		{Input: "user/repo", Image: "docker.io/user/repo:latest"},
-		{Input: "https://busybox", Image: "docker.io/library/busybox:latest"},
-		{Input: "user/repo:tag", Image: "docker.io/user/repo:tag"},
-		{Input: "url:5000/repo", Image: "url:5000/repo:latest"},
-		{Input: "http://busybox@" + digest, Image: "docker.io/library/busybox@" + digest},
-		{Input: "url:5000/repo:tag", Image: "url:5000/repo:tag"},
-		{Input: "https://quay.io/busybox", Image: "quay.io/busybox:latest"},
+		{Input: "quay.io/repo/busybox:glibc", Name: "quay.io/repo/busybox:glibc", Transport: "docker"},
+		{Input: "docker.io/library/root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "docker://root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "user/repo@" + digest, Name: "docker.io/user/repo@" + digest, Transport: "docker"},
+		{Input: "user/repo:tag", Name: "docker.io/user/repo:tag", Transport: "docker"},
+		{Input: "url:5000/repo", Name: "url:5000/repo:latest", Transport: "docker"},
+		{Input: "url:5000/repo:tag", Name: "url:5000/repo:tag", Transport: "docker"},
+		{Input: "oci-archive:path:tag", Name: "path:tag", Transport: "oci-archive"},
+		{Input: "docker-archive:path:image:tag", Name: "path:docker.io/library/image:tag", Transport: "docker-archive"},
 	}
 	for _, testCase := range testCases {
-		image, err := parseImage(testCase.Input)
-		if err != nil {
-			t.Errorf("parseImage(%s) failed: %v", testCase.Input, err)
-		} else if image != testCase.Image {
-			t.Errorf("Expected image: %q, but got %q", testCase.Image, image)
+		ref, err := parseImage(testCase.Input)
+		require.NoError(t, err)
+		require.Equal(t, testCase.Transport, ref.Transport().Name())
+		if ref.Transport().Name() == "docker" {
+			require.Equal(t, testCase.Name, ref.DockerReference().String())
+		} else {
+			require.Equal(t, testCase.Name, ref.StringWithinTransport())
 		}
+
 	}
 }
 

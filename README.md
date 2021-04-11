@@ -108,7 +108,7 @@ plugin "nomad-driver-podman" {
 ```
 ## Task Configuration
 
-* **image** - The image to run,
+* **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
 
 ```
 config {
@@ -343,7 +343,7 @@ $ systemctl --user status podman.socket
    Triggers: * podman.service
        Docs: man:podman-system-service(1)
      Listen: /run/user/1000/podman/podman.sock (Stream)
-     CGroup: /user.slice/user-1000.slice/user@1000.service/podman.socket             
+     CGroup: /user.slice/user-1000.slice/user@1000.service/podman.socket
 ```
 
 ensure that you have a recent version of [crun](https://github.com/containers/crun/)
