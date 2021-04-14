@@ -43,7 +43,6 @@ var (
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
-		"dns":                hclspec.NewAttr("dns", "list(string)", false),
 		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
 		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
