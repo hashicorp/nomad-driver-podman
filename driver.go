@@ -384,18 +384,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Memory: &spec.LinuxMemory{},
 		CPU:    &spec.LinuxCPU{},
 	}
-	if driverConfig.MemoryReservation != "" {
-		reservation, err := memoryInBytes(driverConfig.MemoryReservation)
-		if err != nil {
-			return nil, nil, err
-		}
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = &reservation
-	}
 
-	if cfg.Resources.NomadResources.Memory.MemoryMB > 0 {
-		limit := cfg.Resources.NomadResources.Memory.MemoryMB * 1024 * 1024
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = &limit
+	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
+	if err != nil {
+		return nil, nil, err
 	}
+	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
+	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
+
 	if driverConfig.MemorySwap != "" {
 		swap, err := memoryInBytes(driverConfig.MemorySwap)
 		if err != nil {
@@ -582,6 +578,34 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, net, nil
+}
+
+func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
+	memoryMax := r.MemoryMaxMB * 1024 * 1024
+	memory := r.MemoryMB * 1024 * 1024
+
+	var reserved *int64
+	if reservation != "" {
+		reservation, err := memoryInBytes(reservation)
+		if err != nil {
+			return nil, nil, err
+		}
+		reserved = &reservation
+	}
+
+	if memoryMax > 0 {
+		if reserved != nil && *reserved < memory {
+			memory = *reserved
+		}
+		return &memoryMax, &memory, nil
+	}
+
+	if memory > 0 {
+		return &memory, reserved, nil
+	}
+
+	// We may never actually be here
+	return nil, reserved, nil
 }
 
 func memoryInBytes(strmem string) (int64, error) {
