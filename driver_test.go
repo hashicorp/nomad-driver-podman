@@ -1386,6 +1386,84 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 	require.Equal(t, parsedImage, inspectData.Config.Image)
 }
 
+func Test_memoryLimits(t *testing.T) {
+	cases := []struct {
+		name         string
+		memResources drivers.MemoryResources
+		reservation  string
+		expectedHard int64
+		expectedSoft int64
+	}{
+		{
+			name: "plain",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 0,
+		},
+		{
+			name: "memory oversubscription",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+		{
+			name: "plain but using memory reservations",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			reservation:  "10m",
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "10m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying high memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "25m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hard, soft, err := memoryLimits(c.memResources, c.reservation)
+			require.NoError(t, err)
+
+			if c.expectedHard > 0 {
+				require.NotNil(t, hard)
+				require.Equal(t, c.expectedHard, *hard)
+			} else {
+				require.Nil(t, hard)
+			}
+
+			if c.expectedSoft > 0 {
+				require.NotNil(t, soft)
+				require.Equal(t, c.expectedSoft, *soft)
+			} else {
+				require.Nil(t, soft)
+			}
+		})
+	}
+}
+
 func Test_parseImage(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
