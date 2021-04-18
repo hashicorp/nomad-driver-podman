@@ -386,8 +386,8 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Check stdout/stderr logging
-func TestPodmanDriver_StdOutErr(t *testing.T) {
+// Check log_opt=journald logger
+func TestPodmanDriver_logJournald(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -400,9 +400,10 @@ func TestPodmanDriver_StdOutErr(t *testing.T) {
 		"-c",
 		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
 	})
+	taskCfg.LogDriver = "journald"
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
-		Name:      "stdout",
+		Name:      "logJournald",
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
@@ -435,6 +436,55 @@ func TestPodmanDriver_StdOutErr(t *testing.T) {
 	require.Contains(t, stderrLog, stderrMagic, "stderrMagic in stderr")
 	require.NotContains(t, stderrLog, stdoutMagic, "stderrMagic NOT in stderr")
 
+}
+
+// Check log_opt=nomad logger
+func TestPodmanDriver_logNomad(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	stdoutMagic := uuid.Generate()
+	stderrMagic := uuid.Generate()
+
+	taskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
+	})
+	taskCfg.LogDriver = "nomad"
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "logNomad",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// log_driver=nomad combines both streams into stdout, so we will find both
+	// magic values in the same stream
+	stdoutLog := readStdoutLog(t, task)
+	require.Contains(t, stdoutLog, stdoutMagic, "stdoutMagic in stdout")
+	require.Contains(t, stdoutLog, stderrMagic, "stderrMagic in stdout")
 }
 
 // check hostname task config options

@@ -45,6 +45,9 @@ const (
 	// taskHandleVersion is the version of task handle which this driver sets
 	// and understands how to decode driver state
 	taskHandleVersion = 1
+
+	LOG_DRIVER_NOMAD    = "nomad"
+	LOG_DRIVER_JOURNALD = "journald"
 )
 
 var (
@@ -261,7 +264,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	var taskState TaskState
 	if err := handle.GetDriverState(&taskState); err != nil {
-		return fmt.Errorf("failed to decode task state from handle: %v", err)
+		return fmt.Errorf("failed to decode task state from handle: %w", err)
 	}
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
@@ -371,6 +374,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Hostname = driverConfig.Hostname
 	createOpts.ContainerBasicConfig.Sysctl = driverConfig.Sysctl
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
+
+	// Logging
+	if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
+		createOpts.LogConfiguration.Driver = "journald"
+	} else if driverConfig.LogDriver == LOG_DRIVER_NOMAD {
+		createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	} else {
+		return nil, nil, fmt.Errorf("Invalid log_driver option")
+	}
 
 	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init
