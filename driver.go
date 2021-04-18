@@ -376,10 +376,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
 
 	// Logging
-	if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
-		createOpts.LogConfiguration.Driver = "journald"
-	} else if driverConfig.LogDriver == LOG_DRIVER_NOMAD {
+	if driverConfig.LogDriver == "" || driverConfig.LogDriver == LOG_DRIVER_NOMAD {
 		createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	} else if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
+		createOpts.LogConfiguration.Driver = "journald"
 	} else {
 		return nil, nil, fmt.Errorf("Invalid log_driver option")
 	}
