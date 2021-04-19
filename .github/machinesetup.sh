@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-# add podman 2.x repository
-echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_18.04/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_18.04/Release.key | apt-key add -
+# add podman repository
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/Release.key | apt-key add -
 
 # Ignore apt-get update errors to avoid failing due to misbehaving repo;
 # true errors would fail in the apt-get install phase
@@ -25,7 +25,7 @@ podman info
 echo "====== Podman version:"
 podman version
 
-# enable http socket (not included in ubuntu package)
+# enable http socket 
 cat > /etc/systemd/system/podman.service << EOF
 [Unit]
 Description=Podman API Service
