@@ -1393,27 +1393,57 @@ func Test_createImage(t *testing.T) {
 		t.Parallel()
 	}
 
-	d := podmanDriverHarness(t, nil)
-	// Need to test: shortname, longname with/without transport
-	// TODO: Also test oci/docker archives
-	// TODO: Make sure that images do NOT exist before some tests
 	testCases := []struct {
 		Image     string
 		Reference string
 	}{
 		{Image: "busybox:musl", Reference: "docker.io/library/busybox:musl"},
-		{Image: "docker://busybox:unstable", Reference: "docker.io/library/busybox:unstable"},
+		{Image: "docker://busybox:latest", Reference: "docker.io/library/busybox:latest"},
 		{Image: "docker.io/library/busybox", Reference: "docker.io/library/busybox:latest"},
 	}
 
 	for _, testCase := range testCases {
-		idTest, err := getPodmanDriver(t, d).createImage(testCase.Image)
-		require.NoError(t, err)
-
-		idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), testCase.Reference)
-		require.NoError(t, err)
-		require.Equal(t, idRef, idTest)
+		createInspectImage(t, testCase.Image, testCase.Reference)
 	}
+}
+
+func Test_createImageArchives(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	archiveDir := os.Getenv("ARCHIVE_DIR")
+	if archiveDir == "" {
+		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+	}
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{
+			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
+			Reference: "localhost/alpine:latest",
+		},
+		{
+			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),
+			Reference: "docker.io/library/alpine:latest",
+		},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
+func createInspectImage(t *testing.T, image, reference string) {
+	d := podmanDriverHarness(t, nil)
+
+	idTest, err := getPodmanDriver(t, d).createImage(image)
+	require.NoError(t, err)
+
+	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
+	require.NoError(t, err)
+	require.Equal(t, idRef, idTest)
 }
 
 func Test_memoryLimits(t *testing.T) {

@@ -630,22 +630,21 @@ func (d *Driver) createImage(image string) (string, error) {
 		if err != nil {
 			return imageID, fmt.Errorf("invalid image reference %s: %w", image, err)
 		}
-		// For archive transports, we cannot ask for a pull or
-		// check for existence in the API without image plumbing.
-		// Load the images instead
 		switch transport := imageRef.Transport().Name(); transport {
+		case "docker":
+			imageName = imageRef.DockerReference().String()
 		case "oci-archive", "docker-archive":
-			// docker-archive:path[:docker-reference]
-			// oci-archive:path:tag
-			path := strings.Split(image, ":")[1]
+			// For archive transports, we cannot ask for a pull or
+			// check for existence in the API without image plumbing.
+			// Load the images instead
+			archiveData := imageRef.StringWithinTransport()
+			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
-			imageID, err = d.podman.ImageLoad(d.ctx, path)
+			imageName, err = d.podman.ImageLoad(d.ctx, path)
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
 			}
-			return imageID, nil
 		}
-		imageName = imageRef.DockerReference().String()
 	}
 
 	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
