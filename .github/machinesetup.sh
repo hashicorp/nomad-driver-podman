@@ -9,7 +9,7 @@ curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/
 apt-get update || true
 
 # install podman for running the test suite
-apt-get install -y podman wget ca-certificates
+apt-get install -y podman wget ca-certificates build-essential
 
 # get catatonit (to check podman --init switch)
 cd /tmp
