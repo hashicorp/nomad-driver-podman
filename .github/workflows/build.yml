@@ -31,6 +31,7 @@ jobs:
 
     - name: Compile driver
       run: sudo -E ./build.sh
+
     - name: Archive production artifacts
       uses: actions/upload-artifact@v1
       with:
