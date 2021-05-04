@@ -6,7 +6,7 @@ VAGRANTFILE_API_VERSION = "2"
 # Create box
 Vagrant.configure("2") do |config|
   config.vm.define "podman-linux"
-  config.vm.box = "hashicorp/bionic64"
+  config.vm.box = "ubuntu/focal64"
   config.vm.synced_folder ".", "/home/vagrant/nomad-driver-podman"
   config.ssh.extra_args = ["-t", "cd /home/vagrant/nomad-driver-podman; bash --login"]
   config.vm.network "forwarded_port", guest: 4646, host: 4646, host_ip: "127.0.0.1"
