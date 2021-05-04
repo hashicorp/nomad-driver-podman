@@ -1,10 +1,13 @@
 name: build
 
-on: 
+on:
   pull_request:
     branches:
       - main
   workflow_dispatch:
+
+env:
+  ARCHIVE_DIR: /tmp
 
 jobs:
   build:
@@ -33,6 +36,9 @@ jobs:
       with:
         name: nomad-driver-podman
         path: nomad-driver-podman
+
+    - name: Produce oci and docker archives
+      run: sudo podman pull alpine:latest && sudo podman save --format docker-archive --output $ARCHIVE_DIR/docker-archive alpine:latest && sudo podman save --format oci-archive --output $ARCHIVE_DIR/oci-archive alpine:latest && sudo podman image rm alpine:latest
 
     - name: Test
       run: sudo -E GOPATH=$PWD/build CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api

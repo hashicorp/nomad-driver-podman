@@ -25,9 +25,14 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 
-	dockerref "github.com/docker/distribution/reference"
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/containers/image/v5/docker"
+	dockerArchive "github.com/containers/image/v5/docker/archive"
+	ociArchive "github.com/containers/image/v5/oci/archive"
+	"github.com/containers/image/v5/pkg/shortnames"
+	"github.com/containers/image/v5/types"
 )
 
 const (
@@ -480,30 +485,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		// FIXME: there are more variations of image sources, we should handle it
-		//        e.g. oci-archive:/... etc
-		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
-
-		imageName, err := parseImage(createOpts.Image)
+		imageID, err := d.createImage(createOpts.Image)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, unable to parse image reference %s: %v", createOpts.Image, err)
+			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
-
-		// do we already have this image in local storage?
-		haveImage, err := d.podman.ImageExists(d.ctx, imageName)
-		if err != nil {
-			d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
-			// do NOT fail this operation, instead try to pull the image
-			haveImage = false
-		}
-		if !haveImage {
-			d.logger.Debug("Pull image", "image", imageName)
-			// image is not in local storage, so we need to pull it
-			if err = d.podman.ImagePull(d.ctx, imageName); err != nil {
-				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s : %v", imageName, err)
-			}
-		}
-		createOpts.Image = imageName
+		createOpts.Image = imageID
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
@@ -632,35 +618,82 @@ func memoryInBytes(strmem string) (int64, error) {
 	}
 }
 
-func parseImage(image string) (string, error) {
-	// strip http/https and docker transport prefix
-	for _, prefix := range []string{"http://", "https://", "docker://"} {
-		if strings.HasPrefix(image, prefix) {
-			image = strings.Replace(image, prefix, "", 1)
+// Creates the requested image if missing from storage
+// returns the 64-byte image ID as an unique image identifier
+func (d *Driver) createImage(image string) (string, error) {
+	var imageID string
+	imageName := image
+	// If it is a shortname, we should not have to worry
+	// Let podman deal with it according to user configuration
+	if !shortnames.IsShortName(image) {
+		imageRef, err := parseImage(image)
+		if err != nil {
+			return imageID, fmt.Errorf("invalid image reference %s: %w", image, err)
+		}
+		switch transport := imageRef.Transport().Name(); transport {
+		case "docker":
+			imageName = imageRef.DockerReference().String()
+		case "oci-archive", "docker-archive":
+			// For archive transports, we cannot ask for a pull or
+			// check for existence in the API without image plumbing.
+			// Load the images instead
+			archiveData := imageRef.StringWithinTransport()
+			path := strings.Split(archiveData, ":")[0]
+			d.logger.Debug("Load image archive", "path", path)
+			imageName, err = d.podman.ImageLoad(d.ctx, path)
+			if err != nil {
+				return imageID, fmt.Errorf("error while loading image: %w", err)
+			}
 		}
 	}
 
-	named, err := dockerref.ParseNormalizedNamed(image)
+	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
 	if err != nil {
-		return "", err
+		// If ImageInspectID errors, continue the operation and try
+		// to pull the image instead
+		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
+	}
+	if imageID != "" {
+		d.logger.Info("Found imageID", imageID, "for image", imageName, "in local storage")
+		return imageID, nil
 	}
 
-	var tag, digest string
+	d.logger.Debug("Pull image", "image", imageName)
+	if imageID, err = d.podman.ImagePull(d.ctx, imageName); err != nil {
+		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+	}
+	d.logger.Debug("Pulled image ID", "imageID", imageID)
+	return imageID, nil
+}
 
-	tagged, ok := named.(dockerref.Tagged)
-	if ok {
-		tag = tagged.Tag()
-		return fmt.Sprintf("%s:%s", named.Name(), tag), nil
+func parseImage(image string) (types.ImageReference, error) {
+	var transport, name string
+	parts := strings.SplitN(image, ":", 2)
+	// In case the transport is missing, assume docker://
+	if len(parts) == 1 {
+		transport = "docker"
+		name = "//" + image
+	} else {
+		transport = parts[0]
+		name = parts[1]
 	}
 
-	digested, ok := named.(dockerref.Digested)
-	if ok {
-		digest = digested.Digest().String()
-		return fmt.Sprintf("%s@%s", named.Name(), digest), nil
+	switch transport {
+	case "docker":
+		return docker.ParseReference(name)
+	case "oci-archive":
+		return ociArchive.ParseReference(name)
+	case "docker-archive":
+		return dockerArchive.ParseReference(name)
+	default:
+		// We could have both an unknown/malformed transport
+		// or an image:tag with default "docker://" transport omitted
+		ref, err := docker.ParseReference("//" + image)
+		if err == nil {
+			return ref, nil
+		}
+		return nil, fmt.Errorf("unsupported transport %s", transport)
 	}
-
-	// Image is neither diggested, nor tagged. Default to 'latest'
-	return fmt.Sprintf("%s:%s", named.Name(), "latest"), nil
 }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task
