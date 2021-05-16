@@ -117,6 +117,18 @@ config {
 }
 ```
 
+* **auth** - (Optional) Authenticate to the image registry using a static credential.
+
+```
+config {
+  image = "your.registry.tld/some/image"
+  auth {
+    username = "someuser"
+    password = "sup3rs3creT"
+  }
+}
+```
+
 * **entrypoint** - (Optional) The entrypoint for the container. Defaults to the entrypoint set in the image.
 
 ```

@@ -11,10 +11,17 @@ import (
 )
 
 // ImagePull pulls a image from a remote location to local storage
-func (c *API) ImagePull(ctx context.Context, nameWithTag string) (string, error) {
+func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthConfig) (string, error) {
 	var id string
 
-	res, err := c.Post(ctx, fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s", nameWithTag), nil)
+	authHeader, err := NewAuthHeader(auth)
+	if err != nil {
+		return "", err
+	}
+	headers := map[string]string{
+		"X-Registry-Auth": authHeader,
+	}
+	res, err := c.PostWithHeaders(ctx, fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s", nameWithTag), nil, headers)
 	if err != nil {
 		return "", err
 	}
