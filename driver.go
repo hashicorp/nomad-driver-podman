@@ -485,7 +485,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image)
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -620,7 +620,7 @@ func memoryInBytes(strmem string) (int64, error) {
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -659,7 +659,11 @@ func (d *Driver) createImage(image string) (string, error) {
 	}
 
 	d.logger.Debug("Pull image", "image", imageName)
-	if imageID, err = d.podman.ImagePull(d.ctx, imageName); err != nil {
+	imageAuth := api.ImageAuthConfig{
+		Username: auth.Username,
+		Password: auth.Password,
+	}
+	if imageID, err = d.podman.ImagePull(d.ctx, imageName, imageAuth); err != nil {
 		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 	}
 	d.logger.Debug("Pulled image ID", "imageID", imageID)

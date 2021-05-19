@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +24,11 @@ type API struct {
 type ClientConfig struct {
 	SocketPath  string
 	HttpTimeout time.Duration
+}
+
+type ImageAuthConfig struct {
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 func DefaultClientConfig() ClientConfig {
@@ -78,11 +85,18 @@ func (c *API) Get(ctx context.Context, path string) (*http.Response, error) {
 }
 
 func (c *API) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	return c.PostWithHeaders(ctx, path, body, map[string]string{})
+}
+
+func (c *API) PostWithHeaders(ctx context.Context, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseUrl+path, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	return c.Do(req)
 }
 
@@ -92,4 +106,14 @@ func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
 		return nil, err
 	}
 	return c.Do(req)
+}
+
+// NewAuthHeader encodes auth configuration to a docker X-Registry-Auth header payload.
+func NewAuthHeader(auth ImageAuthConfig) (string, error) {
+	jsonBytes, err := json.Marshal(auth)
+	if err != nil {
+		return "", err
+	}
+	header := base64.StdEncoding.EncodeToString(jsonBytes)
+	return header, nil
 }
