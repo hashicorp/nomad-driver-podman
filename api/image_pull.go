@@ -13,14 +13,17 @@ import (
 // ImagePull pulls a image from a remote location to local storage
 func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthConfig) (string, error) {
 	var id string
+	headers := map[string]string{}
 
-	authHeader, err := NewAuthHeader(auth)
-	if err != nil {
-		return "", err
+	// handle authentication
+	if auth.Username != "" && auth.Password != "" {
+		authHeader, err := NewAuthHeader(auth)
+		if err != nil {
+			return "", err
+		}
+		headers["X-Registry-Auth"] = authHeader
 	}
-	headers := map[string]string{
-		"X-Registry-Auth": authHeader,
-	}
+
 	res, err := c.PostWithHeaders(ctx, fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s", nameWithTag), nil, headers)
 	if err != nil {
 		return "", err
