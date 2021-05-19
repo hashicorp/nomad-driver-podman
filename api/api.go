@@ -108,7 +108,7 @@ func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
 	return c.Do(req)
 }
 
-// encode auth configuration to a docker'isch X-Registry-Auth header payload
+// NewAuthHeader encodes auth configuration to a docker X-Registry-Auth header payload.
 func NewAuthHeader(auth ImageAuthConfig) (string, error) {
 	jsonBytes, err := json.Marshal(auth)
 	if err != nil {
