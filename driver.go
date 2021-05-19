@@ -25,9 +25,14 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 
-	dockerref "github.com/docker/distribution/reference"
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/containers/image/v5/docker"
+	dockerArchive "github.com/containers/image/v5/docker/archive"
+	ociArchive "github.com/containers/image/v5/oci/archive"
+	"github.com/containers/image/v5/pkg/shortnames"
+	"github.com/containers/image/v5/types"
 )
 
 const (
@@ -223,7 +228,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		desc = "ready"
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
-		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Rootless)
+		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
 		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
 		if d.systemInfo.Version.Version == "" {
 			// keep first received systemInfo in driver struct
@@ -323,6 +328,8 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
+	rootless := d.systemInfo.Host.Security.Rootless
+
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
@@ -382,18 +389,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		Memory: &spec.LinuxMemory{},
 		CPU:    &spec.LinuxCPU{},
 	}
-	if driverConfig.MemoryReservation != "" {
-		reservation, err := memoryInBytes(driverConfig.MemoryReservation)
-		if err != nil {
-			return nil, nil, err
-		}
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = &reservation
-	}
 
-	if cfg.Resources.NomadResources.Memory.MemoryMB > 0 {
-		limit := cfg.Resources.NomadResources.Memory.MemoryMB * 1024 * 1024
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = &limit
+	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
+	if err != nil {
+		return nil, nil, err
 	}
+	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
+	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
+
 	if driverConfig.MemorySwap != "" {
 		swap, err := memoryInBytes(driverConfig.MemorySwap)
 		if err != nil {
@@ -407,7 +410,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
 	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
-	if !d.systemInfo.Host.Rootless {
+	if !rootless {
 		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
@@ -418,12 +421,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.User = cfg.User
 
 	// Network config options
-	for _, strdns := range driverConfig.Dns {
-		ipdns := net.ParseIP(strdns)
-		if ipdns == nil {
-			return nil, nil, fmt.Errorf("Invald dns server address")
+	if cfg.DNS != nil {
+		for _, strdns := range cfg.DNS.Servers {
+			ipdns := net.ParseIP(strdns)
+			if ipdns == nil {
+				return nil, nil, fmt.Errorf("Invald dns server address")
+			}
+			createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
 		}
-		createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
+		createOpts.ContainerNetworkConfig.DNSSearch = append(createOpts.ContainerNetworkConfig.DNSSearch, cfg.DNS.Searches...)
+		createOpts.ContainerNetworkConfig.DNSOptions = append(createOpts.ContainerNetworkConfig.DNSOptions, cfg.DNS.Options...)
 	}
 	// Configure network
 	if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Path != "" {
@@ -431,7 +438,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
 	} else {
 		if driverConfig.NetworkMode == "" {
-			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			if !rootless {
+				// bridge is default for rootful podman
+				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			} else {
+				// slirp4netns is default for rootless podman
+				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+			}
 		} else if driverConfig.NetworkMode == "bridge" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
 		} else if driverConfig.NetworkMode == "host" {
@@ -472,29 +485,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		// FIXME: there are more variations of image sources, we should handle it
-		//        e.g. oci-archive:/... etc
-		//        see also https://github.com/hashicorp/nomad-driver-podman/issues/69
-
-		imageName, tag, err := parseImage(createOpts.Image)
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, unable to parse image reference %s: %v", createOpts.Image, err)
+			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
-
-		// do we already have this image in local storage?
-		haveImage, err := d.podman.ImageExists(d.ctx, fmt.Sprintf("%s:%s", imageName, tag))
-		if err != nil {
-			d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
-			// do NOT fail this operation, instead try to pull the image
-			haveImage = false
-		}
-		if !haveImage {
-			d.logger.Debug("Pull image", "image", imageName)
-			// image is not in local storage, so we need to pull it
-			if err = d.podman.ImagePull(d.ctx, imageName); err != nil {
-				return nil, nil, fmt.Errorf("failed to start task, unable to pull image %s: %v", imageName, err)
-			}
-		}
+		createOpts.Image = imageID
 
 		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
@@ -571,6 +566,34 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, net, nil
 }
 
+func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
+	memoryMax := r.MemoryMaxMB * 1024 * 1024
+	memory := r.MemoryMB * 1024 * 1024
+
+	var reserved *int64
+	if reservation != "" {
+		reservation, err := memoryInBytes(reservation)
+		if err != nil {
+			return nil, nil, err
+		}
+		reserved = &reservation
+	}
+
+	if memoryMax > 0 {
+		if reserved != nil && *reserved < memory {
+			memory = *reserved
+		}
+		return &memoryMax, &memory, nil
+	}
+
+	if memory > 0 {
+		return &memory, reserved, nil
+	}
+
+	// We may never actually be here
+	return nil, reserved, nil
+}
+
 func memoryInBytes(strmem string) (int64, error) {
 	l := len(strmem)
 	if l < 2 {
@@ -595,34 +618,86 @@ func memoryInBytes(strmem string) (int64, error) {
 	}
 }
 
-func parseImage(image string) (string, string, error) {
-	// strip http/https and docker transport prefix
-	for _, prefix := range []string{"http://", "https://", "docker://"} {
-		if strings.HasPrefix(image, prefix) {
-			image = strings.Replace(image, prefix, "", 1)
+// Creates the requested image if missing from storage
+// returns the 64-byte image ID as an unique image identifier
+func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
+	var imageID string
+	imageName := image
+	// If it is a shortname, we should not have to worry
+	// Let podman deal with it according to user configuration
+	if !shortnames.IsShortName(image) {
+		imageRef, err := parseImage(image)
+		if err != nil {
+			return imageID, fmt.Errorf("invalid image reference %s: %w", image, err)
+		}
+		switch transport := imageRef.Transport().Name(); transport {
+		case "docker":
+			imageName = imageRef.DockerReference().String()
+		case "oci-archive", "docker-archive":
+			// For archive transports, we cannot ask for a pull or
+			// check for existence in the API without image plumbing.
+			// Load the images instead
+			archiveData := imageRef.StringWithinTransport()
+			path := strings.Split(archiveData, ":")[0]
+			d.logger.Debug("Load image archive", "path", path)
+			imageName, err = d.podman.ImageLoad(d.ctx, path)
+			if err != nil {
+				return imageID, fmt.Errorf("error while loading image: %w", err)
+			}
 		}
 	}
 
-	named, err := dockerref.ParseNormalizedNamed(image)
+	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
 	if err != nil {
-		return "", "", nil
+		// If ImageInspectID errors, continue the operation and try
+		// to pull the image instead
+		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
+	}
+	if imageID != "" {
+		d.logger.Info("Found imageID", imageID, "for image", imageName, "in local storage")
+		return imageID, nil
 	}
 
-	var tag, digest string
+	d.logger.Debug("Pull image", "image", imageName)
+	imageAuth := api.ImageAuthConfig{
+		Username: auth.Username,
+		Password: auth.Password,
+	}
+	if imageID, err = d.podman.ImagePull(d.ctx, imageName, imageAuth); err != nil {
+		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+	}
+	d.logger.Debug("Pulled image ID", "imageID", imageID)
+	return imageID, nil
+}
 
-	tagged, ok := named.(dockerref.Tagged)
-	if ok {
-		tag = tagged.Tag()
+func parseImage(image string) (types.ImageReference, error) {
+	var transport, name string
+	parts := strings.SplitN(image, ":", 2)
+	// In case the transport is missing, assume docker://
+	if len(parts) == 1 {
+		transport = "docker"
+		name = "//" + image
+	} else {
+		transport = parts[0]
+		name = parts[1]
 	}
 
-	digested, ok := named.(dockerref.Digested)
-	if ok {
-		digest = digested.Digest().String()
+	switch transport {
+	case "docker":
+		return docker.ParseReference(name)
+	case "oci-archive":
+		return ociArchive.ParseReference(name)
+	case "docker-archive":
+		return dockerArchive.ParseReference(name)
+	default:
+		// We could have both an unknown/malformed transport
+		// or an image:tag with default "docker://" transport omitted
+		ref, err := docker.ParseReference("//" + image)
+		if err == nil {
+			return ref, nil
+		}
+		return nil, fmt.Errorf("unsupported transport %s", transport)
 	}
-	if len(tag) == 0 && len(digest) == 0 {
-		tag = "latest"
-	}
-	return named.Name(), tag, nil
 }
 
 // WaitTask function is expected to return a channel that will send an *ExitResult when the task

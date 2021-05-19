@@ -39,11 +39,14 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"args":               hclspec.NewAttr("args", "list(string)", false),
+		"args": hclspec.NewAttr("args", "list(string)", false),
+		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"username": hclspec.NewAttr("username", "string", false),
+			"password": hclspec.NewAttr("password", "string", false),
+		})),
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
-		"dns":                hclspec.NewAttr("dns", "list(string)", false),
 		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
 		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
@@ -62,6 +65,12 @@ var (
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 	})
 )
+
+// AuthConfig is the tasks authentication configuration
+type AuthConfig struct {
+	Username string `codec:"username"`
+	Password string `codec:"password"`
+}
 
 // GCConfig is the driver GarbageCollection configuration
 type GCConfig struct {
@@ -85,12 +94,12 @@ type PluginConfig struct {
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
 	Args              []string           `codec:"args"`
+	Auth              AuthConfig         `codec:"auth"`
 	Ports             []string           `codec:"ports"`
 	Tmpfs             []string           `codec:"tmpfs"`
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
-	Dns               []string           `codec:"dns"`
 	Command           string             `codec:"command"`
 	Entrypoint        string             `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`

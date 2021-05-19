@@ -1150,18 +1150,23 @@ func TestPodmanDriver_Dns(t *testing.T) {
 		"-c",
 		"sleep 1; cat /etc/resolv.conf",
 	})
-	// config {
-	//   dns = [
-	//     "1.1.1.1"
-	//   ]
+	// network {
+	//   dns {
+	//     servers = ["1.1.1.1"]
+	// 	   searches = ["internal.corp"]
+	//     options = ["ndots:2"]
+	//   }
 	// }
-	taskCfg.Dns = []string{"1.1.1.1"}
-
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "dns",
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
+		DNS: &drivers.DNSConfig{
+			Servers:  []string{"1.1.1.1"},
+			Searches: []string{"internal.corp"},
+			Options:  []string{"ndots:2"},
+		},
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -1189,6 +1194,8 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	// see if stdout was populated with the correct output
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "nameserver 1.1.1.1")
+	require.Contains(t, tasklog, "search internal.corp")
+	require.Contains(t, tasklog, "options ndots:2")
 
 }
 
@@ -1350,35 +1357,204 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 }
 
-func Test_parseImage(t *testing.T) {
+// Make sure we can pull and start "non-latest" containers
+func TestPodmanDriver_Pull(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
 
 	testCases := []struct {
-		Input string
-		Repo  string
-		Tag   string
+		Image    string
+		TaskName string
 	}{
-		{Input: "quay.io/prometheus/busybox:glibc", Repo: "quay.io/prometheus/busybox", Tag: "glibc"},
-		{Input: "root", Repo: "docker.io/library/root", Tag: "latest"},
-		{Input: "root:tag", Repo: "docker.io/library/root", Tag: "tag"},
-		{Input: "docker://root", Repo: "docker.io/library/root", Tag: "latest"},
-		{Input: "user/repo", Repo: "docker.io/user/repo", Tag: "latest"},
-		{Input: "https://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
-		{Input: "user/repo:tag", Repo: "docker.io/user/repo", Tag: "tag"},
-		{Input: "url:5000/repo", Repo: "url:5000/repo", Tag: "latest"},
-		{Input: "http://busybox", Repo: "docker.io/library/busybox", Tag: "latest"},
-		{Input: "url:5000/repo:tag", Repo: "url:5000/repo", Tag: "tag"},
-		{Input: "https://quay.io/busybox", Repo: "quay.io/busybox", Tag: "latest"},
+		{Image: "busybox:unstable", TaskName: "pull_tag"},
+		{Image: "busybox", TaskName: "pull_non_tag"},
+		{Image: "busybox@sha256:ce98b632acbcbdf8d6fdc50d5f91fea39c770cd5b3a2724f52551dde4d088e96", TaskName: "pull_digest"},
+	}
+
+	for _, testCase := range testCases {
+		startDestroyInspectImage(t, testCase.Image, testCase.TaskName)
+	}
+}
+
+func startDestroyInspectImage(t *testing.T, image string, taskName string) {
+	taskCfg := newTaskConfig(image, busyboxLongRunningCmd)
+	inspectData := startDestroyInspect(t, taskCfg, taskName)
+
+	d := podmanDriverHarness(t, nil)
+
+	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	require.NoError(t, err)
+	require.Equal(t, imageID, inspectData.Image)
+}
+
+func Test_createImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{Image: "busybox:musl", Reference: "docker.io/library/busybox:musl"},
+		{Image: "docker://busybox:latest", Reference: "docker.io/library/busybox:latest"},
+		{Image: "docker.io/library/busybox", Reference: "docker.io/library/busybox:latest"},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
+func Test_createImageArchives(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	archiveDir := os.Getenv("ARCHIVE_DIR")
+	if archiveDir == "" {
+		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+	}
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{
+			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
+			Reference: "localhost/alpine:latest",
+		},
+		{
+			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),
+			Reference: "docker.io/library/alpine:latest",
+		},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
+func createInspectImage(t *testing.T, image, reference string) {
+	d := podmanDriverHarness(t, nil)
+
+	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	require.NoError(t, err)
+
+	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
+	require.NoError(t, err)
+	require.Equal(t, idRef, idTest)
+}
+
+func Test_memoryLimits(t *testing.T) {
+	cases := []struct {
+		name         string
+		memResources drivers.MemoryResources
+		reservation  string
+		expectedHard int64
+		expectedSoft int64
+	}{
+		{
+			name: "plain",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 0,
+		},
+		{
+			name: "memory oversubscription",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+		{
+			name: "plain but using memory reservations",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			reservation:  "10m",
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "10m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying high memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "25m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hard, soft, err := memoryLimits(c.memResources, c.reservation)
+			require.NoError(t, err)
+
+			if c.expectedHard > 0 {
+				require.NotNil(t, hard)
+				require.Equal(t, c.expectedHard, *hard)
+			} else {
+				require.Nil(t, hard)
+			}
+
+			if c.expectedSoft > 0 {
+				require.NotNil(t, soft)
+				require.Equal(t, c.expectedSoft, *soft)
+			} else {
+				require.Nil(t, soft)
+			}
+		})
+	}
+}
+
+func Test_parseImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	digest := "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	testCases := []struct {
+		Input     string
+		Name      string
+		Transport string
+	}{
+		{Input: "quay.io/repo/busybox:glibc", Name: "quay.io/repo/busybox:glibc", Transport: "docker"},
+		{Input: "docker.io/library/root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "docker://root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "user/repo@" + digest, Name: "docker.io/user/repo@" + digest, Transport: "docker"},
+		{Input: "user/repo:tag", Name: "docker.io/user/repo:tag", Transport: "docker"},
+		{Input: "url:5000/repo", Name: "url:5000/repo:latest", Transport: "docker"},
+		{Input: "url:5000/repo:tag", Name: "url:5000/repo:tag", Transport: "docker"},
+		{Input: "oci-archive:path:tag", Name: "path:tag", Transport: "oci-archive"},
+		{Input: "docker-archive:path:image:tag", Name: "path:docker.io/library/image:tag", Transport: "docker-archive"},
 	}
 	for _, testCase := range testCases {
-		repo, tag, err := parseImage(testCase.Input)
-		if err != nil {
-			t.Errorf("parseImage(%s) failed: %v", testCase.Input, err)
-		} else if repo != testCase.Repo || tag != testCase.Tag {
-			t.Errorf("Expected repo: %q, tag: %q, but got %q and %q", testCase.Repo, testCase.Tag, repo, tag)
+		ref, err := parseImage(testCase.Input)
+		require.NoError(t, err)
+		require.Equal(t, testCase.Transport, ref.Transport().Name())
+		if ref.Transport().Name() == "docker" {
+			require.Equal(t, testCase.Name, ref.DockerReference().String())
+		} else {
+			require.Equal(t, testCase.Name, ref.StringWithinTransport())
 		}
+
 	}
 }
 
@@ -1391,10 +1567,10 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	return string(stdout)
 }
 
-func newTaskConfig(variant string, command []string) TaskConfig {
-	busyboxImageID := "docker://docker.io/library/busybox:latest"
-
-	image := busyboxImageID
+func newTaskConfig(image string, command []string) TaskConfig {
+	if len(image) == 0 {
+		image = "docker://docker.io/library/busybox:latest"
+	}
 
 	return TaskConfig{
 		Image: image,

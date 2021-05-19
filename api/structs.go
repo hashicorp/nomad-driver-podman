@@ -1244,6 +1244,18 @@ type InspectExecProcess struct {
 	User string `json:"user"`
 }
 
+// ImagePullReport is the response from pulling one or more images.
+type ImagePullReport struct {
+	// Stream used to provide output from c/image
+	Stream string `json:"stream,omitempty"`
+	// Error contains text of errors from c/image
+	Error string `json:"error,omitempty"`
+	// Images contains the ID's of the images pulled
+	Images []string `json:"images,omitempty"`
+	// ID contains image id (retained for backwards compatibility)
+	ID string `json:"id,omitempty"`
+}
+
 // -------------------------------------------------------------------------------------------------------
 // structs loosly copied from https://github.com/containers/podman/blob/master/pkg/api/handlers/compat/types.go
 //         and https://github.com/moby/moby/blob/master/api/types/stats.go
@@ -1406,30 +1418,39 @@ type Info struct {
 }
 
 //HostInfo describes the libpod host
+type SecurityInfo struct {
+	DefaultCapabilities string `json:"capabilities"`
+	AppArmorEnabled     bool   `json:"apparmorEnabled"`
+	Rootless            bool   `json:"rootless"`
+	SECCOMPEnabled      bool   `json:"seccompEnabled"`
+	SELinuxEnabled      bool   `json:"selinuxEnabled"`
+}
+
+//HostInfo describes the libpod host
 type HostInfo struct {
-	Arch           string           `json:"arch"`
-	BuildahVersion string           `json:"buildahVersion"`
-	CgroupManager  string           `json:"cgroupManager"`
-	CGroupsVersion string           `json:"cgroupVersion"`
-	Conmon         *ConmonInfo      `json:"conmon"`
-	CPUs           int              `json:"cpus"`
-	Distribution   DistributionInfo `json:"distribution"`
-	EventLogger    string           `json:"eventLogger"`
-	Hostname       string           `json:"hostname"`
-	// IDMappings     IDMappings             `json:"idMappings,omitempty"`
-	Kernel       string                 `json:"kernel"`
-	MemFree      int64                  `json:"memFree"`
-	MemTotal     int64                  `json:"memTotal"`
-	OCIRuntime   *OCIRuntimeInfo        `json:"ociRuntime"`
-	OS           string                 `json:"os"`
-	RemoteSocket *RemoteSocket          `json:"remoteSocket,omitempty"`
-	Rootless     bool                   `json:"rootless"`
-	RuntimeInfo  map[string]interface{} `json:"runtimeInfo,omitempty"`
-	Slirp4NetNS  SlirpInfo              `json:"slirp4netns,omitempty"`
-	SwapFree     int64                  `json:"swapFree"`
-	SwapTotal    int64                  `json:"swapTotal"`
-	Uptime       string                 `json:"uptime"`
-	Linkmode     string                 `json:"linkmode"`
+	Conmon       *ConmonInfo      `json:"conmon"`
+	Distribution DistributionInfo `json:"distribution"`
+	//IDMappings     IDMappings             `json:"idMappings,omitempty"`
+	OCIRuntime     *OCIRuntimeInfo        `json:"ociRuntime"`
+	RemoteSocket   *RemoteSocket          `json:"remoteSocket,omitempty"`
+	Security       SecurityInfo           `json:"security"`
+	Slirp4NetNS    SlirpInfo              `json:"slirp4netns,omitempty"`
+	RuntimeInfo    map[string]interface{} `json:"runtimeInfo,omitempty"`
+	Arch           string                 `json:"arch"`
+	BuildahVersion string                 `json:"buildahVersion"`
+	CgroupManager  string                 `json:"cgroupManager"`
+	CGroupsVersion string                 `json:"cgroupVersion"`
+	EventLogger    string                 `json:"eventLogger"`
+	Hostname       string                 `json:"hostname"`
+	Kernel         string                 `json:"kernel"`
+	OS             string                 `json:"os"`
+	Uptime         string                 `json:"uptime"`
+	Linkmode       string                 `json:"linkmode"`
+	MemFree        int64                  `json:"memFree"`
+	MemTotal       int64                  `json:"memTotal"`
+	SwapFree       int64                  `json:"swapFree"`
+	SwapTotal      int64                  `json:"swapTotal"`
+	CPUs           int                    `json:"cpus"`
 }
 
 // RemoteSocket describes information about the API socket

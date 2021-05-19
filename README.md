@@ -1,6 +1,7 @@
 Nomad podman Driver
 ==================
 
+
 ![](https://github.com/hashicorp/nomad-driver-podman/workflows/build/badge.svg)
 
 Many thanks to [@towe75](https://github.com/towe75) and [Pascom](https://www.pascom.net/) for contributing
@@ -22,6 +23,7 @@ this plugin to Nomad!
 * Set username or UID used for the specified command within the container (podman --user option).
 * Fine tune memory usage: standard [Nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
 * Supports rootless containers with cgroup V2
+* Set DNS servers, searchlist and options via [Nomad dns parameters](https://www.nomadproject.io/docs/job-specification/network#dns-parameters)
 
 
 ## Building The Driver from source
@@ -42,7 +44,7 @@ cd nomad-driver-podman
 - Linux host with `podman` installed
 - For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
-You need a 2.x podman binary and a system socket activation unit,
+You need a 3.0.x podman binary and a system socket activation unit,
 see https://www.redhat.com/sysadmin/podmans-new-rest-api
 
 Nomad agent, nomad-driver-podman and podman will reside on the same host, so you
@@ -107,11 +109,23 @@ plugin "nomad-driver-podman" {
 ```
 ## Task Configuration
 
-* **image** - The image to run,
+* **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
 
 ```
 config {
   image = "docker://redis"
+}
+```
+
+* **auth** - (Optional) Authenticate to the image registry using a static credential.
+
+```
+config {
+  image = "your.registry.tld/some/image"
+  auth {
+    username = "someuser"
+    password = "sup3rs3creT"
+  }
 }
 ```
 
@@ -267,16 +281,6 @@ config {
 }
 ```
 
-* **dns** - (Optional)  A list of dns servers. Replaces the default from podman binary and containers.conf.
-
-```
-config {
-  dns = [
-    "1.1.1.1"
-  ]
-}
-```
-
 * **sysctl** - (Optional)  A key-value map of sysctl configurations to set to the containers on start.
 
 ```
@@ -352,7 +356,7 @@ $ systemctl --user status podman.socket
    Triggers: * podman.service
        Docs: man:podman-system-service(1)
      Listen: /run/user/1000/podman/podman.sock (Stream)
-     CGroup: /user.slice/user-1000.slice/user@1000.service/podman.socket             
+     CGroup: /user.slice/user-1000.slice/user@1000.service/podman.socket
 ```
 
 ensure that you have a recent version of [crun](https://github.com/containers/crun/)
@@ -436,7 +440,7 @@ nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
 sudo nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
 
 # Run a job
-nomad job run examples/redis.nomad
+nomad job run examples/redis_ports.nomad
 
 # Verify
 nomad job status redis

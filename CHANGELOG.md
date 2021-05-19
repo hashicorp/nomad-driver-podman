@@ -1,8 +1,13 @@
 ## Unreleased
 
+* config: Image registry authentication [[GH-71](https://github.com/hashicorp/nomad-driver-podman/issues/71)]
 * config: Added tty option
 * config: Support for sysctl configuration [[GH-82](https://github.com/hashicorp/nomad-driver-podman/issues/82)]
 * config: Fixed a bug where we always pulled an image if image name has a transport prefix [[GH-88](https://github.com/hashicorp/nomad-driver-podman/pull/88)]
+
+BUG FIXES:
+* [[GH-93](https://github.com/hashicorp/nomad-driver-podman/issues/93)] use slirp4netns as default network mode if running rootless
+* [[GH-92](https://github.com/hashicorp/nomad-driver-podman/issues/92)] parse rootless info correctly from podman 3.0.x struct
 
 ## 0.2.0
 
