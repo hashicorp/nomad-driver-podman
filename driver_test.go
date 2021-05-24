@@ -1201,7 +1201,7 @@ func TestPodmanDriver_Dns(t *testing.T) {
 
 // TestPodmanDriver_NetworkMode asserts we can specify different network modes
 // Default podman cni subnet 10.88.0.0/16
-func TestPodmanDriver_NetworkMode(t *testing.T) {
+func TestPodmanDriver_NetworkModes(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -1268,6 +1268,79 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 			require.Equal(t, tc.gateway, inspectData.NetworkSettings.Gateway)
 		})
 	}
+}
+
+// let a task joint NetorkNS of another container
+func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	allocId := uuid.Generate()
+
+	// we're running "nc" on localhost here
+	mainTaskCfg := newTaskConfig("", []string{
+		"nc",
+		"-l",
+		"-p",
+		"6748",
+		"-s",
+		"localhost",
+	})
+	mainTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "maintask",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+
+	// we're running a second task in same networkNS and invoke netstat in it
+	sidecarTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"netstat -tulpen",
+	})
+	// join maintask network
+	sidecarTaskCfg.NetworkMode = "container:maintask-" + allocId
+	sidecarTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sidecar",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+
+	mainHarness := podmanDriverHarness(t, nil)
+	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
+	defer mainCleanup()
+
+	_, _, err := mainHarness.StartTask(mainTask)
+	require.NoError(t, err)
+	defer mainHarness.DestroyTask(mainTask.ID, true)
+
+	sidecarHarness := podmanDriverHarness(t, nil)
+	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
+	defer sidecarCleanup()
+
+	_, _, err = sidecarHarness.StartTask(sidecarTask)
+	require.NoError(t, err)
+	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+
+	// Attempt to wait
+	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Sidecar did not exit in time")
+	}
+
+	// see if stdout was populated with the correct output
+	tasklog := readLogfile(t, sidecarTask)
+	require.Contains(t, tasklog, "127.0.0.1:6748")
 }
 
 // test kill / signal support

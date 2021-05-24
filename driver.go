@@ -453,6 +453,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NoNetwork
 		} else if driverConfig.NetworkMode == "slirp4netns" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "container:") {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
 		} else {
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}

@@ -546,7 +546,7 @@ const (
 // Namespace describes the namespace
 type Namespace struct {
 	NSMode NamespaceMode `json:"nsmode,omitempty"`
-	Value  string        `json:"string,omitempty"`
+	Value  string        `json:"value,omitempty"`
 }
 
 // -------------------------------------------------------------------------------------------------------
