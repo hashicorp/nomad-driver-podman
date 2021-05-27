@@ -44,7 +44,7 @@ var (
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"pod":        		  hclspec.NewAttr("pod", "string", false),
+		"pod":                hclspec.NewAttr("pod", "string", false),
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
@@ -101,7 +101,7 @@ type TaskConfig struct {
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
-	Pod        		  string             `codec:"pod"`
+	Pod               string             `codec:"pod"`
 	Command           string             `codec:"command"`
 	Entrypoint        string             `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
