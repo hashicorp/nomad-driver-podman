@@ -517,6 +517,9 @@ const (
 	Host NamespaceMode = "host"
 	// Path is the path to a namespace
 	Path NamespaceMode = "path"
+	// NetworkId indicates existing network stack should
+	// be used
+	NetworkId NamespaceMode = "network-id"
 	// FromContainer means namespace is derived from a
 	// different container
 	FromContainer NamespaceMode = "container"
