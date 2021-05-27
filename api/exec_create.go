@@ -11,6 +11,8 @@ import (
 
 // ExecConfig contains the configuration of an exec session
 type ExecConfig struct {
+	// Pod is the pod in which container will be instatiated
+	Pod string `json:"Pod,omitempty"`
 	// Command the the command that will be invoked in the exec session.
 	// Must not be empty.
 	Command []string `json:"Cmd"`

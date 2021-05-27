@@ -572,6 +572,8 @@ type InspectContainerConfig struct {
 	User string `json:"User"`
 	// Container environment variables
 	Env []string `json:"Env"`
+	// Container pod
+	Pod string `json:"Pod"`
 	// Container command
 	Cmd []string `json:"Cmd"`
 	// Container image
