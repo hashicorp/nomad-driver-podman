@@ -44,7 +44,6 @@ var (
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"pod":                hclspec.NewAttr("pod", "string", false),
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
@@ -58,6 +57,7 @@ var (
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
+		"cni_networks":       hclspec.NewAttr("cni_networks", "list(string)", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
@@ -101,7 +101,6 @@ type TaskConfig struct {
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
-	Pod               string             `codec:"pod"`
 	Command           string             `codec:"command"`
 	Entrypoint        string             `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
@@ -111,6 +110,7 @@ type TaskConfig struct {
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
+	CNINetworks       []string           `codec:"cni_networks"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
