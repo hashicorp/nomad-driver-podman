@@ -439,8 +439,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	} else {
 		if driverConfig.NetworkMode == "" {
 			if !rootless {
-				// bridge is default for rootful podman
-				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+				// should we join the group shared network namespace?
+				if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Mode == drivers.NetIsolationModeGroup {
+					// yes, join the group ns namespace
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
+					createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
+				} else {
+					// no, simply attach a rootful container to the default podman bridge
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+				}
 			} else {
 				// slirp4netns is default for rootless podman
 				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
@@ -456,6 +463,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else if strings.HasPrefix(driverConfig.NetworkMode, "container:") {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "ns:") {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "ns:")
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "task:") {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
+			otherContainerName := fmt.Sprintf("%s-%s", strings.TrimPrefix(driverConfig.NetworkMode, "task:"), cfg.AllocID)
+			createOpts.ContainerNetworkConfig.NetNS.Value = otherContainerName
 		} else {
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
@@ -728,8 +742,24 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
+	_, err := d.podman.ContainerStats(d.ctx, handle.containerID)
+	if err == api.ContainerNotFound {
+		// container is gone, we do not need to stop it
+		d.logger.Warn("Container is gone, no need to stop it", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else if err == api.ContainerWrongState {
+		// container is not running, no need to stop it
+		d.logger.Warn("Found stopped container while stopping a task", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else if err != nil {
+		d.logger.Warn("Unable to get container state while stopping a task, assuming it is dead", "task", taskID, "container", handle.containerID, "err", err)
+		// we assume that the container does not exist anymore
+		// returning nil pretends that the task was stopped
+		// returning err will retry later, but a lost/broken container would still end up here.
+		return nil
+	}
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
+	err = d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
 	if err != nil {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
