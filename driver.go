@@ -453,6 +453,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NoNetwork
 		} else if driverConfig.NetworkMode == "slirp4netns" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "container:") {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
 		} else {
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
@@ -725,8 +728,24 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
+	_, err := d.podman.ContainerStats(d.ctx, handle.containerID)
+	if err == api.ContainerNotFound {
+		// container is gone, we do not need to stop it
+		d.logger.Warn("Container is gone, no need to stop it", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else if err == api.ContainerWrongState {
+		// container is not running, no need to stop it
+		d.logger.Warn("Found stopped container while stopping a task", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else if err != nil {
+		d.logger.Warn("Unable to get container state while stopping a task, assuming it is dead", "task", taskID, "container", handle.containerID, "err", err)
+		// we assume that the container does not exist anymore
+		// returning nil pretends that the task was stopped
+		// returning err will retry later, but a lost/broken container would still end up here.
+		return nil
+	}
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
+	err = d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
 	if err != nil {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
