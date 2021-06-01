@@ -1270,7 +1270,7 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 	}
 }
 
-// let a task joint NetorkNS of another container via network_mode=container:
+// let a task join NetworkNS of another container via network_mode=container:
 func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
