@@ -323,7 +323,12 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 // BuildContainerName returns the podman container name for a given TaskConfig
 func BuildContainerName(cfg *drivers.TaskConfig) string {
-	return fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
+	return BuildContainerNameForTask(cfg.Name, cfg)
+}
+
+// BuildContainerName returns the podman container name for a specific Task in our group
+func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string {
+	return fmt.Sprintf("%s-%s", taskName, cfg.AllocID)
 }
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
@@ -467,9 +472,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
 			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "ns:")
 		} else if strings.HasPrefix(driverConfig.NetworkMode, "task:") {
+			otherTaskName := strings.TrimPrefix(driverConfig.NetworkMode, "task:")
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
-			otherContainerName := fmt.Sprintf("%s-%s", strings.TrimPrefix(driverConfig.NetworkMode, "task:"), cfg.AllocID)
-			createOpts.ContainerNetworkConfig.NetNS.Value = otherContainerName
+			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		} else {
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
