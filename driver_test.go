@@ -1395,7 +1395,7 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 	}
 
 	// see if stdout was populated with the correct output
-	tasklog := readLogfile(t, sidecarTask)
+	tasklog := readStdoutLog(t, sidecarTask)
 	require.Contains(t, tasklog, "127.0.0.1:6748")
 }
 
