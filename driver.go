@@ -45,6 +45,9 @@ const (
 	// taskHandleVersion is the version of task handle which this driver sets
 	// and understands how to decode driver state
 	taskHandleVersion = 1
+
+	LOG_DRIVER_NOMAD    = "nomad"
+	LOG_DRIVER_JOURNALD = "journald"
 )
 
 var (
@@ -261,7 +264,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	var taskState TaskState
 	if err := handle.GetDriverState(&taskState); err != nil {
-		return fmt.Errorf("failed to decode task state from handle: %v", err)
+		return fmt.Errorf("failed to decode task state from handle: %w", err)
 	}
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
@@ -277,6 +280,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		taskConfig:  taskState.TaskConfig,
 		procState:   drivers.TaskStateUnknown,
 		startedAt:   taskState.StartedAt,
+		logPointer:  time.Now(), // do not rewind log to the startetAt date.
 		exitResult:  &drivers.ExitResult{},
 		logger:      d.logger.Named("podmanHandle"),
 
@@ -371,7 +375,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Sysctl = driverConfig.Sysctl
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
 
-	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	// Logging
+	if driverConfig.LogDriver == "" || driverConfig.LogDriver == LOG_DRIVER_NOMAD {
+		createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	} else if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
+		createOpts.LogConfiguration.Driver = "journald"
+	} else {
+		return nil, nil, fmt.Errorf("Invalid log_driver option")
+	}
 
 	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init
@@ -510,6 +521,22 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
+	h := &TaskHandle{
+		containerID: containerID,
+		driver:      d,
+		taskConfig:  cfg,
+		procState:   drivers.TaskStateRunning,
+		exitResult:  &drivers.ExitResult{},
+		startedAt:   time.Now(),
+		logPointer:  time.Now(),
+		logger:      d.logger.Named("podmanHandle"),
+
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
+	}
 
 	if !recoverRunningContainer {
 		if err = d.podman.ContainerStart(d.ctx, containerID); err != nil {
@@ -529,22 +556,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		PortMap:       driverConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
-	}
-
-	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
-		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger.Named("podmanHandle"),
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
-		removeContainerOnExit: d.config.GC.Container,
 	}
 
 	driverState := TaskState{

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -34,6 +36,7 @@ type TaskHandle struct {
 	taskConfig  *drivers.TaskConfig
 	procState   drivers.TaskState
 	startedAt   time.Time
+	logPointer  time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 
@@ -139,6 +142,48 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		statsChannel <- &usage
 	}
 }
+func (h *TaskHandle) runLogStreamer(ctx context.Context) {
+
+	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open stdout fifo", "err", err)
+		return
+	}
+	defer stdout.Close()
+	stderr, err := os.OpenFile(h.taskConfig.StderrPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open stderr fifo", "err", err)
+		return
+	}
+	defer stderr.Close()
+
+	init := true
+	since := h.logPointer
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if !init {
+				// throttle logger reconciliation
+				time.Sleep(2 * time.Second)
+			}
+			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
+			if err != nil {
+				h.logger.Warn("Log stream was interrupted", "err", err)
+				init = false
+				since = time.Now()
+				// increment logPointer
+				h.stateLock.Lock()
+				h.logPointer = since
+				h.stateLock.Unlock()
+			} else {
+				return
+			}
+		}
+	}
+
+}
 
 func (h *TaskHandle) runContainerMonitor() {
 
@@ -146,10 +191,24 @@ func (h *TaskHandle) runContainerMonitor() {
 	interval := time.Second * 1
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
-	cleanup := func() {
-		h.logger.Debug("Container monitor exits", "container", h.containerID)
+	// only start logstreamer if we have to...
+	var driverConfig TaskConfig
+	if err := h.taskConfig.DecodeDriverConfig(&driverConfig); err != nil {
+		h.logger.Warn("Unable to decode driver config, not starting log streamer", "task", h.taskConfig.ID, "err", err)
+		return
+	} else {
+		if driverConfig.LogDriver != LOG_DRIVER_NOMAD {
+			logctx, logcancel := context.WithCancel(h.driver.ctx)
+			go h.runLogStreamer(logctx)
+
+			cleanup := func() {
+				h.logger.Debug("Container monitor exits", "container", h.containerID)
+				// stop log streamers
+				logcancel()
+			}
+			defer cleanup()
+		}
 	}
-	defer cleanup()
 
 	for {
 		select {

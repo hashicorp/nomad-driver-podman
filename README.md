@@ -215,6 +215,16 @@ config {
 
 ```
 
+* **log_driver** - Configure logging
+
+`log_driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a nomad fifo.
+Benefits of this mode are: zero overhead, don't have to worry about logrotation at system or Podman level. Downside: you can not easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
+
+`log_driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo. 
+Benefits: all containers can log into the host journal, you can ship a structured stream incl. metadata to your log aggregator. No log rotation at Podman level.
+Drawbacks: a bit more overhead, depends on Journal (will not work on WSL2). You should configure some rotation policy for your Journal.
+Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
+
 * **memory_reservation** - Memory soft limit (nit = b (bytes), k (kilobytes), m (megabytes), or g (gigabytes))
 
 After setting memory reservation, when the system detects memory contention or low memory, containers are forced to restrict their consumption to their reservation. So you should always set the value below --memory, otherwise the hard limit will take precedence. By default, memory reservation will be the same as memory limit.
