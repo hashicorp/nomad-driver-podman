@@ -293,6 +293,18 @@ config {
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
 
+* **logging** - (Optional)  Set the logging driver and options to be used for the container.
+
+```
+config {
+  logging = {
+    driver = "journald"
+    options = {
+      "tag" = "redis"
+    }
+  }
+}
+```
 
 ## Example job
 

@@ -53,6 +53,10 @@ var (
 		"image":              hclspec.NewAttr("image", "string", true),
 		"init":               hclspec.NewAttr("init", "bool", false),
 		"init_path":          hclspec.NewAttr("init_path", "string", false),
+		"logging":            hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"driver":             hclspec.NewAttr("driver", "string", false),
+			"options":            hclspec.NewAttr("options", "list(map(string))", false),
+		})),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
@@ -75,6 +79,12 @@ type AuthConfig struct {
 // GCConfig is the driver GarbageCollection configuration
 type GCConfig struct {
 	Container bool `codec:"container"`
+}
+
+// LoggingConfig is the tasks logging configuration
+type LoggingConfig struct {
+	Driver  string             `codec:"driver"`
+	Options hclutils.MapStrStr `codec:"options"`
 }
 
 // VolumeConfig is the drivers volume specific configuration
@@ -106,6 +116,7 @@ type TaskConfig struct {
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	InitPath          string             `codec:"init_path"`
+	Logging           LoggingConfig      `codec:"logging"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
