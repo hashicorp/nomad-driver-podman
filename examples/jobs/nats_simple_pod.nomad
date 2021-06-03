@@ -1,9 +1,8 @@
 //
 // This job runs a pair of nats-server and prometheus-nats-exporter tasks
-// in the network namespace defined by a "pause" container.
 //
-// Because of that, all tasks will share a common network namespace and
-// thus the exporter can access the localhost http monitoring port without exposing it
+// The exporter tasks runs in the network namespace of the server task
+// and can thus access the localhost http monitoring port without exposing it
 //
 // A curl http://<your-ip>:7777/metrics hits the exporter which in turn grabs
 // values from the nats-server
@@ -22,28 +21,6 @@ job "nats" {
       port "exporter" { static = 7777 }
     }
 
-    task "pod" {
-      driver = "podman"
-
-      // run the pause container before
-      // the main workload and other sidecars
-      lifecycle {
-        hook = "prestart"
-        sidecar = "true"
-      }
-
-      config {
-        image = "docker://k8s.gcr.io/pause:3.1"
-
-        // the "pod" task must define the complete network
-        // port mapping here
-        ports = [
-            "server",
-            "exporter"
-        ]
-      }
-    }
-
     task "server" {
       driver = "podman"
 
@@ -52,8 +29,13 @@ job "nats" {
       config {
         image = "docker://nats:2.2.6"
 
-        // here we join the pods network namespace
-        network_mode = "task:pod"
+        // the "server" task must define the complete network
+        // environment, so we will also pre-define the exporter
+        // port mapping here
+        ports = [
+            "server",
+            "exporter"
+        ]
       }
     }
 
@@ -61,7 +43,8 @@ job "nats" {
 
       driver = "podman"
 
-      // ensure to start the exporter _after_ the server
+      // ensure to run the exporter _after_ the server
+      // so that we can join the network namespace
       lifecycle {
         hook = "poststart"
         sidecar = "true"
@@ -70,8 +53,8 @@ job "nats" {
       config {
         image = "docker://natsio/prometheus-nats-exporter:0.7.0"
 
-        // here we join the pods network namespace
-        network_mode = "task:pod"
+        // here we join the servers network namespace
+        network_mode = "task:server"
 
         // ... in order to access the private monitoring port
         args = [
