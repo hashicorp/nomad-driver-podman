@@ -1456,7 +1456,7 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 
 	d := podmanDriverHarness(t, nil)
 
-	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
 	require.NoError(t, err)
 	require.Equal(t, imageID, inspectData.Image)
 }
@@ -1511,7 +1511,7 @@ func Test_createImageArchives(t *testing.T) {
 func createInspectImage(t *testing.T, image, reference string) {
 	d := podmanDriverHarness(t, nil)
 
-	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
 	require.NoError(t, err)
 
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)

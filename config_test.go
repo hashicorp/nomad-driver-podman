@@ -23,3 +23,18 @@ func TestConfig_Ports(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	require.EqualValues(t, expectedPorts, tc.Ports)
 }
+
+func TestConfig_ForcePull(t *testing.T) {
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+
+	validHCL := `
+  config {
+		image = "docker://redis"
+		force_pull = true
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	require.EqualValues(t, true, tc.ForcePull)
+}

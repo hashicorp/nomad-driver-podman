@@ -293,6 +293,14 @@ config {
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
 
+* **force_pull** - (Optional)  true or false (default). Always pull the latest image on container start.
+
+```
+config {
+  force_pull = true
+}
+```
+
 
 ## Example job
 

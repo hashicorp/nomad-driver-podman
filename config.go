@@ -63,6 +63,7 @@ var (
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 	})
 )
 
@@ -114,4 +115,5 @@ type TaskConfig struct {
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
+	ForcePull         bool               `codec:"force_pull"`
 }
