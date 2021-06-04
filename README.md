@@ -299,9 +299,11 @@ config {
 config {
   logging = {
     driver = "journald"
-    options = {
-      "tag" = "redis"
-    }
+    options = [
+      {
+        "tag" = "redis"
+      }
+    ]
   }
 }
 ```

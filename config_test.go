@@ -35,9 +35,11 @@ func TestConfig_Logging(t *testing.T) {
 	  image = "docker://redis"
 	  logging = {
 			driver = "journald"
-			options = {
-				"tag" = "redis"
-			}
+			options = [
+			  {
+				  "tag" = "redis"
+			  }
+			]
 	  }
   }
 `
