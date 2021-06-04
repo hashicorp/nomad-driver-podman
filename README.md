@@ -297,7 +297,7 @@ config {
 
 ```
 config {
-  options = [
+  labels = [
     {
       "nomad" = "job"
     }
