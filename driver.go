@@ -372,7 +372,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
 
 	if driverConfig.Logging.Driver != "" {
-    createOpts.ContainerBasicConfig.LogConfiguration.Driver = driverConfig.Logging.Driver
+		createOpts.ContainerBasicConfig.LogConfiguration.Driver = driverConfig.Logging.Driver
 	}
 	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
