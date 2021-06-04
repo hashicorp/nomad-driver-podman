@@ -293,6 +293,17 @@ config {
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
 
+* **labels** - (Optional)  Set labels on the container.
+
+```
+config {
+  options = [
+    {
+      "nomad" = "job"
+    }
+  ]
+}
+```
 
 ## Example job
 
