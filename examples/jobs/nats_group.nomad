@@ -1,8 +1,11 @@
 //
 // This job runs a pair of nats-server and prometheus-nats-exporter tasks
 //
-// The exporter tasks runs in the network namespace of the server task
-// and can thus access the localhost http monitoring port without exposing it
+// A isolated network stack is defined at group level and both
+// tasks will join it.
+// 
+// The exporter tasks can thus access the localhost http monitoring port without
+// exposing it
 //
 // A curl http://<your-ip>:7777/metrics hits the exporter which in turn grabs
 // values from the nats-server
@@ -17,6 +20,10 @@ job "nats" {
     // Expose the default port for nats clients and 
     // also the exporters http endpoint
     network {
+
+      // define a shared network namespace for all tasks in this group
+      mode = "bridge"
+
       port "server" { static = 4222 }
       port "exporter" { static = 7777 }
     }
@@ -25,7 +32,6 @@ job "nats" {
       driver = "podman"
 
       // no "lifecycle" task: this is the main workload
-
 
       // server configuration file
       template {
@@ -65,9 +71,6 @@ job "nats" {
 
       config {
         image = "docker://natsio/prometheus-nats-exporter:0.7.0"
-
-        // here we join the servers network namespace
-        network_mode = "task:server"
 
         // ... in order to access the private monitoring port
         args = [

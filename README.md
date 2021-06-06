@@ -1,4 +1,4 @@
-Nomad podman Driver
+iomad podman Driver
 ==================
 
 
@@ -245,7 +245,9 @@ config {
 
 * **network_mode** - Set the [network mode](http://docs.podman.io/en/latest/markdown/podman-run.1.html#options) for the container.
 
-- `bridge`: (default for rootful) create a network stack on the default bridge
+By default the task uses the network stack defined in the task group, see [network Stanza](https://www.nomadproject.io/docs/job-specification/network). If the groups network behavior is also undefined, it will fallback to `bridge` in rootful mode or `slirp4netns` for rootless containers.
+
+- `bridge`: create a network stack on the default podman bridge.
 - `none`: no networking
 - `container:id`: reuse another container's network stack
 - `host`: use the Podman host network stack. Note: the host mode gives the
@@ -254,6 +256,7 @@ config {
 - `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
   default for rootless containers. Podman currently does not support it for root
   containers [issue](https://github.com/containers/libpod/issues/6097).
+- `task:name-of-other-task`: join the network of another task in the same allocation.
 
 ```
 config {
