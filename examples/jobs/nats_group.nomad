@@ -4,8 +4,9 @@
 // A isolated network stack is defined at group level and both
 // tasks will join it.
 // 
-// The exporter tasks can thus access the localhost http monitoring port without
-// exposing it
+// The exporter tasks can thus access the servers http monitoring port without
+// exposing it.
+//
 //
 // A curl http://<your-ip>:7777/metrics hits the exporter which in turn grabs
 // values from the nats-server
@@ -43,17 +44,8 @@ job "nats" {
       config {
         image = "docker://nats:2.2.6"
 
-        args = [
-          "--config",
-          "/local/nats-server.conf"
-        ]
-
-        // the "server" task must define the complete network
-        // environment, so we will also pre-define the exporter
-        // port mapping here
         ports = [
-            "server",
-            "exporter"
+          "server"
         ]
       }
     }
@@ -62,22 +54,22 @@ job "nats" {
 
       driver = "podman"
 
-      // ensure to run the exporter _after_ the server
-      // so that we can join the network namespace
-      lifecycle {
-        hook = "poststart"
-        sidecar = "true"
-      }
-
       config {
         image = "docker://natsio/prometheus-nats-exporter:0.7.0"
 
-        // ... in order to access the private monitoring port
+        // NOTE: this example does not bind the servers monitoring port to localhost due
+        //       nomad issue #10014
         args = [
           "-varz",
-          "http://localhost:8222"
+          "http://${NOMAD_IP_server}:8222"
         ]
+
+        ports = [
+          "exporter"
+        ]
+
       }
+
     }
 
   }
