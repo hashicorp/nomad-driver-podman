@@ -297,11 +297,9 @@ config {
 
 ```
 config {
-  labels = [
-    {
-      "nomad" = "job"
-    }
-  ]
+  labels = {
+    "nomad" = "job"
+  }
 }
 ```
 

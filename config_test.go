@@ -30,11 +30,9 @@ func TestConfig_Labels(t *testing.T) {
 	validHCL := `
   config {
 	  image = "docker://redis"
-		labels = [
-		  {
-			  "nomad" = "job"
-		  }
-		]
+		labels = {
+		  "nomad" = "job"
+		 }
   }
 `
 
