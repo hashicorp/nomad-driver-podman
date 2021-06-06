@@ -25,7 +25,7 @@ this plugin to Nomad!
 * Supports rootless containers with cgroup V2
 * Set DNS servers, searchlist and options via [Nomad dns parameters](https://www.nomadproject.io/docs/job-specification/network#dns-parameters)
 * Support for nomad shared network namespaces and consul connect
-* Quite flexible [network configuration](network-configuration), allows to simply build pod-like structures within a nomad group
+* Quite flexible [network configuration](#network-configuration), allows to simply build pod-like structures within a nomad group
 
 ## Redis Example job
 

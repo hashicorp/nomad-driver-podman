@@ -32,20 +32,8 @@ job "nats" {
         sidecar = "true"
       }
 
-      // server configuration file
-      template {
-        change_mode = "noop"
-        destination = "local/nats-server.conf"
-        data = file("./templates/nats-server.conf.tpl")
-      }
-
       config {
         image = "docker://k8s.gcr.io/pause:3.1"
-
-        args = [
-          "--config",
-          "/local/nats-server.conf"
-        ]
 
         // the "pod" task must define the complete network
         // port mapping here
@@ -61,11 +49,24 @@ job "nats" {
 
       // no "lifecycle" task: this is the main workload
 
+      // server configuration file
+      template {
+        change_mode = "noop"
+        destination = "local/nats-server.conf"
+        data = file("./templates/nats-server.conf.tpl")
+      }
+
       config {
         image = "docker://nats:2.2.6"
 
         // here we join the pods network namespace
         network_mode = "task:pod"
+
+        args = [
+          "--config",
+          "/local/nats-server.conf"
+        ]
+
       }
     }
 
