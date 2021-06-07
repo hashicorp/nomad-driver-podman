@@ -343,6 +343,24 @@ config {
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
 
+* **labels** - (Optional)  Set labels on the container.
+
+```
+config {
+  labels = {
+    "nomad" = "job"
+  }
+}
+```
+
+* **force_pull** - (Optional)  true or false (default). Always pull the latest image on container start.
+
+```
+config {
+  force_pull = true
+}
+```
+
 ## Network Configuration
 
 [nomad lifecycle hooks](https://www.nomadproject.io/docs/job-specification/lifecycle) combined with the drivers `network_mode` allows very flexible network namespace definitions. This feature does not build upon the native podman pod structure but simply reuses the networking namespace of one container for other tasks in the same group.

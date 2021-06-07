@@ -1139,6 +1139,17 @@ func TestPodmanDriver_Tty(t *testing.T) {
 	require.True(t, inspectData.Config.Tty)
 }
 
+// check labels option
+func TestPodmanDriver_Labels(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Labels = map[string]string{"nomad": "job"}
+	inspectData := startDestroyInspect(t, taskCfg, "labels")
+
+	expectedLabels := map[string]string{"nomad": "job"}
+
+	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {
@@ -1529,7 +1540,7 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 
 	d := podmanDriverHarness(t, nil)
 
-	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
 	require.NoError(t, err)
 	require.Equal(t, imageID, inspectData.Image)
 }
@@ -1584,7 +1595,7 @@ func Test_createImageArchives(t *testing.T) {
 func createInspectImage(t *testing.T, image, reference string) {
 	d := podmanDriverHarness(t, nil)
 
-	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{})
+	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
 	require.NoError(t, err)
 
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
