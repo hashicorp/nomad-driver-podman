@@ -489,7 +489,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth)
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -624,7 +624,7 @@ func memoryInBytes(strmem string) (int64, error) {
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -657,7 +657,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
 	}
-	if imageID != "" {
+	if !forcePull && imageID != "" {
 		d.logger.Info("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
 	}

@@ -40,3 +40,18 @@ func TestConfig_Labels(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	require.EqualValues(t, "job", tc.Labels["nomad"])
 }
+
+func TestConfig_ForcePull(t *testing.T) {
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+
+	validHCL := `
+  config {
+		image = "docker://redis"
+		force_pull = true
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	require.EqualValues(t, true, tc.ForcePull)
+}

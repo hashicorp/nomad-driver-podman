@@ -303,6 +303,14 @@ config {
 }
 ```
 
+* **force_pull** - (Optional)  true or false (default). Always pull the latest image on container start.
+
+```
+config {
+  force_pull = true
+}
+```
+
 ## Example job
 
 ```
