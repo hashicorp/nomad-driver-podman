@@ -1139,6 +1139,17 @@ func TestPodmanDriver_Tty(t *testing.T) {
 	require.True(t, inspectData.Config.Tty)
 }
 
+// check labels option
+func TestPodmanDriver_Labels(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Labels = map[string]string{"nomad": "job"}
+	inspectData := startDestroyInspect(t, taskCfg, "labels")
+
+	expectedLabels := map[string]string{"nomad": "job"}
+
+	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {

@@ -53,6 +53,7 @@ var (
 		"image":              hclspec.NewAttr("image", "string", true),
 		"init":               hclspec.NewAttr("init", "bool", false),
 		"init_path":          hclspec.NewAttr("init_path", "string", false),
+		"labels":             hclspec.NewAttr("labels", "list(map(string))", false),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
@@ -106,6 +107,7 @@ type TaskConfig struct {
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	InitPath          string             `codec:"init_path"`
+	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`

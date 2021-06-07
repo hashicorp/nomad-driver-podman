@@ -23,3 +23,20 @@ func TestConfig_Ports(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	require.EqualValues(t, expectedPorts, tc.Ports)
 }
+
+func TestConfig_Labels(t *testing.T) {
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+
+	validHCL := `
+  config {
+	  image = "docker://redis"
+		labels = {
+		  "nomad" = "job"
+		 }
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	require.EqualValues(t, "job", tc.Labels["nomad"])
+}
