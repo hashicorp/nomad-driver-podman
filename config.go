@@ -44,15 +44,16 @@ var (
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"command":     hclspec.NewAttr("command", "string", false),
-		"cap_add":     hclspec.NewAttr("cap_add", "list(string)", false),
-		"cap_drop":    hclspec.NewAttr("cap_drop", "list(string)", false),
-		"entrypoint":  hclspec.NewAttr("entrypoint", "string", false),
-		"working_dir": hclspec.NewAttr("working_dir", "string", false),
-		"hostname":    hclspec.NewAttr("hostname", "string", false),
-		"image":       hclspec.NewAttr("image", "string", true),
-		"init":        hclspec.NewAttr("init", "bool", false),
-		"init_path":   hclspec.NewAttr("init_path", "string", false),
+		"command":            hclspec.NewAttr("command", "string", false),
+		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
+		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
+		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
+		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
+		"hostname":           hclspec.NewAttr("hostname", "string", false),
+		"image":              hclspec.NewAttr("image", "string", true),
+		"init":               hclspec.NewAttr("init", "bool", false),
+		"init_path":          hclspec.NewAttr("init_path", "string", false),
+		"labels":             hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
 			"options": hclspec.NewAttr("options", "list(map(string))", false),
@@ -67,6 +68,7 @@ var (
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 	})
 )
 
@@ -117,6 +119,7 @@ type TaskConfig struct {
 	Image             string             `codec:"image"`
 	InitPath          string             `codec:"init_path"`
 	Logging           LoggingConfig      `codec:"logging"`
+	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
@@ -125,4 +128,5 @@ type TaskConfig struct {
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
+	ForcePull         bool               `codec:"force_pull"`
 }
