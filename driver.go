@@ -11,28 +11,24 @@ import (
 	"time"
 
 	"github.com/armon/circbuf"
-	"github.com/hashicorp/nomad/nomad/structs"
-
+	"github.com/containers/image/v5/docker"
+	dockerArchive "github.com/containers/image/v5/docker/archive"
+	ociArchive "github.com/containers/image/v5/oci/archive"
+	"github.com/containers/image/v5/pkg/shortnames"
+	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
+	shelpers "github.com/hashicorp/nomad/helper/stats"
 	nstructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
-
-	shelpers "github.com/hashicorp/nomad/helper/stats"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/containers/image/v5/docker"
-	dockerArchive "github.com/containers/image/v5/docker/archive"
-	ociArchive "github.com/containers/image/v5/oci/archive"
-	"github.com/containers/image/v5/pkg/shortnames"
-	"github.com/containers/image/v5/types"
 )
 
 const (
@@ -1034,7 +1030,7 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 	} else if len(driverCfg.PortMap) > 0 {
 		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
-		allPorts := []structs.Port{}
+		allPorts := []nstructs.Port{}
 		allPorts = append(allPorts, network.ReservedPorts...)
 		allPorts = append(allPorts, network.DynamicPorts...)
 
