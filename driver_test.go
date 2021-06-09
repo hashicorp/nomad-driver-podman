@@ -1186,9 +1186,9 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readLogfile(t, task)
-	require.Contains(t, tasklog, " on /checka type tmpfs ")
-	require.Contains(t, tasklog, " on /checkb type tmpfs ")
-	require.Contains(t, tasklog, " on /checkc type tmpfs ")
+	require.Contains(t, tasklog, " on /checka type ")
+	require.Contains(t, tasklog, " on /checkb type ")
+	require.Contains(t, tasklog, " on /checkc type ")
 }
 
 // check default capabilities
