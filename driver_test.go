@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 
 	"path/filepath"
 	"reflect"
@@ -1113,7 +1114,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 	})
 	taskCfg.Volumes = []string{
 		// explicitely check that we can have more then one option
-		"/tmp:/checka:ro,private",
+		"/tmp:/checka:ro,shared",
 		"/tmp:/checkb:private",
 		"/tmp:/checkc",
 	}
@@ -1147,13 +1148,41 @@ func TestPodmanDriver_Mount(t *testing.T) {
 		t.Fatalf("Container did not exit in time")
 	}
 
-	// see if tmpfs was propagated to podman
+	// see if options where correctly sent to podman
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
-	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checka:ro,private,nosuid,nodev,rbind")
-	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checkb:private,rw,nosuid,nodev,rbind")
-	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checkc:rw,rprivate,nosuid,nodev,rbind")
+	aok := false
+	bok := false
+	cok := false
+
+	// this part is a bit verbose but the exact mount options and
+	// their order depend on the target os
+	// so we need to dissect each result line
+	for _, bind := range inspectData.HostConfig.Binds {
+		if strings.HasPrefix(bind, "/tmp:/check") {
+			prefix := bind[0:13]
+			opts := strings.Split(bind[13:], ",")
+			if prefix == "/tmp:/checka:" {
+				require.Contains(t, opts, "ro")
+				require.Contains(t, opts, "shared")
+				aok = true
+			}
+			if prefix == "/tmp:/checkb:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "private")
+				bok = true
+			}
+			if prefix == "/tmp:/checkc:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "rprivate")
+				cok = true
+			}
+		}
+	}
+	require.True(t, aok, "checka not ok")
+	require.True(t, bok, "checkb not ok")
+	require.True(t, cok, "checkc not ok")
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readLogfile(t, task)
