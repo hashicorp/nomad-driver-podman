@@ -1099,6 +1099,69 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
+// check mount options
+func TestPodmanDriver_Mount(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"sh",
+		"-c",
+		"mount|grep check",
+	})
+	taskCfg.Volumes = []string{
+		// explicitely check that we can have more then one option
+		"/tmp:/checka:ro,private",
+		"/tmp:/checkb:private",
+		"/tmp:/checkc",
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "Mount",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// use "www-data" as a user for our test, it's part of the busybox image
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if tmpfs was propagated to podman
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
+	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checka:ro,private,nosuid,nodev,rbind")
+	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checkb:private,rw,nosuid,nodev,rbind")
+	require.Contains(t, inspectData.HostConfig.Binds, "/tmp:/checkc:rw,rprivate,nosuid,nodev,rbind")
+
+	// see if stdout was populated with expected "mount" output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, " on /checka type tmpfs ")
+	require.Contains(t, tasklog, " on /checkb type tmpfs ")
+	require.Contains(t, tasklog, " on /checkc type tmpfs ")
+}
+
 // check default capabilities
 func TestPodmanDriver_DefaultCaps(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
