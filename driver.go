@@ -730,13 +730,13 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	}
 
 	// fixme send proper signal to container
-    err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
-    if err == nil {
-        return nil
-    } else if err == api.ContainerNotFound {
+	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
+	if err == nil {
+		return nil
+	} else if err == api.ContainerNotFound {
 		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "err", err)
-        return nil
-    } else {
+		return nil
+	} else {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
 	}
