@@ -11,28 +11,24 @@ import (
 	"time"
 
 	"github.com/armon/circbuf"
-	"github.com/hashicorp/nomad/nomad/structs"
-
+	"github.com/containers/image/v5/docker"
+	dockerArchive "github.com/containers/image/v5/docker/archive"
+	ociArchive "github.com/containers/image/v5/oci/archive"
+	"github.com/containers/image/v5/pkg/shortnames"
+	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
+	shelpers "github.com/hashicorp/nomad/helper/stats"
 	nstructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
-
-	shelpers "github.com/hashicorp/nomad/helper/stats"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/containers/image/v5/docker"
-	dockerArchive "github.com/containers/image/v5/docker/archive"
-	ociArchive "github.com/containers/image/v5/oci/archive"
-	"github.com/containers/image/v5/pkg/shortnames"
-	"github.com/containers/image/v5/types"
 )
 
 const (
@@ -370,6 +366,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Hostname = driverConfig.Hostname
 	createOpts.ContainerBasicConfig.Sysctl = driverConfig.Sysctl
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
+	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
 	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 
@@ -488,7 +485,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth)
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -623,7 +620,7 @@ func memoryInBytes(strmem string) (int64, error) {
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -656,7 +653,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig) (string, error) {
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
 	}
-	if imageID != "" {
+	if !forcePull && imageID != "" {
 		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
 	}
@@ -1038,7 +1035,7 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 	} else if len(driverCfg.PortMap) > 0 {
 		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
-		allPorts := []structs.Port{}
+		allPorts := []nstructs.Port{}
 		allPorts = append(allPorts, network.ReservedPorts...)
 		allPorts = append(allPorts, network.DynamicPorts...)
 
