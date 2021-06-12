@@ -54,6 +54,7 @@ var (
 		"init":               hclspec.NewAttr("init", "bool", false),
 		"init_path":          hclspec.NewAttr("init_path", "string", false),
 		"log_driver":         hclspec.NewAttr("log_driver", "string", false),
+		"labels":             hclspec.NewAttr("labels", "list(map(string))", false),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
@@ -64,6 +65,7 @@ var (
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 	})
 )
 
@@ -108,6 +110,7 @@ type TaskConfig struct {
 	Image             string             `codec:"image"`
 	InitPath          string             `codec:"init_path"`
 	LogDriver         string             `codec:"log_driver"`
+	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
@@ -116,4 +119,5 @@ type TaskConfig struct {
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
+	ForcePull         bool               `codec:"force_pull"`
 }
