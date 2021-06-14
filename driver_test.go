@@ -1653,7 +1653,7 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 
 func newTaskConfig(image string, command []string) TaskConfig {
 	if len(image) == 0 {
-		image = "docker://docker.io/library/busybox:latest"
+		image = "docker.io/library/busybox:latest"
 	}
 
 	return TaskConfig{

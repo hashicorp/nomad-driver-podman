@@ -654,7 +654,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
 	}
 	if !forcePull && imageID != "" {
-		d.logger.Info("Found imageID", imageID, "for image", imageName, "in local storage")
+		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
 	}
 
@@ -725,13 +725,18 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
+
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
-	if err != nil {
+	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
+	if err == nil {
+		return nil
+	} else if err == api.ContainerNotFound {
+		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
 	}
-	return nil
 }
 
 // DestroyTask function cleans up and removes a task that has terminated.
@@ -749,7 +754,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.isRunning() {
 		d.logger.Debug("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		err := d.podman.ContainerStop(d.ctx, handle.containerID, 60)
+		err := d.podman.ContainerStop(d.ctx, handle.containerID, 60, true)
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
 		}
