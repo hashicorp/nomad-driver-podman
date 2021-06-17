@@ -181,7 +181,7 @@ func (d *Driver) Capabilities() (*drivers.Capabilities, error) {
 func (d *Driver) Fingerprint(ctx context.Context) (<-chan *drivers.Fingerprint, error) {
 	err := shelpers.Init()
 	if err != nil {
-		d.logger.Error("Could not init stats helper", "err", err)
+		d.logger.Error("Could not init stats helper", "error", err)
 		return nil, err
 	}
 	ch := make(chan *drivers.Fingerprint)
@@ -217,7 +217,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	// try to connect and get version info
 	info, err := d.podman.SystemInfo(d.ctx)
 	if err != nil {
-		d.logger.Error("Could not get podman info", "err", err)
+		d.logger.Error("Could not get podman info", "error", err)
 	} else {
 		// yay! we can enable the driver
 		health = drivers.HealthStateHealthy
@@ -263,7 +263,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	inspectData, err := d.podman.ContainerInspect(d.ctx, taskState.ContainerID)
 	if err != nil {
-		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
+		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
 		return nil
 	}
 
@@ -291,7 +291,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		if d.config.RecoverStopped {
 			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid)
 			if err = d.podman.ContainerStart(d.ctx, inspectData.ID); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
 			} else {
 				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID)
 				h.procState = drivers.TaskStateRunning
@@ -517,7 +517,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	inspectData, err := d.podman.ContainerInspect(d.ctx, containerID)
 	if err != nil {
-		d.logger.Error("failed to inspect container", "err", err)
+		d.logger.Error("failed to inspect container", "error", err)
 		cleanup()
 		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
 	}
@@ -651,7 +651,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 	if err != nil {
 		// If ImageInspectID errors, continue the operation and try
 		// to pull the image instead
-		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
+		d.logger.Warn("Unable to check for local image", "image", imageName, "error", err)
 	}
 	if !forcePull && imageID != "" {
 		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
@@ -731,10 +731,10 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if err == nil {
 		return nil
 	} else if err == api.ContainerNotFound {
-		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "err", err)
+		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "error", err)
 		return nil
 	} else {
-		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
+		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "error", err)
 		return err
 	}
 }
@@ -839,17 +839,17 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 	defer cancel()
 	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
 	if err != nil {
-		d.logger.Error("Unable to create ExecTask session", "err", err)
+		d.logger.Error("Unable to create ExecTask session", "error", err)
 		return nil, err
 	}
 	stdout, err := circbuf.NewBuffer(int64(drivers.CheckBufSize))
 	if err != nil {
-		d.logger.Error("ExecTask session failed, unable to allocate stdout buffer", "sessionId", sessionId, "err", err)
+		d.logger.Error("ExecTask session failed, unable to allocate stdout buffer", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 	stderr, err := circbuf.NewBuffer(int64(drivers.CheckBufSize))
 	if err != nil {
-		d.logger.Error("ExecTask session failed, unable to allocate stderr buffer", "sessionId", sessionId, "err", err)
+		d.logger.Error("ExecTask session failed, unable to allocate stderr buffer", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 	startRequest := api.ExecStartRequest{
@@ -862,13 +862,13 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 	}
 	err = d.podman.ExecStart(ctx, sessionId, startRequest)
 	if err != nil {
-		d.logger.Error("ExecTask session returned with error", "sessionId", sessionId, "err", err)
+		d.logger.Error("ExecTask session returned with error", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 
 	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
 	if err != nil {
-		d.logger.Error("Unable to inspect finished ExecTask session", "sessionId", sessionId, "err", err)
+		d.logger.Error("Unable to inspect finished ExecTask session", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 	execResult := &drivers.ExecTaskResult{
@@ -878,7 +878,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 		Stdout: stdout.Bytes(),
 		Stderr: stderr.Bytes(),
 	}
-	d.logger.Trace("ExecTask result", "code", execResult.ExitResult.ExitCode, "out", string(execResult.Stdout), "err", string(execResult.Stderr))
+	d.logger.Trace("ExecTask result", "code", execResult.ExitResult.ExitCode, "out", string(execResult.Stdout), "error", string(execResult.Stderr))
 
 	return execResult, nil
 }
@@ -901,7 +901,7 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 
 	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
 	if err != nil {
-		d.logger.Error("Unable to create exec session", "err", err)
+		d.logger.Error("Unable to create exec session", "error", err)
 		return nil, err
 	}
 
@@ -917,13 +917,13 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 	}
 	err = d.podman.ExecStart(ctx, sessionId, startRequest)
 	if err != nil {
-		d.logger.Error("Exec session returned with error", "sessionId", sessionId, "err", err)
+		d.logger.Error("Exec session returned with error", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 
 	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
 	if err != nil {
-		d.logger.Error("Unable to inspect finished exec session", "sessionId", sessionId, "err", err)
+		d.logger.Error("Unable to inspect finished exec session", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 	exitResult := drivers.ExitResult{
