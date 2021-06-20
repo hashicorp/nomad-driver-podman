@@ -975,7 +975,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		}
 
 		if mode != "" {
-			bind.Options = append(bind.Options, mode)
+			bind.Options = append(bind.Options, strings.Split(mode, ",")...)
 		}
 		binds = append(binds, bind)
 	}
