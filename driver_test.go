@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 
 	"path/filepath"
 	"reflect"
@@ -1155,6 +1156,97 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
+// check mount options
+func TestPodmanDriver_Mount(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"sh",
+		"-c",
+		"mount|grep check",
+	})
+	taskCfg.Volumes = []string{
+		// explicitely check that we can have more then one option
+		"/tmp:/checka:ro,shared",
+		"/tmp:/checkb:private",
+		"/tmp:/checkc",
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "Mount",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// use "www-data" as a user for our test, it's part of the busybox image
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if options where correctly sent to podman
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
+	aok := false
+	bok := false
+	cok := false
+
+	// this part is a bit verbose but the exact mount options and
+	// their order depend on the target os
+	// so we need to dissect each result line
+	for _, bind := range inspectData.HostConfig.Binds {
+		if strings.HasPrefix(bind, "/tmp:/check") {
+			prefix := bind[0:13]
+			opts := strings.Split(bind[13:], ",")
+			if prefix == "/tmp:/checka:" {
+				require.Contains(t, opts, "ro")
+				require.Contains(t, opts, "shared")
+				aok = true
+			}
+			if prefix == "/tmp:/checkb:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "private")
+				bok = true
+			}
+			if prefix == "/tmp:/checkc:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "rprivate")
+				cok = true
+			}
+		}
+	}
+	require.True(t, aok, "checka not ok")
+	require.True(t, bok, "checkb not ok")
+	require.True(t, cok, "checkc not ok")
+
+	// see if stdout was populated with expected "mount" output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, " on /checka type ")
+	require.Contains(t, tasklog, " on /checkb type ")
+	require.Contains(t, tasklog, " on /checkc type ")
+}
+
 // check default capabilities
 func TestPodmanDriver_DefaultCaps(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
@@ -1337,7 +1429,7 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 	}
 }
 
-// let a task joint NetorkNS of another container
+// let a task join NetworkNS of another container via network_mode=container:
 func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
@@ -1407,6 +1499,79 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 
 	// see if stdout was populated with the correct output
 	tasklog := readStdoutLog(t, sidecarTask)
+	require.Contains(t, tasklog, "127.0.0.1:6748")
+}
+
+// let a task joint NetorkNS of another container via network_mode=task:
+func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	allocId := uuid.Generate()
+
+	// we're running "nc" on localhost here
+	mainTaskCfg := newTaskConfig("", []string{
+		"nc",
+		"-l",
+		"-p",
+		"6748",
+		"-s",
+		"localhost",
+	})
+	mainTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "maintask",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+
+	// we're running a second task in same networkNS and invoke netstat in it
+	sidecarTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"netstat -tulpen",
+	})
+	// join maintask network
+	sidecarTaskCfg.NetworkMode = "task:maintask"
+	sidecarTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sidecar",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+
+	mainHarness := podmanDriverHarness(t, nil)
+	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
+	defer mainCleanup()
+
+	_, _, err := mainHarness.StartTask(mainTask)
+	require.NoError(t, err)
+	defer mainHarness.DestroyTask(mainTask.ID, true)
+
+	sidecarHarness := podmanDriverHarness(t, nil)
+	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
+	defer sidecarCleanup()
+
+	_, _, err = sidecarHarness.StartTask(sidecarTask)
+	require.NoError(t, err)
+	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+
+	// Attempt to wait
+	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Sidecar did not exit in time")
+	}
+
+	// see if stdout was populated with the correct output
+	tasklog := readLogfile(t, sidecarTask)
 	require.Contains(t, tasklog, "127.0.0.1:6748")
 }
 
@@ -1716,7 +1881,7 @@ func readStderrLog(t *testing.T, task *drivers.TaskConfig) string {
 
 func newTaskConfig(image string, command []string) TaskConfig {
 	if len(image) == 0 {
-		image = "docker://docker.io/library/busybox:latest"
+		image = "docker.io/library/busybox:latest"
 	}
 
 	return TaskConfig{

@@ -20,6 +20,10 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 
 	defer res.Body.Close()
 
+	if res.StatusCode == http.StatusNotFound {
+		return inspectData, ContainerNotFound
+	}
+
 	if res.StatusCode != http.StatusOK {
 		return inspectData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}

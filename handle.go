@@ -120,8 +120,6 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 			Measured:   measuredCPUStats,
 		}
 
-		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
-
 		ms := &drivers.MemoryStats{
 			MaxUsage: h.containerStats.MemoryStats.MaxUsage,
 			Usage:    h.containerStats.MemoryStats.Usage,

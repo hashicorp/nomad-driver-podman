@@ -265,7 +265,10 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
 	inspectData, err := d.podman.ContainerInspect(d.ctx, taskState.ContainerID)
-	if err != nil {
+	if err == api.ContainerNotFound {
+		d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
+		return nil
+	} else if err != nil {
 		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
 		return nil
 	}
@@ -303,7 +306,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		} else {
 			// no, let's cleanup here to prepare for a StartTask()
 			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID)
-			if err = d.podman.ContainerStart(d.ctx, inspectData.ID); err != nil {
+			if err = d.podman.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
 				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID)
 			}
 			h.procState = drivers.TaskStateExited
@@ -323,7 +326,12 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 // BuildContainerName returns the podman container name for a given TaskConfig
 func BuildContainerName(cfg *drivers.TaskConfig) string {
-	return fmt.Sprintf("%s-%s", cfg.Name, cfg.AllocID)
+	return BuildContainerNameForTask(cfg.Name, cfg)
+}
+
+// BuildContainerName returns the podman container name for a specific Task in our group
+func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string {
+	return fmt.Sprintf("%s-%s", taskName, cfg.AllocID)
 }
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
@@ -447,8 +455,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	} else {
 		if driverConfig.NetworkMode == "" {
 			if !rootless {
-				// bridge is default for rootful podman
-				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+				// should we join the group shared network namespace?
+				if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Mode == drivers.NetIsolationModeGroup {
+					// yes, join the group ns namespace
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
+					createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
+				} else {
+					// no, simply attach a rootful container to the default podman bridge
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+				}
 			} else {
 				// slirp4netns is default for rootless podman
 				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
@@ -464,6 +479,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else if strings.HasPrefix(driverConfig.NetworkMode, "container:") {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "ns:") {
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "ns:")
+		} else if strings.HasPrefix(driverConfig.NetworkMode, "task:") {
+			otherTaskName := strings.TrimPrefix(driverConfig.NetworkMode, "task:")
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
+			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		} else {
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
@@ -665,7 +687,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 		d.logger.Warn("Unable to check for local image", "image", imageName, "err", err)
 	}
 	if !forcePull && imageID != "" {
-		d.logger.Info("Found imageID", imageID, "for image", imageName, "in local storage")
+		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
 	}
 
@@ -736,13 +758,18 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	if !ok {
 		return drivers.ErrTaskNotFound
 	}
+
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()))
-	if err != nil {
+	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
+	if err == nil {
+		return nil
+	} else if err == api.ContainerNotFound {
+		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "err", err)
+		return nil
+	} else {
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "err", err)
 		return err
 	}
-	return nil
 }
 
 // DestroyTask function cleans up and removes a task that has terminated.
@@ -760,7 +787,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.isRunning() {
 		d.logger.Debug("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		err := d.podman.ContainerStop(d.ctx, handle.containerID, 60)
+		err := d.podman.ContainerStop(d.ctx, handle.containerID, 60, true)
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
 		}
@@ -978,7 +1005,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		}
 
 		if mode != "" {
-			bind.Options = append(bind.Options, mode)
+			bind.Options = append(bind.Options, strings.Split(mode, ",")...)
 		}
 		binds = append(binds, bind)
 	}
