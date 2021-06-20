@@ -34,6 +34,9 @@ var (
 		),
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
+		// disable_log_collection indicates whether nomad should collect logs of podman
+		// task containers.  If true, logs are not forwarded to nomad.
+		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -44,17 +47,20 @@ var (
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"command":            hclspec.NewAttr("command", "string", false),
-		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
-		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
-		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
-		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
-		"hostname":           hclspec.NewAttr("hostname", "string", false),
-		"image":              hclspec.NewAttr("image", "string", true),
-		"init":               hclspec.NewAttr("init", "bool", false),
-		"init_path":          hclspec.NewAttr("init_path", "string", false),
-		"log_driver":         hclspec.NewAttr("log_driver", "string", false),
-		"labels":             hclspec.NewAttr("labels", "list(map(string))", false),
+		"command":     hclspec.NewAttr("command", "string", false),
+		"cap_add":     hclspec.NewAttr("cap_add", "list(string)", false),
+		"cap_drop":    hclspec.NewAttr("cap_drop", "list(string)", false),
+		"entrypoint":  hclspec.NewAttr("entrypoint", "string", false),
+		"working_dir": hclspec.NewAttr("working_dir", "string", false),
+		"hostname":    hclspec.NewAttr("hostname", "string", false),
+		"image":       hclspec.NewAttr("image", "string", true),
+		"init":        hclspec.NewAttr("init", "bool", false),
+		"init_path":   hclspec.NewAttr("init_path", "string", false),
+		"labels":      hclspec.NewAttr("labels", "list(map(string))", false),
+		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"driver":  hclspec.NewAttr("driver", "string", false),
+			"options": hclspec.NewAttr("options", "list(map(string))", false),
+		})),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
@@ -80,6 +86,12 @@ type GCConfig struct {
 	Container bool `codec:"container"`
 }
 
+// LoggingConfig is the tasks logging configuration
+type LoggingConfig struct {
+	Driver  string             `codec:"driver"`
+	Options hclutils.MapStrStr `codec:"options"`
+}
+
 // VolumeConfig is the drivers volume specific configuration
 type VolumeConfig struct {
 	Enabled      bool   `codec:"enabled"`
@@ -88,10 +100,11 @@ type VolumeConfig struct {
 
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
-	Volumes        VolumeConfig `codec:"volumes"`
-	GC             GCConfig     `codec:"gc"`
-	RecoverStopped bool         `codec:"recover_stopped"`
-	SocketPath     string       `codec:"socket_path"`
+	Volumes              VolumeConfig `codec:"volumes"`
+	GC                   GCConfig     `codec:"gc"`
+	RecoverStopped       bool         `codec:"recover_stopped"`
+	SocketPath           string       `codec:"socket_path"`
+	DisableLogCollection bool         `codec:"disable_log_collection"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
@@ -109,7 +122,7 @@ type TaskConfig struct {
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	InitPath          string             `codec:"init_path"`
-	LogDriver         string             `codec:"log_driver"`
+	Logging           LoggingConfig      `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`

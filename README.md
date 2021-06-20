@@ -154,6 +154,18 @@ plugin "nomad-driver-podman" {
   }
 }
 ```
+
+* disable_log_collection (string) Defaults to `false`. Setting this to true will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
+
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    disable_log_collection = false
+  }
+}
+```
+
 ## Task Configuration
 
 * **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
@@ -262,15 +274,37 @@ config {
 
 ```
 
-* **log_driver** - Configure logging
+* **logging** - Configure logging. See also plugin option **disable_log_collection**
 
-`log_driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a nomad fifo.
-Benefits of this mode are: zero overhead, don't have to worry about logrotation at system or Podman level. Downside: you can not easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
+`driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a nomad fifo.
+Benefits of this mode are: zero overhead, don't have to worry about log rotation at system or Podman level. Downside: you can not easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
 
-`log_driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo. 
-Benefits: all containers can log into the host journal, you can ship a structured stream incl. metadata to your log aggregator. No log rotation at Podman level.
+```
+config {
+  logging = {
+    driver = "nomad"
+  }
+}
+```
+
+`log_driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo (controllable by **disable_log_collection**)
+Benefits: all containers can log into the host journal, you can ship a structured stream incl. metadata to your log aggregator. No log rotation at Podman level. You can add additional tags to the journal.
 Drawbacks: a bit more overhead, depends on Journal (will not work on WSL2). You should configure some rotation policy for your Journal.
 Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
+
+```
+config {
+  logging = {
+    driver = "journald"
+    options = [
+      {
+        "tag" = "redis"
+      }
+    ]
+  }
+}
+```
+
 
 * **memory_reservation** - Memory soft limit (nit = b (bytes), k (kilobytes), m (megabytes), or g (gigabytes))
 

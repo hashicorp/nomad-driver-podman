@@ -401,7 +401,7 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 		"-c",
 		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
 	})
-	taskCfg.LogDriver = "journald"
+	taskCfg.Logging.Driver = "journald"
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "logJournald",
@@ -453,7 +453,7 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 		"-c",
 		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
 	})
-	taskCfg.LogDriver = "nomad"
+	taskCfg.Logging.Driver = "nomad"
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "logNomad",
@@ -1241,7 +1241,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 	require.True(t, cok, "checkc not ok")
 
 	// see if stdout was populated with expected "mount" output
-	tasklog := readLogfile(t, task)
+	tasklog := readStdoutLog(t, task)
 	require.Contains(t, tasklog, " on /checka type ")
 	require.Contains(t, tasklog, " on /checkb type ")
 	require.Contains(t, tasklog, " on /checkc type ")
@@ -1571,7 +1571,7 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 	}
 
 	// see if stdout was populated with the correct output
-	tasklog := readLogfile(t, sidecarTask)
+	tasklog := readStdoutLog(t, sidecarTask)
 	require.Contains(t, tasklog, "127.0.0.1:6748")
 }
 

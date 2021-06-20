@@ -195,7 +195,8 @@ func (h *TaskHandle) runContainerMonitor() {
 		h.logger.Warn("Unable to decode driver config, not starting log streamer", "task", h.taskConfig.ID, "err", err)
 		return
 	} else {
-		if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
+		// start to stream logs if journald log driver is configured and LogCollection is not disabled
+		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && h.driver.config.DisableLogCollection == false {
 			logctx, logcancel := context.WithCancel(h.driver.ctx)
 			go h.runLogStreamer(logctx)
 
