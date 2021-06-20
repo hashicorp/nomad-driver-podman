@@ -262,7 +262,10 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
 	inspectData, err := d.podman.ContainerInspect(d.ctx, taskState.ContainerID)
-	if err != nil {
+	if err == api.ContainerNotFound {
+		d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
+		return nil
+	} else if err != nil {
 		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "err", err)
 		return nil
 	}
@@ -299,7 +302,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		} else {
 			// no, let's cleanup here to prepare for a StartTask()
 			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID)
-			if err = d.podman.ContainerStart(d.ctx, inspectData.ID); err != nil {
+			if err = d.podman.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
 				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID)
 			}
 			h.procState = drivers.TaskStateExited
