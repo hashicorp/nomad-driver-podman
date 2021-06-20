@@ -196,7 +196,7 @@ func (h *TaskHandle) runContainerMonitor() {
 		return
 	} else {
 		// start to stream logs if journald log driver is configured and LogCollection is not disabled
-		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && h.driver.config.DisableLogCollection == false {
+		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && !h.driver.config.DisableLogCollection {
 			logctx, logcancel := context.WithCancel(h.driver.ctx)
 			go h.runLogStreamer(logctx)
 

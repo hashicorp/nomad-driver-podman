@@ -103,8 +103,8 @@ type PluginConfig struct {
 	Volumes              VolumeConfig `codec:"volumes"`
 	GC                   GCConfig     `codec:"gc"`
 	RecoverStopped       bool         `codec:"recover_stopped"`
-	SocketPath           string       `codec:"socket_path"`
 	DisableLogCollection bool         `codec:"disable_log_collection"`
+	SocketPath           string       `codec:"socket_path"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
