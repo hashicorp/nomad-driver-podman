@@ -749,6 +749,17 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 		return nil, drivers.ErrTaskNotFound
 	}
 	ch := make(chan *drivers.ExitResult)
+	// only start logstreamer if we have to...
+	var driverConfig TaskConfig
+	if err := handle.taskConfig.DecodeDriverConfig(&driverConfig); err != nil {
+		d.logger.Warn("Unable to decode driver config, not starting log streamer", "task", taskID, "err", err)
+	} else {
+		// start to stream logs if journald log driver is configured and LogCollection is not disabled
+		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && !d.config.DisableLogCollection {
+			go handle.runLogStreamer(ctx)
+		}
+	}
+
 	go handle.runExitWatcher(ctx, ch)
 	return ch, nil
 }
