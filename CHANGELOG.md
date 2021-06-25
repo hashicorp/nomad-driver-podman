@@ -1,4 +1,6 @@
-## Unreleased
+## UNRELEASED
+
+## 0.3.0
 
 * config: Image registry authentication [[GH-71](https://github.com/hashicorp/nomad-driver-podman/issues/71)]
 * config: Added tty option
