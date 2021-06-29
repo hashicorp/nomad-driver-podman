@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+BUG FIXES:
+* log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
+
 ## 0.3.0
 
 * config: Image registry authentication [[GH-71](https://github.com/hashicorp/nomad-driver-podman/issues/71)]
