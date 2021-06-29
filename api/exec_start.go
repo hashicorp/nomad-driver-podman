@@ -91,7 +91,7 @@ func (c *API) attachHandleResize(ctx context.Context, resizeChannel <-chan drive
 			c.logger.Trace("Resize terminal", "sessionId", sessionId, "height", size.Height, "width", size.Width)
 			rerr := c.ExecResize(ctx, sessionId, size.Height, size.Width)
 			if rerr != nil {
-				c.logger.Error("Failed to resize TTY", "err", rerr)
+				c.logger.Error("Failed to resize TTY", "error", rerr)
 			}
 		}
 	}
@@ -155,7 +155,7 @@ func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStart
 		go func() {
 			_, err := io.Copy(socket, options.Stdin)
 			if err != nil {
-				c.logger.Error("Failed to send stdin to exec session", "err", err)
+				c.logger.Error("Failed to send stdin to exec session", "error", err)
 			}
 		}()
 	}
