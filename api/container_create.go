@@ -55,6 +55,11 @@ type ContainerCreateRequest struct {
 	// Optional.
 	Command []string `json:"command,omitempty"`
 
+	// Pod is the container's pod.
+	// If not given and container will not be inside a pod
+	// Optional.
+	Pod string `json:"pod,omitempty"`
+
 	// Entrypoint is the container's entrypoint.
 	// If not given and Image is specified, this will be populated by the
 	// image's configuration.

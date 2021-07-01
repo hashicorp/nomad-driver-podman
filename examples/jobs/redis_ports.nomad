@@ -15,6 +15,8 @@ job "redis" {
       config {
         image = "docker://redis"
         ports = ["redis"]
+        network_mode = "bridge"
+        cni_networks = ["internal", "web"]
       }
     }
   }

@@ -459,6 +459,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			}
 		} else if driverConfig.NetworkMode == "bridge" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			if len(driverConfig.CNINetworks) > 0 {
+				createOpts.ContainerNetworkConfig.CNINetworks = driverConfig.CNINetworks
+			}
 		} else if driverConfig.NetworkMode == "host" {
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Host
 		} else if driverConfig.NetworkMode == "none" {
