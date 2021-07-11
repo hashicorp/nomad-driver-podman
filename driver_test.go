@@ -1719,7 +1719,7 @@ func Test_createImageArchives(t *testing.T) {
 	}{
 		{
 			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
-			Reference: "localhost/alpine:latest",
+			Reference: "docker.io/library/alpine:latest",
 		},
 		{
 			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),
