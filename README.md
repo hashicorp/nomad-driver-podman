@@ -231,6 +231,17 @@ config {
 }
 ```
 
+* **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions. 
+Each entry adds a host device to the container. Optional permissions can be used to specify device permissions, it is combination of r for read, w for write, and m for mknod(2). See podman documentation for more details.
+
+```
+config {
+  devices = [
+    "/dev/net/tun"
+  ]
+}
+```
+
 * **hostname** -  (Optional) The hostname to assign to the container. When launching more than one of a task (using count) with this option set, every container the task starts will have the same hostname.
 
 * **Forwarding and Exposing Ports** - (Optional) See [Docker Driver Configuration](https://www.nomadproject.io/docs/drivers/docker.html#forwarding-and-exposing-ports) for details.

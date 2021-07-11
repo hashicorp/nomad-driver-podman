@@ -47,6 +47,7 @@ var (
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
+		"devices":            hclspec.NewAttr("devices", "list(string)", false),
 		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
 		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
@@ -104,6 +105,7 @@ type TaskConfig struct {
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
 	Command           string             `codec:"command"`
+	Devices           []string           `codec:"devices"`
 	Entrypoint        string             `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
