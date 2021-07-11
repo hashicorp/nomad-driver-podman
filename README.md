@@ -24,7 +24,54 @@ this plugin to Nomad!
 * Fine tune memory usage: standard [Nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
 * Supports rootless containers with cgroup V2
 * Set DNS servers, searchlist and options via [Nomad dns parameters](https://www.nomadproject.io/docs/job-specification/network#dns-parameters)
+* Support for nomad shared network namespaces and consul connect
+* Quite flexible [network configuration](#network-configuration), allows to simply build pod-like structures within a nomad group
 
+## Redis Example job
+
+Here is a simple redis "hello world" Example:
+
+```
+job "redis" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  group "redis" {
+    network {
+      port "redis" { to = 6379 }
+    }
+
+    task "redis" {
+      driver = "podman"
+
+        config {
+          image = "docker://redis"
+          ports = ["redis"]
+        }
+
+      resources {
+        cpu    = 500
+        memory = 256
+      }
+    }
+  }
+}
+```
+
+```sh
+nomad run redis.nomad
+
+==> Monitoring evaluation "9fc25b88"
+    Evaluation triggered by job "redis"
+    Allocation "60fdc69b" created: node "f6bccd6d", group "redis"
+    Evaluation status changed: "pending" -> "complete"
+==> Evaluation "9fc25b88" finished with status "complete"
+
+podman ps
+
+CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS             PORTS  NAMES
+6d2d700cbce6  docker.io/library/redis:latest  docker-entrypoint...  16 seconds ago  Up 16 seconds ago         redis-60fdc69b-65cb-8ece-8554-df49321b3462
+```
 
 ## Building The Driver from source
 
@@ -255,15 +302,18 @@ config {
 
 * **network_mode** - Set the [network mode](http://docs.podman.io/en/latest/markdown/podman-run.1.html#options) for the container.
 
-- `bridge`: (default for rootful) create a network stack on the default bridge
+By default the task uses the network stack defined in the task group, see [network Stanza](https://www.nomadproject.io/docs/job-specification/network). If the groups network behavior is also undefined, it will fallback to `bridge` in rootful mode or `slirp4netns` for rootless containers.
+
+- `bridge`: create a network stack on the default podman bridge.
 - `none`: no networking
-- `container:id`: reuse another container's network stack
 - `host`: use the Podman host network stack. Note: the host mode gives the
   container full access to local system services such as D-bus and is therefore
   considered insecure
 - `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
   default for rootless containers. Podman currently does not support it for root
   containers [issue](https://github.com/containers/libpod/issues/6097).
+- `container:id`: reuse another podman containers network stack
+- `task:name-of-other-task`: join the network of another task in the same allocation.
 
 ```
 config {
@@ -321,51 +371,51 @@ config {
 }
 ```
 
-## Example job
+## Network Configuration
 
-```
-job "redis" {
-  datacenters = ["dc1"]
-  type        = "service"
+[nomad lifecycle hooks](https://www.nomadproject.io/docs/job-specification/lifecycle) combined with the drivers `network_mode` allows very flexible network namespace definitions. This feature does not build upon the native podman pod structure but simply reuses the networking namespace of one container for other tasks in the same group.
 
-  group "redis" {
-    network {
-      port "redis" { to = 6379 }
-    }
+A typical example is a network server and a metric exporter or log shipping sidecar. The metric exporter needs access to i.E. a private monitoring Port which should not be exposed the the network and thus is usually bound to localhost.
 
-    task "redis" {
-      driver = "podman"
+The repository includes three different examples jobs for such a setup. All of them will start a [nats](https://nats.io/) server and a [prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter) using different approaches.
 
-        config {
-          image = "docker://redis"
-          ports = ["redis"]
-        }
+You can use `curl` to proof that the job is working correctly and that you can get prometheus metrics:
 
-      resources {
-        cpu    = 500
-        memory = 256
-      }
-    }
-  }
-}
-```
+`curl http://your-machine:7777/metrics`
 
-```sh
-nomad run redis.nomad
+### 2 Task setup, server defines the network
 
-==> Monitoring evaluation "9fc25b88"
-    Evaluation triggered by job "redis"
-    Allocation "60fdc69b" created: node "f6bccd6d", group "redis"
-    Evaluation status changed: "pending" -> "complete"
-==> Evaluation "9fc25b88" finished with status "complete"
+See `examples/jobs/nats_simple_pod.nomad`
 
-podman ps
+Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar. 
+Because of that, nomad guarantees that the server is started first and thus the exporter can
+easily join the servers network namespace via `network_mode = "task:server"`.
 
-CONTAINER ID  IMAGE                           COMMAND               CREATED         STATUS             PORTS  NAMES
-6d2d700cbce6  docker.io/library/redis:latest  docker-entrypoint...  16 seconds ago  Up 16 seconds ago         redis-60fdc69b-65cb-8ece-8554-df49321b3462
-```
+Note, that the *server* configuration file binds the *http_port* to localhost. 
 
-### Rootless on ubuntu
+Be aware that ports must be defined in the parent network namespace, here *server*.
+
+### 3 Task setup, a pause container defines the network
+
+See `examples/jobs/nats_pod.nomad`
+
+A slightly different setup is demonstrated in this job. It reassembles more closesly the idea of a *pod* by starting a
+pause task, named *pod* via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
+
+Next, the main workload, *server* is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
+Finally, nomad starts the poststart/sidecar *exporter* which also joins the network.
+
+Note that all ports must be defined on the *pod* level.
+
+### 2 Task setup, shared nomad network namespace
+
+See `examples/jobs/nats_group.nomad`
+
+This example is very different. Both *server* and *exporter* join a network namespace which is created and managed
+by nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
+
+
+## Rootless on ubuntu
 
 edit `/etc/default/grub` to enable cgroups v2
 ```
@@ -438,14 +488,14 @@ CONTAINER ID  IMAGE                           COMMAND       CREATED        STATU
 2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
 ```
 
-### Local Development
+## Local Development
 
-#### Requirements
+### Requirements
 
   - Vagrant >= 2.2
   - VirtualBox >= v6.0
 
-#### Vagrant Environment Setup
+### Vagrant Environment Setup
 
 ```
 # create the vm

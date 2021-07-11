@@ -120,8 +120,6 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 			Measured:   measuredCPUStats,
 		}
 
-		//h.driver.logger.Info("stats", "cpu", containerStats.Cpu, "system", containerStats.System_nano, "user", containerStats.Cpu_nano, "percent", totalPercent, "ticks", cs.TotalTicks, "cpus", cpus, "available", available)
-
 		ms := &drivers.MemoryStats{
 			MaxUsage: h.containerStats.MemoryStats.MaxUsage,
 			Usage:    h.containerStats.MemoryStats.Usage,
@@ -228,20 +226,20 @@ func (h *TaskHandle) runContainerMonitor() {
 				gone = true
 			}
 			if gone {
-				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", statsErr)
+				h.logger.Debug("Container is not running anymore", "container", h.containerID, "error", statsErr)
 				// container was stopped, get exit code and other post mortem infos
 				inspectData, err := h.driver.podman.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
 				h.completedAt = time.Now()
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
-					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
+					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "error", err)
 					h.exitResult.Signal = 0
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 					if len(inspectData.State.Error) > 0 {
 						h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
-						h.logger.Error("Container error", "container", h.containerID, "err", h.exitResult.Err)
+						h.logger.Error("Container error", "container", h.containerID, "error", h.exitResult.Err)
 					}
 					h.completedAt = inspectData.State.FinishedAt
 					if inspectData.State.OOMKilled {
@@ -257,7 +255,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			}
 			// continue and wait for next cycle, it should eventually
 			// fall into the "TaskStateExited" case
-			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", statsErr))
+			h.logger.Debug("Could not get container stats, unknown error", "error", fmt.Sprintf("%#v", statsErr))
 			continue
 		}
 
