@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+FEATURES:
+* config: Map host devices into container. [[GH-41](https://github.com/hashicorp/nomad-driver-podman/pull/41)]
+
 BUG FIXES:
 * log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
 

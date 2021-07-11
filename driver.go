@@ -388,6 +388,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, err
 	}
 	createOpts.ContainerStorageConfig.Mounts = allMounts
+	allDevices := []spec.LinuxDevice{}
+	for _, device := range driverConfig.Devices {
+		allDevices = append(allDevices, spec.LinuxDevice{Path: device})
+	}
+	createOpts.ContainerStorageConfig.Devices = allDevices
 
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
