@@ -381,13 +381,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
 	// Logging
-	if driverConfig.LogDriver == "" || driverConfig.LogDriver == LOG_DRIVER_NOMAD {
-		createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
-	} else if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
+	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
+		// Only modify container loggin path if LogCollection is not disabled
+		if !d.config.DisableLogCollection {
+			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+		}
+	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
 		createOpts.LogConfiguration.Driver = "journald"
 	} else {
 		return nil, nil, fmt.Errorf("Invalid log_driver option")
 	}
+	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
 
 	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init
@@ -750,6 +754,17 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 		return nil, drivers.ErrTaskNotFound
 	}
 	ch := make(chan *drivers.ExitResult)
+	// only start logstreamer if we have to...
+	var driverConfig TaskConfig
+	if err := handle.taskConfig.DecodeDriverConfig(&driverConfig); err != nil {
+		d.logger.Warn("Unable to decode driver config, not starting log streamer", "task", taskID, "err", err)
+	} else {
+		// start to stream logs if journald log driver is configured and LogCollection is not disabled
+		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && !d.config.DisableLogCollection {
+			go handle.runLogStreamer(ctx)
+		}
+	}
+
 	go handle.runExitWatcher(ctx, ch)
 	return ch, nil
 }

@@ -189,25 +189,6 @@ func (h *TaskHandle) runContainerMonitor() {
 	interval := time.Second * 1
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
-	// only start logstreamer if we have to...
-	var driverConfig TaskConfig
-	if err := h.taskConfig.DecodeDriverConfig(&driverConfig); err != nil {
-		h.logger.Warn("Unable to decode driver config, not starting log streamer", "task", h.taskConfig.ID, "err", err)
-		return
-	} else {
-		if driverConfig.LogDriver == LOG_DRIVER_JOURNALD {
-			logctx, logcancel := context.WithCancel(h.driver.ctx)
-			go h.runLogStreamer(logctx)
-
-			cleanup := func() {
-				h.logger.Debug("Container monitor exits", "container", h.containerID)
-				// stop log streamers
-				logcancel()
-			}
-			defer cleanup()
-		}
-	}
-
 	for {
 		select {
 		case <-h.driver.ctx.Done():
