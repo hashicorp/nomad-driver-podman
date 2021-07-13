@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 
 	"path/filepath"
 	"reflect"
@@ -1099,6 +1100,97 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
+// check mount options
+func TestPodmanDriver_Mount(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"sh",
+		"-c",
+		"mount|grep check",
+	})
+	taskCfg.Volumes = []string{
+		// explicitely check that we can have more then one option
+		"/tmp:/checka:ro,shared",
+		"/tmp:/checkb:private",
+		"/tmp:/checkc",
+	}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "Mount",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	// use "www-data" as a user for our test, it's part of the busybox image
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	containerName := BuildContainerName(task)
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if options where correctly sent to podman
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
+	aok := false
+	bok := false
+	cok := false
+
+	// this part is a bit verbose but the exact mount options and
+	// their order depend on the target os
+	// so we need to dissect each result line
+	for _, bind := range inspectData.HostConfig.Binds {
+		if strings.HasPrefix(bind, "/tmp:/check") {
+			prefix := bind[0:13]
+			opts := strings.Split(bind[13:], ",")
+			if prefix == "/tmp:/checka:" {
+				require.Contains(t, opts, "ro")
+				require.Contains(t, opts, "shared")
+				aok = true
+			}
+			if prefix == "/tmp:/checkb:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "private")
+				bok = true
+			}
+			if prefix == "/tmp:/checkc:" {
+				require.Contains(t, opts, "rw")
+				require.Contains(t, opts, "rprivate")
+				cok = true
+			}
+		}
+	}
+	require.True(t, aok, "checka not ok")
+	require.True(t, bok, "checkb not ok")
+	require.True(t, cok, "checkc not ok")
+
+	// see if stdout was populated with expected "mount" output
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, " on /checka type ")
+	require.Contains(t, tasklog, " on /checkb type ")
+	require.Contains(t, tasklog, " on /checkc type ")
+}
+
 // check default capabilities
 func TestPodmanDriver_DefaultCaps(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
@@ -1130,6 +1222,26 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 }
 
+// check enabled tty option
+func TestPodmanDriver_Tty(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Tty = true
+	inspectData := startDestroyInspect(t, taskCfg, "tty")
+
+	require.True(t, inspectData.Config.Tty)
+}
+
+// check labels option
+func TestPodmanDriver_Labels(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Labels = map[string]string{"nomad": "job"}
+	inspectData := startDestroyInspect(t, taskCfg, "labels")
+
+	expectedLabels := map[string]string{"nomad": "job"}
+
+	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {
@@ -1141,18 +1253,23 @@ func TestPodmanDriver_Dns(t *testing.T) {
 		"-c",
 		"sleep 1; cat /etc/resolv.conf",
 	})
-	// config {
-	//   dns = [
-	//     "1.1.1.1"
-	//   ]
+	// network {
+	//   dns {
+	//     servers = ["1.1.1.1"]
+	// 	   searches = ["internal.corp"]
+	//     options = ["ndots:2"]
+	//   }
 	// }
-	taskCfg.Dns = []string{"1.1.1.1"}
-
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      "dns",
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
+		DNS: &drivers.DNSConfig{
+			Servers:  []string{"1.1.1.1"},
+			Searches: []string{"internal.corp"},
+			Options:  []string{"ndots:2"},
+		},
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
@@ -1180,12 +1297,14 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	// see if stdout was populated with the correct output
 	tasklog := readLogfile(t, task)
 	require.Contains(t, tasklog, "nameserver 1.1.1.1")
+	require.Contains(t, tasklog, "search internal.corp")
+	require.Contains(t, tasklog, "options ndots:2")
 
 }
 
 // TestPodmanDriver_NetworkMode asserts we can specify different network modes
 // Default podman cni subnet 10.88.0.0/16
-func TestPodmanDriver_NetworkMode(t *testing.T) {
+func TestPodmanDriver_NetworkModes(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
@@ -1254,6 +1373,152 @@ func TestPodmanDriver_NetworkMode(t *testing.T) {
 	}
 }
 
+// let a task join NetworkNS of another container via network_mode=container:
+func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	allocId := uuid.Generate()
+
+	// we're running "nc" on localhost here
+	mainTaskCfg := newTaskConfig("", []string{
+		"nc",
+		"-l",
+		"-p",
+		"6748",
+		"-s",
+		"localhost",
+	})
+	mainTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "maintask",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+
+	// we're running a second task in same networkNS and invoke netstat in it
+	sidecarTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"netstat -tulpen",
+	})
+	// join maintask network
+	sidecarTaskCfg.NetworkMode = "container:maintask-" + allocId
+	sidecarTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sidecar",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+
+	mainHarness := podmanDriverHarness(t, nil)
+	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
+	defer mainCleanup()
+
+	_, _, err := mainHarness.StartTask(mainTask)
+	require.NoError(t, err)
+	defer mainHarness.DestroyTask(mainTask.ID, true)
+
+	sidecarHarness := podmanDriverHarness(t, nil)
+	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
+	defer sidecarCleanup()
+
+	_, _, err = sidecarHarness.StartTask(sidecarTask)
+	require.NoError(t, err)
+	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+
+	// Attempt to wait
+	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Sidecar did not exit in time")
+	}
+
+	// see if stdout was populated with the correct output
+	tasklog := readLogfile(t, sidecarTask)
+	require.Contains(t, tasklog, "127.0.0.1:6748")
+}
+
+// let a task joint NetorkNS of another container via network_mode=task:
+func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	allocId := uuid.Generate()
+
+	// we're running "nc" on localhost here
+	mainTaskCfg := newTaskConfig("", []string{
+		"nc",
+		"-l",
+		"-p",
+		"6748",
+		"-s",
+		"localhost",
+	})
+	mainTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "maintask",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+
+	// we're running a second task in same networkNS and invoke netstat in it
+	sidecarTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"netstat -tulpen",
+	})
+	// join maintask network
+	sidecarTaskCfg.NetworkMode = "task:maintask"
+	sidecarTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sidecar",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+
+	mainHarness := podmanDriverHarness(t, nil)
+	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
+	defer mainCleanup()
+
+	_, _, err := mainHarness.StartTask(mainTask)
+	require.NoError(t, err)
+	defer mainHarness.DestroyTask(mainTask.ID, true)
+
+	sidecarHarness := podmanDriverHarness(t, nil)
+	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
+	defer sidecarCleanup()
+
+	_, _, err = sidecarHarness.StartTask(sidecarTask)
+	require.NoError(t, err)
+	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+
+	// Attempt to wait
+	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Sidecar did not exit in time")
+	}
+
+	// see if stdout was populated with the correct output
+	tasklog := readLogfile(t, sidecarTask)
+	require.Contains(t, tasklog, "127.0.0.1:6748")
+}
+
 // test kill / signal support
 func TestPodmanDriver_SignalTask(t *testing.T) {
 	if !tu.IsCI() {
@@ -1297,6 +1562,251 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 	}
 }
 
+func TestPodmanDriver_Sysctl(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	// set a uncommon somaxconn value and echo the effective
+	// in-container value
+	taskCfg := newTaskConfig("", []string{
+		"sysctl",
+		"net.core.somaxconn",
+	})
+	taskCfg.Sysctl = map[string]string{"net.core.somaxconn": "12321"}
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sysctl",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	tasklog := readLogfile(t, task)
+	require.Contains(t, tasklog, "net.core.somaxconn = 12321")
+
+}
+
+// Make sure we can pull and start "non-latest" containers
+func TestPodmanDriver_Pull(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		Image    string
+		TaskName string
+	}{
+		{Image: "busybox:unstable", TaskName: "pull_tag"},
+		{Image: "busybox", TaskName: "pull_non_tag"},
+		{Image: "busybox@sha256:ce98b632acbcbdf8d6fdc50d5f91fea39c770cd5b3a2724f52551dde4d088e96", TaskName: "pull_digest"},
+	}
+
+	for _, testCase := range testCases {
+		startDestroyInspectImage(t, testCase.Image, testCase.TaskName)
+	}
+}
+
+func startDestroyInspectImage(t *testing.T, image string, taskName string) {
+	taskCfg := newTaskConfig(image, busyboxLongRunningCmd)
+	inspectData := startDestroyInspect(t, taskCfg, taskName)
+
+	d := podmanDriverHarness(t, nil)
+
+	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
+	require.NoError(t, err)
+	require.Equal(t, imageID, inspectData.Image)
+}
+
+func Test_createImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{Image: "busybox:musl", Reference: "docker.io/library/busybox:musl"},
+		{Image: "docker://busybox:latest", Reference: "docker.io/library/busybox:latest"},
+		{Image: "docker.io/library/busybox", Reference: "docker.io/library/busybox:latest"},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
+func Test_createImageArchives(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	archiveDir := os.Getenv("ARCHIVE_DIR")
+	if archiveDir == "" {
+		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+	}
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{
+			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
+			Reference: "localhost/alpine:latest",
+		},
+		{
+			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),
+			Reference: "docker.io/library/alpine:latest",
+		},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
+func createInspectImage(t *testing.T, image, reference string) {
+	d := podmanDriverHarness(t, nil)
+
+	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false)
+	require.NoError(t, err)
+
+	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
+	require.NoError(t, err)
+	require.Equal(t, idRef, idTest)
+}
+
+func Test_memoryLimits(t *testing.T) {
+	cases := []struct {
+		name         string
+		memResources drivers.MemoryResources
+		reservation  string
+		expectedHard int64
+		expectedSoft int64
+	}{
+		{
+			name: "plain",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 0,
+		},
+		{
+			name: "memory oversubscription",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+		{
+			name: "plain but using memory reservations",
+			memResources: drivers.MemoryResources{
+				MemoryMB: 20,
+			},
+			reservation:  "10m",
+			expectedHard: 20 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "10m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 10 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription but with specifying high memory reservation",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: 30,
+			},
+			reservation:  "25m",
+			expectedHard: 30 * 1024 * 1024,
+			expectedSoft: 20 * 1024 * 1024,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			hard, soft, err := memoryLimits(c.memResources, c.reservation)
+			require.NoError(t, err)
+
+			if c.expectedHard > 0 {
+				require.NotNil(t, hard)
+				require.Equal(t, c.expectedHard, *hard)
+			} else {
+				require.Nil(t, hard)
+			}
+
+			if c.expectedSoft > 0 {
+				require.NotNil(t, soft)
+				require.Equal(t, c.expectedSoft, *soft)
+			} else {
+				require.Nil(t, soft)
+			}
+		})
+	}
+}
+
+func Test_parseImage(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	digest := "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	testCases := []struct {
+		Input     string
+		Name      string
+		Transport string
+	}{
+		{Input: "quay.io/repo/busybox:glibc", Name: "quay.io/repo/busybox:glibc", Transport: "docker"},
+		{Input: "docker.io/library/root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "docker://root", Name: "docker.io/library/root:latest", Transport: "docker"},
+		{Input: "user/repo@" + digest, Name: "docker.io/user/repo@" + digest, Transport: "docker"},
+		{Input: "user/repo:tag", Name: "docker.io/user/repo:tag", Transport: "docker"},
+		{Input: "url:5000/repo", Name: "url:5000/repo:latest", Transport: "docker"},
+		{Input: "url:5000/repo:tag", Name: "url:5000/repo:tag", Transport: "docker"},
+		{Input: "oci-archive:path:tag", Name: "path:tag", Transport: "oci-archive"},
+		{Input: "docker-archive:path:image:tag", Name: "path:docker.io/library/image:tag", Transport: "docker-archive"},
+	}
+	for _, testCase := range testCases {
+		ref, err := parseImage(testCase.Input)
+		require.NoError(t, err)
+		require.Equal(t, testCase.Transport, ref.Transport().Name())
+		if ref.Transport().Name() == "docker" {
+			require.Equal(t, testCase.Name, ref.DockerReference().String())
+		} else {
+			require.Equal(t, testCase.Name, ref.StringWithinTransport())
+		}
+
+	}
+}
+
 // read a tasks logfile into a string, fail on error
 func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
@@ -1306,10 +1816,10 @@ func readLogfile(t *testing.T, task *drivers.TaskConfig) string {
 	return string(stdout)
 }
 
-func newTaskConfig(variant string, command []string) TaskConfig {
-	busyboxImageID := "docker://docker.io/library/busybox:latest"
-
-	image := busyboxImageID
+func newTaskConfig(image string, command []string) TaskConfig {
+	if len(image) == 0 {
+		image = "docker.io/library/busybox:latest"
+	}
 
 	return TaskConfig{
 		Image: image,

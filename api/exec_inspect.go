@@ -8,21 +8,17 @@ import (
 	"net/http"
 )
 
-// ContainerInspect data takes a name or ID of a container returns the inspection data
-func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContainerData, error) {
+// ExecInspect returns low-level information about an exec instance.
+func (c *API) ExecInspect(ctx context.Context, sessionId string) (InspectExecSession, error) {
 
-	var inspectData InspectContainerData
+	var inspectData InspectExecSession
 
-	res, err := c.Get(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/json", name))
+	res, err := c.Get(ctx, fmt.Sprintf("/v1.0.0/libpod/exec/%s/json", sessionId))
 	if err != nil {
 		return inspectData, err
 	}
 
 	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusNotFound {
-		return inspectData, ContainerNotFound
-	}
 
 	if res.StatusCode != http.StatusOK {
 		return inspectData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)

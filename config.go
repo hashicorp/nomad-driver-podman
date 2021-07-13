@@ -39,27 +39,40 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"args":               hclspec.NewAttr("args", "list(string)", false),
+		"args": hclspec.NewAttr("args", "list(string)", false),
+		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"username": hclspec.NewAttr("username", "string", false),
+			"password": hclspec.NewAttr("password", "string", false),
+		})),
 		"command":            hclspec.NewAttr("command", "string", false),
 		"cap_add":            hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":           hclspec.NewAttr("cap_drop", "list(string)", false),
-		"dns":                hclspec.NewAttr("dns", "list(string)", false),
 		"entrypoint":         hclspec.NewAttr("entrypoint", "string", false),
 		"working_dir":        hclspec.NewAttr("working_dir", "string", false),
 		"hostname":           hclspec.NewAttr("hostname", "string", false),
 		"image":              hclspec.NewAttr("image", "string", true),
 		"init":               hclspec.NewAttr("init", "bool", false),
 		"init_path":          hclspec.NewAttr("init_path", "string", false),
+		"labels":             hclspec.NewAttr("labels", "list(map(string))", false),
 		"memory_reservation": hclspec.NewAttr("memory_reservation", "string", false),
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
+		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
+		"tty":                hclspec.NewAttr("tty", "bool", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 	})
 )
+
+// AuthConfig is the tasks authentication configuration
+type AuthConfig struct {
+	Username string `codec:"username"`
+	Password string `codec:"password"`
+}
 
 // GCConfig is the driver GarbageCollection configuration
 type GCConfig struct {
@@ -82,23 +95,27 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	Command           string             `codec:"command"`
-	Entrypoint        string             `codec:"entrypoint"`
 	Args              []string           `codec:"args"`
-	WorkingDir        string             `codec:"working_dir"`
-	Hostname          string             `codec:"hostname"`
-	Image             string             `codec:"image"`
-	Init              bool               `codec:"init"`
-	InitPath          string             `codec:"init_path"`
-	MemoryReservation string             `codec:"memory_reservation"`
-	MemorySwap        string             `codec:"memory_swap"`
-	NetworkMode       string             `codec:"network_mode"`
-	MemorySwappiness  int64              `codec:"memory_swappiness"`
-	PortMap           hclutils.MapStrInt `codec:"port_map"`
+	Auth              AuthConfig         `codec:"auth"`
 	Ports             []string           `codec:"ports"`
 	Tmpfs             []string           `codec:"tmpfs"`
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
-	Dns               []string           `codec:"dns"`
+	Command           string             `codec:"command"`
+	Entrypoint        string             `codec:"entrypoint"`
+	WorkingDir        string             `codec:"working_dir"`
+	Hostname          string             `codec:"hostname"`
+	Image             string             `codec:"image"`
+	InitPath          string             `codec:"init_path"`
+	Labels            hclutils.MapStrStr `codec:"labels"`
+	MemoryReservation string             `codec:"memory_reservation"`
+	MemorySwap        string             `codec:"memory_swap"`
+	NetworkMode       string             `codec:"network_mode"`
+	MemorySwappiness  int64              `codec:"memory_swappiness"`
+	PortMap           hclutils.MapStrInt `codec:"port_map"`
+	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
+	Init              bool               `codec:"init"`
+	Tty               bool               `codec:"tty"`
+	ForcePull         bool               `codec:"force_pull"`
 }

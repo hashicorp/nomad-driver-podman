@@ -152,13 +152,13 @@ func (h *TaskHandle) onContainerDied() {
 	h.completedAt = time.Now()
 	if err != nil {
 		h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
-		h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
+		h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "error", err)
 		h.exitResult.Signal = 0
 	} else {
 		h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 		if len(inspectData.State.Error) > 0 {
 			h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
-			h.logger.Error("Container error", "container", h.containerID, "err", h.exitResult.Err)
+			h.logger.Error("Container error", "container", h.containerID, "error", h.exitResult.Err)
 		}
 		h.completedAt = inspectData.State.FinishedAt
 		if inspectData.State.OOMKilled {
