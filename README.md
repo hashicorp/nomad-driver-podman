@@ -211,12 +211,12 @@ config {
 }
 ```
 
-* **volumes** - (Optional) A list of host_path:container_path strings to bind host paths to container paths.
+* **volumes** - (Optional) A list of host_path:container_path:options strings to bind host paths to container paths. Named volumes are not supported.
 
 ```
 config {
   volumes = [
-    "/some/host/data:/container/data"
+    "/some/host/data:/container/data:ro,noexec"
   ]
 }
 ```
@@ -377,11 +377,11 @@ You can use `curl` to proof that the job is working correctly and that you can g
 
 See `examples/jobs/nats_simple_pod.nomad`
 
-Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar. 
+Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar.
 Because of that, nomad guarantees that the server is started first and thus the exporter can
 easily join the servers network namespace via `network_mode = "task:server"`.
 
-Note, that the *server* configuration file binds the *http_port* to localhost. 
+Note, that the *server* configuration file binds the *http_port* to localhost.
 
 Be aware that ports must be defined in the parent network namespace, here *server*.
 
