@@ -1037,6 +1037,54 @@ func TestPodmanDriver_User(t *testing.T) {
 
 }
 
+func TestPodmanDriver_Device(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		// print our username to stdout
+		"sh",
+		"-c",
+		"sleep 1; ls -l /dev/net/tun",
+	})
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "device",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	taskCfg.Devices = []string{"/dev/net/tun"}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		require.True(t, res.Successful())
+	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// see if stdout was populated with the "whoami" output
+	tasklog := readStdoutLog(t, task)
+	require.Contains(t, tasklog, "dev/net/tun")
+
+}
+
 // test memory/swap options
 func TestPodmanDriver_Swap(t *testing.T) {
 	if !tu.IsCI() {
@@ -1727,7 +1775,7 @@ func Test_createImageArchives(t *testing.T) {
 	}{
 		{
 			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
-			Reference: "localhost/alpine:latest",
+			Reference: "docker.io/library/alpine:latest",
 		},
 		{
 			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),

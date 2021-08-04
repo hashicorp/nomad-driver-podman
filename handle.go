@@ -144,13 +144,13 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 
 	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		h.logger.Warn("Unable to open stdout fifo", "err", err)
+		h.logger.Warn("Unable to open stdout fifo", "error", err)
 		return
 	}
 	defer stdout.Close()
 	stderr, err := os.OpenFile(h.taskConfig.StderrPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		h.logger.Warn("Unable to open stderr fifo", "err", err)
+		h.logger.Warn("Unable to open stderr fifo", "error", err)
 		return
 	}
 	defer stderr.Close()
@@ -168,7 +168,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 			}
 			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
 			if err != nil {
-				h.logger.Warn("Log stream was interrupted", "err", err)
+				h.logger.Warn("Log stream was interrupted", "error", err)
 				init = false
 				since = time.Now()
 				// increment logPointer
@@ -207,20 +207,20 @@ func (h *TaskHandle) runContainerMonitor() {
 				gone = true
 			}
 			if gone {
-				h.logger.Debug("Container is not running anymore", "container", h.containerID, "err", statsErr)
+				h.logger.Debug("Container is not running anymore", "container", h.containerID, "error", statsErr)
 				// container was stopped, get exit code and other post mortem infos
 				inspectData, err := h.driver.podman.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
 				h.completedAt = time.Now()
 				if err != nil {
 					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
-					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "err", err)
+					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "error", err)
 					h.exitResult.Signal = 0
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 					if len(inspectData.State.Error) > 0 {
 						h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
-						h.logger.Error("Container error", "container", h.containerID, "err", h.exitResult.Err)
+						h.logger.Error("Container error", "container", h.containerID, "error", h.exitResult.Err)
 					}
 					h.completedAt = inspectData.State.FinishedAt
 					if inspectData.State.OOMKilled {
@@ -236,7 +236,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			}
 			// continue and wait for next cycle, it should eventually
 			// fall into the "TaskStateExited" case
-			h.logger.Debug("Could not get container stats, unknown error", "err", fmt.Sprintf("%#v", statsErr))
+			h.logger.Debug("Could not get container stats, unknown error", "error", fmt.Sprintf("%#v", statsErr))
 			continue
 		}
 
