@@ -287,7 +287,7 @@ config {
 }
 ```
 
-`log_driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo (controllable by **disable_log_collection**)
+`driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo (controllable by **disable_log_collection**)
 Benefits: all containers can log into the host journal, you can ship a structured stream incl. metadata to your log aggregator. No log rotation at Podman level. You can add additional tags to the journal.
 Drawbacks: a bit more overhead, depends on Journal (will not work on WSL2). You should configure some rotation policy for your Journal.
 Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
