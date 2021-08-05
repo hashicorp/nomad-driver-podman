@@ -1535,3 +1535,39 @@ type Version struct {
 	Built      int64
 	OsArch     string
 }
+
+// -------------------------------------------------------------------------------------------------------
+// structs copied from https://github.com/containers/podman/blob/master/libpod/define/containerstate.go
+//
+// some unused parts are modified/commented out to not pull more dependencies
+//
+// some fields are reordert to make the linter happy (bytes maligned complains)
+// -------------------------------------------------------------------------------------------------------
+
+// ContainerStats contains the statistics information for a running container
+type ContainerStats struct {
+	ContainerID   string
+	Name          string
+	PerCPU        []uint64
+	CPU           float64
+	CPUNano       uint64
+	CPUSystemNano uint64
+	SystemNano    uint64
+	MemUsage      uint64
+	MemLimit      uint64
+	MemPerc       float64
+	NetInput      uint64
+	NetOutput     uint64
+	BlockInput    uint64
+	BlockOutput   uint64
+	PIDs          uint64
+}
+
+// ContainerStatsReport is used for streaming container stats.
+// https://github.com/containers/podman/blob/master/pkg/domain/entities/containers.go
+type ContainerStatsReport struct {
+	// Error from reading stats.
+	Error error
+	// Results, set when there is no error.
+	Stats []ContainerStats
+}
