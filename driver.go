@@ -271,13 +271,14 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 
 	h := &TaskHandle{
-		containerID: taskState.ContainerID,
-		driver:      d,
-		taskConfig:  taskState.TaskConfig,
-		procState:   drivers.TaskStateUnknown,
-		startedAt:   taskState.StartedAt,
-		exitResult:  &drivers.ExitResult{},
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        taskState.ContainerID,
+		driver:             d,
+		taskConfig:         taskState.TaskConfig,
+		procState:          drivers.TaskStateUnknown,
+		startedAt:          taskState.StartedAt,
+		exitResult:         &drivers.ExitResult{},
+		logger:             d.logger.Named("podmanHandle"),
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),
@@ -555,13 +556,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
-		startedAt:   time.Now().Round(time.Millisecond),
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        containerID,
+		driver:             d,
+		taskConfig:         cfg,
+		procState:          drivers.TaskStateRunning,
+		exitResult:         &drivers.ExitResult{},
+		startedAt:          time.Now().Round(time.Millisecond),
+		logger:             d.logger.Named("podmanHandle"),
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),
