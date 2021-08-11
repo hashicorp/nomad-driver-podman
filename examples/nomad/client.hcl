@@ -29,6 +29,13 @@ plugin "raw_exec" {
   }
 }
 
+telemetry {
+  # you should align the collection_interval to your
+  # metrics system. A very short interval of 1-2 secs
+  # puts considerable strain on your system
+  collection_interval = "10s"
+}
+
 # different port than server
 ports {
   http = 7646

@@ -274,14 +274,15 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 
 	h := &TaskHandle{
-		containerID: taskState.ContainerID,
-		driver:      d,
-		taskConfig:  taskState.TaskConfig,
-		procState:   drivers.TaskStateUnknown,
-		startedAt:   taskState.StartedAt,
-		logPointer:  time.Now(), // do not rewind log to the startetAt date.
-		exitResult:  &drivers.ExitResult{},
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        taskState.ContainerID,
+		driver:             d,
+		taskConfig:         taskState.TaskConfig,
+		procState:          drivers.TaskStateUnknown,
+		startedAt:          taskState.StartedAt,
+		logPointer:         time.Now(), // do not rewind log to the startetAt date.
+		exitResult:         &drivers.ExitResult{},
+		logger:             d.logger.Named("podmanHandle"),
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),
@@ -403,11 +404,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, err
 	}
 	createOpts.ContainerStorageConfig.Mounts = allMounts
-	allDevices := []spec.LinuxDevice{}
-	for _, device := range driverConfig.Devices {
-		allDevices = append(allDevices, spec.LinuxDevice{Path: device})
+	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(driverConfig.Devices))
+	for idx, device := range driverConfig.Devices {
+		createOpts.ContainerStorageConfig.Devices[idx] = spec.LinuxDevice{Path: device}
 	}
-	createOpts.ContainerStorageConfig.Devices = allDevices
 
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
@@ -550,14 +550,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
-		startedAt:   time.Now(),
-		logPointer:  time.Now(),
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        containerID,
+		driver:             d,
+		taskConfig:         cfg,
+		procState:          drivers.TaskStateRunning,
+		exitResult:         &drivers.ExitResult{},
+		startedAt:          time.Now(),
+		logPointer:         time.Now(),
+		logger:             d.logger.Named("podmanHandle"),
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),
