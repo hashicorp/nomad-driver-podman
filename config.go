@@ -37,6 +37,7 @@ var (
 		// disable_log_collection indicates whether nomad should collect logs of podman
 		// task containers.  If true, logs are not forwarded to nomad.
 		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
+		"client_http_timeout":    hclspec.NewAttr("client_http_timeout", "string", false),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -111,6 +112,7 @@ type PluginConfig struct {
 	RecoverStopped       bool         `codec:"recover_stopped"`
 	DisableLogCollection bool         `codec:"disable_log_collection"`
 	SocketPath           string       `codec:"socket_path"`
+	ClientHttpTimeout    string       `codec:"client_http_timeout"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
