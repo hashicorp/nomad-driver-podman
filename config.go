@@ -58,9 +58,13 @@ var (
 		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
 		"hostname":       hclspec.NewAttr("hostname", "string", false),
 		"image":          hclspec.NewAttr("image", "string", true),
-		"init":           hclspec.NewAttr("init", "bool", false),
-		"init_path":      hclspec.NewAttr("init_path", "string", false),
-		"labels":         hclspec.NewAttr("labels", "list(map(string))", false),
+		"image_pull_timeout": hclspec.NewDefault(
+			hclspec.NewAttr("image_pull_timeout", "string", false),
+			hclspec.NewLiteral(`"5m"`),
+		),
+		"init":      hclspec.NewAttr("init", "bool", false),
+		"init_path": hclspec.NewAttr("init_path", "string", false),
+		"labels":    hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
 			"options": hclspec.NewAttr("options", "list(map(string))", false),
@@ -130,6 +134,7 @@ type TaskConfig struct {
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
+	ImagePullTimeout  string             `codec:"image_pull_timeout"`
 	InitPath          string             `codec:"init_path"`
 	Logging           LoggingConfig      `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`

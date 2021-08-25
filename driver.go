@@ -553,7 +553,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, cfg)
+		imagePullTimeout, err := time.ParseDuration(driverConfig.ImagePullTimeout)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", err)
+		}
+
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -754,7 +759,7 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg *drivers.TaskConfig) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, imagePullTimeout time.Duration, cfg *drivers.TaskConfig) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -813,7 +818,11 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 		Username: auth.Username,
 		Password: auth.Password,
 	}
-	if imageID, err = d.podman.ImagePull(d.ctx, imageName, imageAuth); err != nil {
+
+	ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
+	defer cancel()
+
+	if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
 		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 	}
 	d.logger.Debug("Pulled image ID", "imageID", imageID)
