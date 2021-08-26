@@ -2094,8 +2094,9 @@ func newTaskConfig(image string, command []string) TaskConfig {
 	return TaskConfig{
 		Image: image,
 		// LoadImage: loadImage,
-		Command: command[0],
-		Args:    command[1:],
+		Command:          command[0],
+		Args:             command[1:],
+		ImagePullTimeout: "5m",
 	}
 }
 
