@@ -155,7 +155,7 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* disable_log_collection (string) Defaults to `false`. Setting this to true will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
+* disable_log_collection (string) Defaults to `false`. Setting this to `true` will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
 
 
 ```
@@ -287,8 +287,8 @@ config {
 
 * **logging** - Configure logging. See also plugin option **disable_log_collection**
 
-`driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a nomad fifo.
-Benefits of this mode are: zero overhead, don't have to worry about log rotation at system or Podman level. Downside: you can not easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
+`driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a Nomad fifo.
+Benefits of this mode are: zero overhead, don't have to worry about log rotation at system or Podman level. Downside: you cannot easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
 
 ```
 config {
@@ -433,7 +433,7 @@ You can use `curl` to proof that the job is working correctly and that you can g
 See `examples/jobs/nats_simple_pod.nomad`
 
 Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar.
-Because of that, nomad guarantees that the server is started first and thus the exporter can
+Because of that, Nomad guarantees that the server is started first and thus the exporter can
 easily join the servers network namespace via `network_mode = "task:server"`.
 
 Note, that the *server* configuration file binds the *http_port* to localhost.
@@ -448,16 +448,16 @@ A slightly different setup is demonstrated in this job. It reassembles more clos
 pause task, named *pod* via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
 
 Next, the main workload, *server* is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
-Finally, nomad starts the poststart/sidecar *exporter* which also joins the network.
+Finally, Nomad starts the poststart/sidecar *exporter* which also joins the network.
 
 Note that all ports must be defined on the *pod* level.
 
-### 2 Task setup, shared nomad network namespace
+### 2 Task setup, shared Nomad network namespace
 
 See `examples/jobs/nats_group.nomad`
 
 This example is very different. Both *server* and *exporter* join a network namespace which is created and managed
-by nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
+by Nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
 
 
 ## Rootless on ubuntu
