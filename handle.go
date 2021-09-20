@@ -36,6 +36,7 @@ type TaskHandle struct {
 	taskConfig  *drivers.TaskConfig
 	procState   drivers.TaskState
 	startedAt   time.Time
+	logStreamer bool
 	logPointer  time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
@@ -176,6 +177,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 				h.logPointer = since
 				h.stateLock.Unlock()
 			} else {
+				h.logger.Trace("runLogStreamer loop exit")
 				return
 			}
 		}

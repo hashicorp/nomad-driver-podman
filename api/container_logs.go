@@ -12,6 +12,7 @@ import (
 // ContainerLogs gets stdout and stderr logs from a container.
 func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, stdout io.Writer, stderr io.Writer) error {
 
+	c.logger.Debug("Running log stream", "container", name)
 	res, err := c.GetStream(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/logs?follow=true&since=%d&stdout=true&stderr=true", name, since.Unix()))
 	if err != nil {
 		return err
@@ -21,7 +22,6 @@ func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, s
 		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
 	}
 
-	c.logger.Debug("Running log stream", "container", name)
 	defer func() {
 		res.Body.Close()
 		c.logger.Debug("Stopped log stream", "container", name)
