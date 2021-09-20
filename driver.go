@@ -110,10 +110,10 @@ type Driver struct {
 // during recovery.
 type TaskState struct {
 	TaskConfig  *drivers.TaskConfig
-	LogStreamer bool
 	ContainerID string
 	StartedAt   time.Time
 	Net         *drivers.DriverNetwork
+	LogStreamer bool
 }
 
 // NewPodmanDriver returns a new DriverPlugin implementation

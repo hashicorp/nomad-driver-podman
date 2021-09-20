@@ -38,14 +38,13 @@ type TaskHandle struct {
 	taskConfig  *drivers.TaskConfig
 	procState   drivers.TaskState
 	startedAt   time.Time
-	logStreamer bool
 	logPointer  time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 
+	containerStats        api.Stats
 	removeContainerOnExit bool
-
-	containerStats api.Stats
+	logStreamer           bool
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
