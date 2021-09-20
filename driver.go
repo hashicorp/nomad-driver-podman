@@ -275,15 +275,16 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 
 	h := &TaskHandle{
-		containerID: taskState.ContainerID,
-		driver:      d,
-		taskConfig:  taskState.TaskConfig,
-		procState:   drivers.TaskStateUnknown,
-		startedAt:   taskState.StartedAt,
-		logPointer:  time.Now(), // do not rewind log to the startetAt date.
-		exitResult:  &drivers.ExitResult{},
-		logStreamer: taskState.LogStreamer,
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        taskState.ContainerID,
+		driver:             d,
+		taskConfig:         taskState.TaskConfig,
+		procState:          drivers.TaskStateUnknown,
+		startedAt:          taskState.StartedAt,
+		exitResult:         &drivers.ExitResult{},
+		logger:             d.logger.Named("podmanHandle"),
+		logPointer:         time.Now(), // do not rewind log to the startetAt date.
+		logStreamer:        taskState.LogStreamer,
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),
@@ -551,15 +552,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 	h := &TaskHandle{
-		containerID: containerID,
-		driver:      d,
-		taskConfig:  cfg,
-		procState:   drivers.TaskStateRunning,
-		exitResult:  &drivers.ExitResult{},
-		startedAt:   time.Now(),
-		logStreamer: driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
-		logPointer:  time.Now(),
-		logger:      d.logger.Named("podmanHandle"),
+		containerID:        containerID,
+		driver:             d,
+		taskConfig:         cfg,
+		procState:          drivers.TaskStateRunning,
+		exitResult:         &drivers.ExitResult{},
+		startedAt:          time.Now(),
+		logger:             d.logger.Named("podmanHandle"),
+		logStreamer:        driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logPointer:         time.Now(),
+		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
 		userCPUStats:   stats.NewCpuStats(),

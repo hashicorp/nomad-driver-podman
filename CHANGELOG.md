@@ -6,6 +6,7 @@ FEATURES:
 
 BUG FIXES:
 * log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
+* telemetry: respect telemetry.collection_interval to reduce cpu churn when running many containers [[GH-130](https://github.com/hashicorp/nomad-driver-podman/pull/130)]
 
 ## 0.3.0
 

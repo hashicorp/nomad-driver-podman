@@ -30,6 +30,8 @@ type TaskHandle struct {
 	userCPUStats   *stats.CpuStats
 	systemCPUStats *stats.CpuStats
 
+	collectionInterval time.Duration
+
 	// stateLock syncs access to all fields below
 	stateLock sync.RWMutex
 
@@ -99,6 +101,7 @@ func (h *TaskHandle) runExitWatcher(ctx context.Context, exitChannel chan *drive
 func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *drivers.TaskResourceUsage, interval time.Duration) {
 	timer := time.NewTimer(0)
 	h.logger.Debug("Starting statsEmitter", "container", h.containerID)
+	h.collectionInterval = interval
 	for {
 		select {
 		case <-ctx.Done():
@@ -188,7 +191,6 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 func (h *TaskHandle) runContainerMonitor() {
 
 	timer := time.NewTimer(0)
-	interval := time.Second * 1
 	h.logger.Debug("Monitoring container", "container", h.containerID)
 
 	for {
@@ -197,7 +199,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			return
 
 		case <-timer.C:
-			timer.Reset(interval)
+			timer.Reset(h.collectionInterval)
 		}
 
 		containerStats, statsErr := h.driver.podman.ContainerStats(h.driver.ctx, h.containerID)
