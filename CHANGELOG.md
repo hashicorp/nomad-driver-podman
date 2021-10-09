@@ -2,6 +2,7 @@
 
 FEATURES:
 * config: Map host devices into container. [[GH-41](https://github.com/hashicorp/nomad-driver-podman/pull/41)]
+* config: Stream logs via API, support journald log driver. [[GH-99](https://github.com/hashicorp/nomad-driver-podman/pull/99)]
 
 BUG FIXES:
 * log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
@@ -15,6 +16,7 @@ BUG FIXES:
 * config: Fixed a bug where we always pulled an image if image name has a transport prefix [[GH-88](https://github.com/hashicorp/nomad-driver-podman/pull/88)]
 * config: Added labels option
 * config: Add force_pull option
+* config: Added logging options
 
 BUG FIXES:
 * [[GH-93](https://github.com/hashicorp/nomad-driver-podman/issues/93)] use slirp4netns as default network mode if running rootless

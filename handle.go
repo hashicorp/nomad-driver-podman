@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	hclog "github.com/hashicorp/go-hclog"
@@ -36,12 +38,13 @@ type TaskHandle struct {
 	taskConfig  *drivers.TaskConfig
 	procState   drivers.TaskState
 	startedAt   time.Time
+	logPointer  time.Time
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 
+	containerStats        api.Stats
 	removeContainerOnExit bool
-
-	containerStats api.Stats
+	logStreamer           bool
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -140,16 +143,54 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		statsChannel <- &usage
 	}
 }
+func (h *TaskHandle) runLogStreamer(ctx context.Context) {
+
+	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open stdout fifo", "error", err)
+		return
+	}
+	defer stdout.Close()
+	stderr, err := os.OpenFile(h.taskConfig.StderrPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
+	if err != nil {
+		h.logger.Warn("Unable to open stderr fifo", "error", err)
+		return
+	}
+	defer stderr.Close()
+
+	init := true
+	since := h.logPointer
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if !init {
+				// throttle logger reconciliation
+				time.Sleep(2 * time.Second)
+			}
+			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
+			if err != nil {
+				h.logger.Warn("Log stream was interrupted", "error", err)
+				init = false
+				since = time.Now()
+				// increment logPointer
+				h.stateLock.Lock()
+				h.logPointer = since
+				h.stateLock.Unlock()
+			} else {
+				h.logger.Trace("runLogStreamer loop exit")
+				return
+			}
+		}
+	}
+
+}
 
 func (h *TaskHandle) runContainerMonitor() {
 
 	timer := time.NewTimer(0)
 	h.logger.Debug("Monitoring container", "container", h.containerID)
-
-	cleanup := func() {
-		h.logger.Debug("Container monitor exits", "container", h.containerID)
-	}
-	defer cleanup()
 
 	for {
 		select {

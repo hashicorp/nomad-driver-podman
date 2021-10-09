@@ -154,6 +154,18 @@ plugin "nomad-driver-podman" {
   }
 }
 ```
+
+* disable_log_collection (string) Defaults to `false`. Setting this to `true` will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
+
+
+```
+plugin "nomad-driver-podman" {
+  config {
+    disable_log_collection = false
+  }
+}
+```
+
 ## Task Configuration
 
 * **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
@@ -273,6 +285,38 @@ config {
 
 ```
 
+* **logging** - Configure logging. See also plugin option **disable_log_collection**
+
+`driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a Nomad fifo.
+Benefits of this mode are: zero overhead, don't have to worry about log rotation at system or Podman level. Downside: you cannot easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
+
+```
+config {
+  logging = {
+    driver = "nomad"
+  }
+}
+```
+
+`driver = "journald"` The container log is forwarded from Podman to the journald on your host. Next, it's pulled by the Podman API back from the journal into the Nomad fifo (controllable by **disable_log_collection**)
+Benefits: all containers can log into the host journal, you can ship a structured stream incl. metadata to your log aggregator. No log rotation at Podman level. You can add additional tags to the journal.
+Drawbacks: a bit more overhead, depends on Journal (will not work on WSL2). You should configure some rotation policy for your Journal.
+Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
+
+```
+config {
+  logging = {
+    driver = "journald"
+    options = [
+      {
+        "tag" = "redis"
+      }
+    ]
+  }
+}
+```
+
+
 * **memory_reservation** - Memory soft limit (nit = b (bytes), k (kilobytes), m (megabytes), or g (gigabytes))
 
 After setting memory reservation, when the system detects memory contention or low memory, containers are forced to restrict their consumption to their reservation. So you should always set the value below --memory, otherwise the hard limit will take precedence. By default, memory reservation will be the same as memory limit.
@@ -389,7 +433,7 @@ You can use `curl` to proof that the job is working correctly and that you can g
 See `examples/jobs/nats_simple_pod.nomad`
 
 Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar.
-Because of that, nomad guarantees that the server is started first and thus the exporter can
+Because of that, Nomad guarantees that the server is started first and thus the exporter can
 easily join the servers network namespace via `network_mode = "task:server"`.
 
 Note, that the *server* configuration file binds the *http_port* to localhost.
@@ -404,16 +448,16 @@ A slightly different setup is demonstrated in this job. It reassembles more clos
 pause task, named *pod* via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
 
 Next, the main workload, *server* is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
-Finally, nomad starts the poststart/sidecar *exporter* which also joins the network.
+Finally, Nomad starts the poststart/sidecar *exporter* which also joins the network.
 
 Note that all ports must be defined on the *pod* level.
 
-### 2 Task setup, shared nomad network namespace
+### 2 Task setup, shared Nomad network namespace
 
 See `examples/jobs/nats_group.nomad`
 
 This example is very different. Both *server* and *exporter* join a network namespace which is created and managed
-by nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
+by Nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
 
 
 ## Rootless on ubuntu

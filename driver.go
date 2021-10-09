@@ -41,6 +41,9 @@ const (
 	// taskHandleVersion is the version of task handle which this driver sets
 	// and understands how to decode driver state
 	taskHandleVersion = 1
+
+	LOG_DRIVER_NOMAD    = "nomad"
+	LOG_DRIVER_JOURNALD = "journald"
 )
 
 var (
@@ -110,6 +113,7 @@ type TaskState struct {
 	ContainerID string
 	StartedAt   time.Time
 	Net         *drivers.DriverNetwork
+	LogStreamer bool
 }
 
 // NewPodmanDriver returns a new DriverPlugin implementation
@@ -257,7 +261,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 
 	var taskState TaskState
 	if err := handle.GetDriverState(&taskState); err != nil {
-		return fmt.Errorf("failed to decode task state from handle: %v", err)
+		return fmt.Errorf("failed to decode task state from handle: %w", err)
 	}
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
@@ -278,6 +282,8 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		startedAt:          taskState.StartedAt,
 		exitResult:         &drivers.ExitResult{},
 		logger:             d.logger.Named("podmanHandle"),
+		logPointer:         time.Now(), // do not rewind log to the startetAt date.
+		logStreamer:        taskState.LogStreamer,
 		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
@@ -313,7 +319,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		h.procState = drivers.TaskStateUnknown
 	}
 
-	d.tasks.Set(taskState.TaskConfig.ID, h)
+	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
 	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
@@ -377,7 +383,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
 	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
-	createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	// Logging
+	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
+		// Only modify container loggin path if LogCollection is not disabled
+		if !d.config.DisableLogCollection {
+			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+		}
+	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
+		createOpts.LogConfiguration.Driver = "journald"
+	} else {
+		return nil, nil, fmt.Errorf("Invalid logging.driver option")
+	}
+	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
 
 	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init
@@ -534,6 +551,24 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
+	h := &TaskHandle{
+		containerID:        containerID,
+		driver:             d,
+		taskConfig:         cfg,
+		procState:          drivers.TaskStateRunning,
+		exitResult:         &drivers.ExitResult{},
+		startedAt:          time.Now(),
+		logger:             d.logger.Named("podmanHandle"),
+		logStreamer:        driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logPointer:         time.Now(),
+		collectionInterval: time.Second,
+
+		totalCPUStats:  stats.NewCpuStats(),
+		userCPUStats:   stats.NewCpuStats(),
+		systemCPUStats: stats.NewCpuStats(),
+
+		removeContainerOnExit: d.config.GC.Container,
+	}
 
 	if !recoverRunningContainer {
 		if err = d.podman.ContainerStart(d.ctx, containerID); err != nil {
@@ -555,26 +590,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		AutoAdvertise: true,
 	}
 
-	h := &TaskHandle{
-		containerID:        containerID,
-		driver:             d,
-		taskConfig:         cfg,
-		procState:          drivers.TaskStateRunning,
-		exitResult:         &drivers.ExitResult{},
-		startedAt:          time.Now().Round(time.Millisecond),
-		logger:             d.logger.Named("podmanHandle"),
-		collectionInterval: time.Second,
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
-		removeContainerOnExit: d.config.GC.Container,
-	}
-
 	driverState := TaskState{
 		ContainerID: containerID,
 		TaskConfig:  cfg,
+		LogStreamer: h.logStreamer,
 		StartedAt:   h.startedAt,
 		Net:         net,
 	}
@@ -740,6 +759,12 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 		return nil, drivers.ErrTaskNotFound
 	}
 	ch := make(chan *drivers.ExitResult)
+	// only start logstreamer if we have to...
+	// start to stream logs if journald log driver is configured and LogCollection is not disabled
+	if handle.logStreamer && !d.config.DisableLogCollection {
+		go handle.runLogStreamer(ctx)
+	}
+
 	go handle.runExitWatcher(ctx, ch)
 	return ch, nil
 }
