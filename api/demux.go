@@ -33,14 +33,9 @@ func DemuxFrame(r io.Reader, buffer []byte, length int) (frame []byte, err error
 		buffer = append(buffer, make([]byte, length-len(buffer)+1)...)
 	}
 
-	n, err := io.ReadFull(r, buffer[0:length])
+	_, err = io.ReadFull(r, buffer[0:length])
 	if err != nil {
-		return nil, nil
-	}
-	if n < length {
-		err = io.ErrUnexpectedEOF
 		return
 	}
-
 	return buffer[0:length], nil
 }
