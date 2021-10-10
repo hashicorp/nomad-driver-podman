@@ -57,7 +57,6 @@ var (
 		"image":       hclspec.NewAttr("image", "string", true),
 		"init":        hclspec.NewAttr("init", "bool", false),
 		"init_path":   hclspec.NewAttr("init_path", "string", false),
-		"log_driver":  hclspec.NewAttr("log_driver", "string", false),
 		"labels":      hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),

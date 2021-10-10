@@ -113,6 +113,7 @@ type TaskState struct {
 	ContainerID string
 	StartedAt   time.Time
 	Net         *drivers.DriverNetwork
+	LogStreamer bool
 }
 
 // NewPodmanDriver returns a new DriverPlugin implementation
@@ -279,9 +280,10 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		taskConfig:         taskState.TaskConfig,
 		procState:          drivers.TaskStateUnknown,
 		startedAt:          taskState.StartedAt,
-		logPointer:         time.Now(), // do not rewind log to the startetAt date.
 		exitResult:         &drivers.ExitResult{},
 		logger:             d.logger.Named("podmanHandle"),
+		logPointer:         time.Now(), // do not rewind log to the startetAt date.
+		logStreamer:        taskState.LogStreamer,
 		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
@@ -317,7 +319,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		h.procState = drivers.TaskStateUnknown
 	}
 
-	d.tasks.Set(taskState.TaskConfig.ID, h)
+	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
 	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
@@ -390,7 +392,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
 		createOpts.LogConfiguration.Driver = "journald"
 	} else {
-		return nil, nil, fmt.Errorf("Invalid log_driver option")
+		return nil, nil, fmt.Errorf("Invalid logging.driver option")
 	}
 	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
 
@@ -556,8 +558,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		procState:          drivers.TaskStateRunning,
 		exitResult:         &drivers.ExitResult{},
 		startedAt:          time.Now(),
-		logPointer:         time.Now(),
 		logger:             d.logger.Named("podmanHandle"),
+		logStreamer:        driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logPointer:         time.Now(),
 		collectionInterval: time.Second,
 
 		totalCPUStats:  stats.NewCpuStats(),
@@ -590,6 +593,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	driverState := TaskState{
 		ContainerID: containerID,
 		TaskConfig:  cfg,
+		LogStreamer: h.logStreamer,
 		StartedAt:   h.startedAt,
 		Net:         net,
 	}
@@ -756,14 +760,9 @@ func (d *Driver) WaitTask(ctx context.Context, taskID string) (<-chan *drivers.E
 	}
 	ch := make(chan *drivers.ExitResult)
 	// only start logstreamer if we have to...
-	var driverConfig TaskConfig
-	if err := handle.taskConfig.DecodeDriverConfig(&driverConfig); err != nil {
-		d.logger.Warn("Unable to decode driver config, not starting log streamer", "task", taskID, "err", err)
-	} else {
-		// start to stream logs if journald log driver is configured and LogCollection is not disabled
-		if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD && !d.config.DisableLogCollection {
-			go handle.runLogStreamer(ctx)
-		}
+	// start to stream logs if journald log driver is configured and LogCollection is not disabled
+	if handle.logStreamer && !d.config.DisableLogCollection {
+		go handle.runLogStreamer(ctx)
 	}
 
 	go handle.runExitWatcher(ctx, ch)

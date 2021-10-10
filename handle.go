@@ -42,9 +42,9 @@ type TaskHandle struct {
 	completedAt time.Time
 	exitResult  *drivers.ExitResult
 
+	containerStats        api.Stats
 	removeContainerOnExit bool
-
-	containerStats api.Stats
+	logStreamer           bool
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {
@@ -147,13 +147,13 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 
 	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		h.logger.Warn("Unable to open stdout fifo", "err", err)
+		h.logger.Warn("Unable to open stdout fifo", "error", err)
 		return
 	}
 	defer stdout.Close()
 	stderr, err := os.OpenFile(h.taskConfig.StderrPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		h.logger.Warn("Unable to open stderr fifo", "err", err)
+		h.logger.Warn("Unable to open stderr fifo", "error", err)
 		return
 	}
 	defer stderr.Close()
@@ -171,7 +171,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 			}
 			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
 			if err != nil {
-				h.logger.Warn("Log stream was interrupted", "err", err)
+				h.logger.Warn("Log stream was interrupted", "error", err)
 				init = false
 				since = time.Now()
 				// increment logPointer
@@ -179,6 +179,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 				h.logPointer = since
 				h.stateLock.Unlock()
 			} else {
+				h.logger.Trace("runLogStreamer loop exit")
 				return
 			}
 		}
