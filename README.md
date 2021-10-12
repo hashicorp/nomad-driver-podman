@@ -395,6 +395,7 @@ config {
   }
 }
 ```
+* **privileged** - (Optional)  true or false (default). A privileged container turns off the security features that isolate the container from the host. Dropped Capabilities, limited devices, read-only mount points, Apparmor/SELinux separation, and Seccomp filters are all disabled.
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
 
