@@ -840,6 +840,11 @@ type InspectContainerHostConfig struct {
 	// capabilities listed in the container's spec, compared against a set
 	// of default capabilities.
 	CapDrop []string `json:"CapDrop"`
+	// SelinuxProcessLabel is the process label the container will use.
+	// If SELinux is enabled and this is not specified, a label will be
+	// automatically generated if not specified.
+	// Optional.
+	SelinuxOpts []string `json:"SelinuxOpts"`
 	// Dns is a list of DNS nameservers that will be added to the
 	// container's resolv.conf
 	Dns []string `json:"Dns"`
