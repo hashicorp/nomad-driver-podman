@@ -68,6 +68,7 @@ var (
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
+		"privileged":         hclspec.NewAttr("privileged", "bool", false),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
@@ -135,4 +136,5 @@ type TaskConfig struct {
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
 	ForcePull         bool               `codec:"force_pull"`
+	Privileged        bool               `codec:"privileged"`
 }

@@ -446,6 +446,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
 	createOpts.ContainerSecurityConfig.User = cfg.User
+	createOpts.ContainerSecurityConfig.Privileged = driverConfig.Privileged
 
 	// Network config options
 	if cfg.DNS != nil {

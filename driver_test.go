@@ -1346,6 +1346,15 @@ func TestPodmanDriver_Labels(t *testing.T) {
 	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
 }
 
+// check enabled privileged option
+func TestPodmanDriver_Privileged(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Privileged = true
+	inspectData := startDestroyInspect(t, taskCfg, "privileged")
+
+	require.True(t, inspectData.HostConfig.Privileged)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {
