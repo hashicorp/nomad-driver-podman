@@ -688,15 +688,14 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 			archiveData := imageRef.StringWithinTransport()
 			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
-			if err = d.eventer.EmitEvent(&drivers.TaskEvent{
+			//nolint // ignore returned error, can't react in a good way
+			d.eventer.EmitEvent(&drivers.TaskEvent{
 				TaskID:    cfg.ID,
 				TaskName:  cfg.Name,
 				AllocID:   cfg.AllocID,
 				Timestamp: time.Now(),
-				Message:   "Load image " + path,
-			}); err != nil {
-				d.logger.Warn("Unable to emit event", "error", err)
-			}
+				Message:   "Loading image " + path,
+			})
 			imageName, err = d.podman.ImageLoad(d.ctx, path)
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
@@ -715,17 +714,15 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 		return imageID, nil
 	}
 
-	d.logger.Info("Pull image", "image", imageName)
-	if err = d.eventer.EmitEvent(&drivers.TaskEvent{
+	d.logger.Info("Pulling image", "image", imageName)
+	//nolint // ignore returned error, can't react in a good way
+	d.eventer.EmitEvent(&drivers.TaskEvent{
 		TaskID:    cfg.ID,
 		TaskName:  cfg.Name,
 		AllocID:   cfg.AllocID,
 		Timestamp: time.Now(),
-		Message:   "Pull image " + imageName,
-	}); err != nil {
-		d.logger.Warn("Unable to emit event", "error", err)
-	}
-
+		Message:   "Pulling image " + imageName,
+	})
 	imageAuth := api.ImageAuthConfig{
 		Username: auth.Username,
 		Password: auth.Password,
