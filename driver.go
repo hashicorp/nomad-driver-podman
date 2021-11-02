@@ -530,7 +530,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull)
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, cfg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -668,7 +668,7 @@ func memoryInBytes(strmem string) (int64, error) {
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg *drivers.TaskConfig) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -688,6 +688,14 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 			archiveData := imageRef.StringWithinTransport()
 			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
+			//nolint // ignore returned error, can't react in a good way
+			d.eventer.EmitEvent(&drivers.TaskEvent{
+				TaskID:    cfg.ID,
+				TaskName:  cfg.Name,
+				AllocID:   cfg.AllocID,
+				Timestamp: time.Now(),
+				Message:   "Loading image " + path,
+			})
 			imageName, err = d.podman.ImageLoad(d.ctx, path)
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
@@ -696,7 +704,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 	}
 
 	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
-	if err != nil {
+	if err != nil && err != api.ImageNotFound {
 		// If ImageInspectID errors, continue the operation and try
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "error", err)
@@ -706,7 +714,15 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool) (st
 		return imageID, nil
 	}
 
-	d.logger.Debug("Pull image", "image", imageName)
+	d.logger.Info("Pulling image", "image", imageName)
+	//nolint // ignore returned error, can't react in a good way
+	d.eventer.EmitEvent(&drivers.TaskEvent{
+		TaskID:    cfg.ID,
+		TaskName:  cfg.Name,
+		AllocID:   cfg.AllocID,
+		Timestamp: time.Now(),
+		Message:   "Pulling image " + imageName,
+	})
 	imageAuth := api.ImageAuthConfig{
 		Username: auth.Username,
 		Password: auth.Password,
