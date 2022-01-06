@@ -47,17 +47,19 @@ var (
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"command":     hclspec.NewAttr("command", "string", false),
-		"cap_add":     hclspec.NewAttr("cap_add", "list(string)", false),
-		"cap_drop":    hclspec.NewAttr("cap_drop", "list(string)", false),
-		"devices":     hclspec.NewAttr("devices", "list(string)", false),
-		"entrypoint":  hclspec.NewAttr("entrypoint", "string", false),
-		"working_dir": hclspec.NewAttr("working_dir", "string", false),
-		"hostname":    hclspec.NewAttr("hostname", "string", false),
-		"image":       hclspec.NewAttr("image", "string", true),
-		"init":        hclspec.NewAttr("init", "bool", false),
-		"init_path":   hclspec.NewAttr("init_path", "string", false),
-		"labels":      hclspec.NewAttr("labels", "list(map(string))", false),
+		"command":        hclspec.NewAttr("command", "string", false),
+		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
+		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
+		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
+		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
+		"devices":        hclspec.NewAttr("devices", "list(string)", false),
+		"entrypoint":     hclspec.NewAttr("entrypoint", "string", false),
+		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
+		"hostname":       hclspec.NewAttr("hostname", "string", false),
+		"image":          hclspec.NewAttr("image", "string", true),
+		"init":           hclspec.NewAttr("init", "bool", false),
+		"init_path":      hclspec.NewAttr("init_path", "string", false),
+		"labels":         hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
 			"options": hclspec.NewAttr("options", "list(map(string))", false),
@@ -130,9 +132,11 @@ type TaskConfig struct {
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
+	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
+	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
 	ForcePull         bool               `codec:"force_pull"`
