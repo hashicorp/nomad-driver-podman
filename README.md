@@ -243,7 +243,7 @@ config {
 }
 ```
 
-* **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions. 
+* **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions.
 Each entry adds a host device to the container. Optional permissions can be used to specify device permissions, it is combination of r for read, w for write, and m for mknod(2). See podman documentation for more details.
 
 ```
@@ -549,7 +549,11 @@ vagrant up
 
 # ssh into the vm
 vagrant ssh
+````
 
+Running a Nomad dev agent with the Podman plugin:
+
+```
 # Build the task driver plugin
 sudo -E ./build.sh
 
@@ -569,4 +573,14 @@ nomad job run examples/redis_ports.nomad
 nomad job status redis
 
 sudo podman ps
+```
+
+Running the tests:
+
+```
+# Start the Podman server
+systemctl --user start podman.socket
+
+# Run the tests
+CI=1 ./build/bin/gotestsum --junitfile ./build/test/result.xml -- -timeout=15m . ./api
 ```

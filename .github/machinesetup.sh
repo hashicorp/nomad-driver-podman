@@ -1,5 +1,11 @@
 #!/bin/bash -e
 
+# Update ca-certificates first to prevent using outdated certificates for the
+# podman repository.
+# https://github.com/containers/podman/issues/8533#issuecomment-944873690
+apt-get update
+apt-get install -y ca-certificates
+
 # add podman repository
 echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
 curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/Release.key | apt-key add -
@@ -9,7 +15,7 @@ curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/
 apt-get update || true
 
 # install podman for running the test suite
-apt-get install -y podman wget ca-certificates build-essential
+apt-get install -y podman wget build-essential
 
 # get catatonit (to check podman --init switch)
 cd /tmp
@@ -25,7 +31,7 @@ podman info
 echo "====== Podman version:"
 podman version
 
-# enable http socket 
+# enable http socket
 cat > /etc/systemd/system/podman.service << EOF
 [Unit]
 Description=Podman API Service
