@@ -387,6 +387,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
 		// Only modify container loggin path if LogCollection is not disabled
 		if !d.config.DisableLogCollection {
+			createOpts.LogConfiguration.Driver = "k8s-file"
+
 			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 		}
 	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
