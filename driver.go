@@ -1099,6 +1099,19 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		binds = append(binds, bind)
 	}
 
+	// append nomad task mounts
+	for _, mnt := range task.Mounts {
+		bind := spec.Mount{
+			Source:      mnt.HostPath,
+			Destination: mnt.TaskPath,
+			Type:        "bind",
+		}
+		if mnt.Readonly {
+			bind.Options = []string{"ro"}
+		}
+		binds = append(binds, bind)
+	}
+
 	return binds, nil
 }
 
