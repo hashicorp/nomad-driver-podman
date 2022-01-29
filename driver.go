@@ -609,12 +609,21 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		for _, strdns := range cfg.DNS.Servers {
 			ipdns := net.ParseIP(strdns)
 			if ipdns == nil {
-				return nil, nil, fmt.Errorf("Invalid dns server address")
+				return nil, nil, fmt.Errorf("Invalid dns server address, dns=%v", strdns)
 			}
 			createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
 		}
 		createOpts.ContainerNetworkConfig.DNSSearch = append(createOpts.ContainerNetworkConfig.DNSSearch, cfg.DNS.Searches...)
 		createOpts.ContainerNetworkConfig.DNSOptions = append(createOpts.ContainerNetworkConfig.DNSOptions, cfg.DNS.Options...)
+	} else if len(d.config.DNSServers) > 0 {
+		// no task DNS specific, try load default DNS from plugin config
+		for _, strdns := range d.config.DNSServers {
+			ipdns := net.ParseIP(strdns)
+			if ipdns == nil {
+				return nil, nil, fmt.Errorf("Invalid dns server address from plugin config, dns=%v", strdns)
+			}
+			createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
+		}
 	}
 	// Configure network
 	if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Path != "" {
