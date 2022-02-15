@@ -17,6 +17,7 @@ FEATURES:
 * config: Stream logs via API, support journald log driver. [[GH-99](https://github.com/hashicorp/nomad-driver-podman/pull/99)]
 * config: Privileged containers. [[GH-137](https://github.com/hashicorp/nomad-driver-podman/pull/137)]
 * config: Add `cpu_hard_limit` and `cpu_cfs_period` options [[GH-149](https://github.com/hashicorp/nomad-driver-podman/pull/149)]
+* config: Add `selinux_opts` option [[GH-139](https://github.com/hashicorp/nomad-driver-podman/pull/139)]
 * config: Allow mounting rootfs as read-only. [[GH-133](https://github.com/hashicorp/nomad-driver-podman/pull/133)]
 * config: Allow setting `ulimit` configuration. [[GH-166](https://github.com/hashicorp/nomad-driver-podman/pull/166)]
 * config: Allow setting `image_pull_timeout` and `client_http_timeout ` [[GH-131](https://github.com/hashicorp/nomad-driver-podman/pull/131)]
