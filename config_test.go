@@ -81,3 +81,20 @@ func TestConfig_ForcePull(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	require.EqualValues(t, true, tc.ForcePull)
 }
+
+func TestConfig_CPUHardLimit(t *testing.T) {
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+
+	validHCL := `
+  config {
+		image = "docker://redis"
+		cpu_hard_limit = true
+		cpu_cfs_period = 200000
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	require.EqualValues(t, true, tc.CPUHardLimit)
+	require.EqualValues(t, 200000, tc.CPUCFSPeriod)
+}

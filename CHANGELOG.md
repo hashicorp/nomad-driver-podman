@@ -4,6 +4,7 @@ FEATURES:
 * config: Map host devices into container. [[GH-41](https://github.com/hashicorp/nomad-driver-podman/pull/41)]
 * config: Stream logs via API, support journald log driver. [[GH-99](https://github.com/hashicorp/nomad-driver-podman/pull/99)]
 * config: Privileged containers.
+* config: Add `cpu_hard_limit` and `cpu_cfs_period` options [[GH-149](https://github.com/hashicorp/nomad-driver-podman/pull/149)]
 * config: Allow mounting rootfs as read-only. [[GH-133](https://github.com/hashicorp/nomad-driver-podman/pull/133)]
 
 BUG FIXES:

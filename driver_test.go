@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,8 +47,11 @@ func createBasicResources() *drivers.Resources {
 			},
 		},
 		LinuxResources: &drivers.LinuxResources{
-			CPUShares:        512,
+			CPUPeriod:        100000,
+			CPUQuota:         100000,
+			CPUShares:        500,
 			MemoryLimitBytes: 256 * 1024 * 1024,
+			PercentTicks:     float64(500) / float64(2000),
 		},
 	}
 	return &res
@@ -1827,6 +1832,94 @@ func createInspectImage(t *testing.T, image, reference string) {
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
 	require.NoError(t, err)
 	require.Equal(t, idRef, idTest)
+}
+
+func Test_cpuLimits(t *testing.T) {
+	numCores := runtime.NumCPU()
+	cases := []struct {
+		name            string
+		systemResources drivers.LinuxResources
+		hardLimit       bool
+		period          uint64
+		expectedQuota   int64
+		expectedPeriod  uint64
+	}{
+		{
+			name: "no hard limit",
+			systemResources: drivers.LinuxResources{
+				PercentTicks: 1.0,
+				CPUPeriod:    100000,
+			},
+			hardLimit:      false,
+			expectedQuota:  100000,
+			expectedPeriod: 100000,
+		},
+		{
+			name: "hard limit max quota",
+			systemResources: drivers.LinuxResources{
+				PercentTicks: 1.0,
+				CPUPeriod:    100000,
+			},
+			hardLimit:      true,
+			expectedQuota:  100000,
+			expectedPeriod: 100000,
+		},
+		{
+			name: "hard limit, half quota",
+			systemResources: drivers.LinuxResources{
+				PercentTicks: 0.5,
+				CPUPeriod:    100000,
+			},
+			hardLimit:      true,
+			expectedQuota:  50000,
+			expectedPeriod: 100000,
+		},
+		{
+			name: "hard limit, custom period",
+			systemResources: drivers.LinuxResources{
+				PercentTicks: 1.0,
+				CPUPeriod:    100000,
+			},
+			hardLimit:      true,
+			period:         20000,
+			expectedQuota:  20000,
+			expectedPeriod: 20000,
+		},
+		{
+			name: "hard limit, half quota, custom period",
+			systemResources: drivers.LinuxResources{
+				PercentTicks: 0.5,
+				CPUPeriod:    100000,
+			},
+			hardLimit:      true,
+			period:         20000,
+			expectedQuota:  10000,
+			expectedPeriod: 20000,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			taskCPU := &spec.LinuxCPU{}
+			cfg := TaskConfig{
+				CPUHardLimit: c.hardLimit,
+				CPUCFSPeriod: c.period,
+			}
+			err := setCPUResources(cfg, &c.systemResources, taskCPU)
+			require.Nil(t, err)
+
+			if c.hardLimit {
+				require.NotNil(t, taskCPU.Quota)
+				require.Equal(t, c.expectedQuota*int64(numCores), *taskCPU.Quota)
+
+				require.NotNil(t, taskCPU.Period)
+				require.Equal(t, c.expectedPeriod, *taskCPU.Period)
+			} else {
+				require.Nil(t, taskCPU.Quota)
+				require.Nil(t, taskCPU.Period)
+			}
+		})
+	}
 }
 
 func Test_memoryLimits(t *testing.T) {
