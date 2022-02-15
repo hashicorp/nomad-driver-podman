@@ -420,7 +420,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		CPU:    &spec.LinuxCPU{},
 	}
 
-	err = setCPUResources(driverConfig.CPUHardLimit, driverConfig.CPUCFSPeriod, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
+	err = setCPUResources(driverConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -650,25 +650,31 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 	return nil, reserved, nil
 }
 
-func setCPUResources(hardLimit bool, period uint64, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
-	if hardLimit {
-		numCores := runtime.NumCPU()
-		if period > 1000000 {
-			return fmt.Errorf("invalid value for cpu_cfs_period")
-		}
-		if period == 0 {
-			period = 100000 // matches cgroup default
-		}
-		if period < 1000 {
-			period = 1000
-		}
-		quota := int64(systemResources.PercentTicks*float64(period)) * int64(numCores)
-		if quota < 1000 {
-			quota = 1000
-		}
-		taskCPU.Period = &period
-		taskCPU.Quota = &quota
+func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
+	if !cfg.CPUHardLimit {
+		return nil
 	}
+
+	period := cfg.CPUCFSPeriod
+	if period > 1000000 {
+		return fmt.Errorf("invalid value for cpu_cfs_period, %d is bigger than 1000000", period)
+	}
+	if period == 0 {
+		period = 100000 // matches cgroup default
+	}
+	if period < 1000 {
+		period = 1000
+	}
+
+	numCores := runtime.NumCPU()
+	quota := int64(systemResources.PercentTicks*float64(period)) * int64(numCores)
+	if quota < 1000 {
+		quota = 1000
+	}
+
+	taskCPU.Period = &period
+	taskCPU.Quota = &quota
+
 	return nil
 }
 

@@ -1892,7 +1892,11 @@ func Test_cpuLimits(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			taskCPU := &spec.LinuxCPU{}
-			err := setCPUResources(c.hardLimit, c.period, &c.systemResources, taskCPU)
+			cfg := TaskConfig{
+				CPUHardLimit: c.hardLimit,
+				CPUCFSPeriod: c.period,
+			}
+			err := setCPUResources(cfg, &c.systemResources, taskCPU)
 			require.Nil(t, err)
 
 			if c.hardLimit {
