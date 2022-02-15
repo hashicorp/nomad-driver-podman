@@ -243,7 +243,7 @@ config {
 }
 ```
 
-* **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions. 
+* **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions.
 Each entry adds a host device to the container. Optional permissions can be used to specify device permissions, it is combination of r for read, w for write, and m for mknod(2). See podman documentation for more details.
 
 ```
@@ -416,6 +416,16 @@ config {
   force_pull = true
 }
 ```
+
+* **readonly_rootfs** - (Optional)  true or false (default). Mount the rootfs as read-only.
+
+```
+config {
+  readonly_rootfs = true
+}
+```
+
+
 
 ## Network Configuration
 

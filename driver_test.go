@@ -1360,6 +1360,15 @@ func TestPodmanDriver_Privileged(t *testing.T) {
 	require.True(t, inspectData.HostConfig.Privileged)
 }
 
+// check enabled readonly_rootfs option
+func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.ReadOnlyRootfs = true
+	inspectData := startDestroyInspect(t, taskCfg, "readonly_rootfs")
+
+	require.True(t, inspectData.HostConfig.ReadonlyRootfs)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {
