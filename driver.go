@@ -163,6 +163,10 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		clientConfig.SocketPath = pluginConfig.SocketPath
 	}
 
+	if &pluginConfig.Timeout != nil {
+		clientConfig.HttpTimeout = time.Duration(pluginConfig.Timeout) * time.Second
+	}
+
 	d.podman = api.NewClient(d.logger, clientConfig)
 	return nil
 }
