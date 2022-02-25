@@ -31,7 +31,7 @@ this plugin to Nomad!
 
 Here is a simple redis "hello world" Example:
 
-```
+```hcl
 job "redis" {
   datacenters = ["dc1"]
   type        = "service"
@@ -106,7 +106,7 @@ Ensure that Nomad can find the plugin, see [plugin_dir](https://www.nomadproject
   * enabled - Defaults to true. Allows tasks to bind host paths (volumes) inside their container.
   * selinuxlabel - Allows the operator to set a SELinux label to the allocation and task local bind-mounts to containers. If used with _volumes.enabled_ set to false, the labels will still be applied to the standard binds in the container.
 
-```
+```hcl
 plugin "nomad-driver-podman" {
   config {
     volumes {
@@ -121,7 +121,7 @@ plugin "nomad-driver-podman" {
 
     * container - Defaults to true. This option can be used to disable Nomad from removing a container when the task exits.
 
-```
+```hcl
 plugin "nomad-driver-podman" {
   config {
     gc {
@@ -136,7 +136,7 @@ plugin "nomad-driver-podman" {
   Consider a simple single node system and a complete reboot. All previously managed containers
   will be reused instead of disposed and recreated.
 
-```
+```hcl
 plugin "nomad-driver-podman" {
   config {
     recover_stopped = false
@@ -147,7 +147,7 @@ plugin "nomad-driver-podman" {
 * socket_path (string) Defaults to `"unix://run/podman/io.podman"` when running as root or a cgroup V1 system, and `"unix://run/user/<USER_ID>/podman/io.podman"` for rootless cgroup V2 systems
 
 
-```
+```hcl
 plugin "nomad-driver-podman" {
   config {
     socket_path = "unix://run/podman/io.podman"
@@ -158,7 +158,7 @@ plugin "nomad-driver-podman" {
 * disable_log_collection (string) Defaults to `false`. Setting this to `true` will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
 
 
-```
+```hcl
 plugin "nomad-driver-podman" {
   config {
     disable_log_collection = false
@@ -170,7 +170,7 @@ plugin "nomad-driver-podman" {
 
 * **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
 
-```
+```hcl
 config {
   image = "docker://redis"
 }
@@ -178,7 +178,7 @@ config {
 
 * **auth** - (Optional) Authenticate to the image registry using a static credential.
 
-```
+```hcl
 config {
   image = "your.registry.tld/some/image"
   auth {
@@ -190,7 +190,7 @@ config {
 
 * **entrypoint** - (Optional) The entrypoint for the container. Defaults to the entrypoint set in the image.
 
-```
+```hcl
 config {
   entrypoint = "/entrypoint.sh"
 }
@@ -198,7 +198,7 @@ config {
 
 * **command** - (Optional) The command to run when starting the container.
 
-```
+```hcl
 config {
   command = "some-command"
 }
@@ -206,7 +206,7 @@ config {
 
 * **args** - (Optional) A list of arguments to the optional command. If no *command* is specified, the arguments are passed directly to the container.
 
-```
+```hcl
 config {
   args = [
     "arg1",
@@ -217,7 +217,7 @@ config {
 
 * **working_dir** - (Optional) The working directory for the container. Defaults to the default set in the image.
 
-```
+```hcl
 config {
   working_dir = "/data"
 }
@@ -225,7 +225,7 @@ config {
 
 * **volumes** - (Optional) A list of host_path:container_path:options strings to bind host paths to container paths. Named volumes are not supported.
 
-```
+```hcl
 config {
   volumes = [
     "/some/host/data:/container/data:ro,noexec"
@@ -235,7 +235,7 @@ config {
 
 * **tmpfs** - (Optional) A list of /container_path strings for tmpfs mount points. See podman run --tmpfs options for details.
 
-```
+```hcl
 config {
   tmpfs = [
     "/var"
@@ -246,7 +246,7 @@ config {
 * **devices** - (Optional) A list of `host-device[:container-device][:permissions]` definitions.
 Each entry adds a host device to the container. Optional permissions can be used to specify device permissions, it is combination of r for read, w for write, and m for mknod(2). See podman documentation for more details.
 
-```
+```hcl
 config {
   devices = [
     "/dev/net/tun"
@@ -260,7 +260,7 @@ config {
 
 * **init** - Run an init inside the container that forwards signals and reaps processes.
 
-```
+```hcl
 config {
   init = true
 }
@@ -268,7 +268,7 @@ config {
 
 * **init_path** - Path to the container-init binary.
 
-```
+```hcl
 config {
   init = true
   init_path = /usr/libexec/podman/catatonit
@@ -277,7 +277,7 @@ config {
 
 * **user** - Run the command as a specific user/uid within the container. See [Task configuration](https://www.nomadproject.io/docs/job-specification/task.html#user)
 
-```
+```hcl
 user = nobody
 
 config {
@@ -290,7 +290,7 @@ config {
 `driver = "nomad"` (default) Podman redirects its combined stdout/stderr logstream directly to a Nomad fifo.
 Benefits of this mode are: zero overhead, don't have to worry about log rotation at system or Podman level. Downside: you cannot easily ship the logstream to a log aggregator plus stdout/stderr is multiplexed into a single stream..
 
-```
+```hcl
 config {
   logging = {
     driver = "nomad"
@@ -303,7 +303,7 @@ Benefits: all containers can log into the host journal, you can ship a structure
 Drawbacks: a bit more overhead, depends on Journal (will not work on WSL2). You should configure some rotation policy for your Journal.
 Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
 
-```
+```hcl
 config {
   logging = {
     driver = "journald"
@@ -321,7 +321,7 @@ config {
 
 After setting memory reservation, when the system detects memory contention or low memory, containers are forced to restrict their consumption to their reservation. So you should always set the value below --memory, otherwise the hard limit will take precedence. By default, memory reservation will be the same as memory limit.
 
-```
+```hcl
 config {
   memory_reservation = "100m"
 }
@@ -331,7 +331,7 @@ config {
 
 Unit can be b (bytes), k (kilobytes), m (megabytes), or g (gigabytes). If you don't specify a unit, b is used. Set LIMIT to -1 to enable unlimited swap.
 
-```
+```hcl
 config {
   memory_swap = "180m"
 }
@@ -339,7 +339,7 @@ config {
 
 * **memory_swappiness** - Tune a container's memory swappiness behavior. Accepts an integer between 0 and 100.
 
-```
+```hcl
 config {
   memory_swappiness = 60
 }
@@ -360,7 +360,7 @@ By default the task uses the network stack defined in the task group, see [netwo
 - `container:id`: reuse another podman containers network stack
 - `task:name-of-other-task`: join the network of another task in the same allocation.
 
-```
+```hcl
 config {
   network_mode = "bridge"
 }
@@ -368,7 +368,7 @@ config {
 
 * **cap_add** - (Optional)  A list of Linux capabilities as strings to pass to --cap-add.
 
-```
+```hcl
 config {
   cap_add = [
     "SYS_TIME"
@@ -378,7 +378,7 @@ config {
 
 * **cap_drop** - (Optional)  A list of Linux capabilities as strings to pass to --cap-drop.
 
-```
+```hcl
 config {
   cap_add = [
     "MKNOD"
@@ -388,7 +388,7 @@ config {
 
 * **sysctl** - (Optional)  A key-value map of sysctl configurations to set to the containers on start.
 
-```
+```hcl
 config {
   sysctl = {
     "net.core.somaxconn" = "16384"
@@ -401,7 +401,7 @@ config {
 
 * **labels** - (Optional)  Set labels on the container.
 
-```
+```hcl
 config {
   labels = {
     "nomad" = "job"
@@ -411,7 +411,7 @@ config {
 
 * **force_pull** - (Optional)  true or false (default). Always pull the latest image on container start.
 
-```
+```hcl
 config {
   force_pull = true
 }
@@ -419,7 +419,7 @@ config {
 
 * **readonly_rootfs** - (Optional)  true or false (default). Mount the rootfs as read-only.
 
-```
+```hcl
 config {
   readonly_rootfs = true
 }
@@ -474,14 +474,14 @@ by Nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job
 ## Rootless on ubuntu
 
 edit `/etc/default/grub` to enable cgroups v2
-```
+```sh
 GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.unified_cgroup_hierarchy=1"
 ```
 
 `sudo update-grub`
 
 ensure that podman socket is running
-```
+```sh
 $ systemctl --user status podman.socket
 * podman.socket - Podman API Socket
      Loaded: loaded (/usr/lib/systemd/user/podman.socket; disabled; vendor preset: disabled)
@@ -494,8 +494,8 @@ $ systemctl --user status podman.socket
 
 ensure that you have a recent version of [crun](https://github.com/containers/crun/)
 
-```
-crun -V
+```sh
+$ crun -V
 crun version 0.13.227-d38b
 commit: d38b8c28fc50a14978a27fa6afc69a55bfdd2c11
 spec: 1.0.0
@@ -503,7 +503,7 @@ spec: 1.0.0
 ```
 
 `nomad job run example.nomad`
-```
+```hcl
 job "example" {
   datacenters = ["dc1"]
   type        = "service"
@@ -538,7 +538,7 @@ job "example" {
 
 verify `podman ps`
 
-```
+```sh
 $ podman ps
 CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
 2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
@@ -553,7 +553,7 @@ CONTAINER ID  IMAGE                           COMMAND       CREATED        STATU
 
 ### Vagrant Environment Setup
 
-```
+```sh
 # create the vm
 vagrant up
 
