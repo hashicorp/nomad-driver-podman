@@ -481,7 +481,7 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.uni
 `sudo update-grub`
 
 ensure that podman socket is running
-```sh
+```console
 $ systemctl --user status podman.socket
 * podman.socket - Podman API Socket
      Loaded: loaded (/usr/lib/systemd/user/podman.socket; disabled; vendor preset: disabled)
@@ -494,7 +494,7 @@ $ systemctl --user status podman.socket
 
 ensure that you have a recent version of [crun](https://github.com/containers/crun/)
 
-```sh
+```console
 $ crun -V
 crun version 0.13.227-d38b
 commit: d38b8c28fc50a14978a27fa6afc69a55bfdd2c11
@@ -538,7 +538,7 @@ job "example" {
 
 verify `podman ps`
 
-```sh
+```console
 $ podman ps
 CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
 2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
