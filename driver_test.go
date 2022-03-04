@@ -1748,12 +1748,12 @@ func TestPodmanDriver_Pull(t *testing.T) {
 		{Image: "busybox:unstable", TaskName: "pull_tag"},
 		{Image: "busybox", TaskName: "pull_non_tag"},
 	}
-	if runtime.GOARCH == "arm64" {
+	switch runtime.GOARCH {
+	case "arm64":
 		testCases = append(testCases, imageTestCase{Image: "busybox@sha256:5acba83a746c7608ed544dc1533b87c737a0b0fb730301639a0179f9344b1678", TaskName: "pull_digest"})
-
-	} else if runtime.GOARCH == "amd64" {
+	case "amd64":
 		testCases = append(testCases, imageTestCase{Image: "busybox@sha256:ce98b632acbcbdf8d6fdc50d5f91fea39c770cd5b3a2724f52551dde4d088e96", TaskName: "pull_digest"})
-	} else {
+	default:
 		t.Fatalf("Unexpected architecture %s", runtime.GOARCH)
 	}
 
