@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  ARCHIVE_DIR: /tmp
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v1
+    - name: Determine Go version
+      id: get-go-version
+      run: |
+        echo "Building with Go $(cat .go-version)"
+        echo "::set-output name=go-version::$(cat .go-version)"
+    - name: Setup go
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ steps.get-go-version.outputs.go-version }}
+    - name: Install deps
+      run: make deps
+    - name: Lint
+      run: make check
+    - name: Prepare machine
+      run: sudo bash -e .github/machinesetup.sh
+    - name: Compile driver
+      run: make dev
+    - name: Produce OCI and Docker archives
+      run: |
+        sudo podman pull alpine:latest
+        sudo podman save --format docker-archive --output $ARCHIVE_DIR/docker-archive alpine:latest
+        sudo podman save --format oci-archive --output $ARCHIVE_DIR/oci-archive alpine:latest
+        sudo podman image rm alpine:latest
+    - name: Run Tests
+      run: sudo -E GOPATH=$PWD/build CI=1 /home/runner/go/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api
+    - name: Archive test result
+      uses: actions/upload-artifact@v1
+      with:
+        name: test-result
+        path: build/test/result.xml

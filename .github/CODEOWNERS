@@ -2,5 +2,5 @@
 * @jazzyfresh @jrasell @lgfa29 @towe75
 
 # release configuration
-/.release/                              @hashicorp/release-engineering 
-/.github/workflows/build.yml            @hashicorp/release-engineering 
+/.release/                              @hashicorp/release-engineering
+/.github/workflows/build.yml            @hashicorp/release-engineering

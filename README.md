@@ -75,15 +75,17 @@ CONTAINER ID  IMAGE                           COMMAND               CREATED     
 
 ## Building The Driver from source
 
-This project has a go.mod definition. So you can clone it to whatever directory you want.
+This project has a `go.mod` definition. So you can clone it to whatever directory you want.
 It is not necessary to setup a go path at all.
-Ensure that you use go 1.13 or newer.
+Ensure that you use go 1.17 or newer.
 
-```sh
+```shell-session
 $ git clone git@github.com:hashicorp/nomad-driver-podman
-cd nomad-driver-podman
-./build.sh
+$ cd nomad-driver-podman
+$ make dev
 ```
+
+The compiled binary will be located at `./build/nomad-driver-podman`.
 
 ## Runtime dependencies
 
@@ -561,10 +563,10 @@ vagrant up
 vagrant ssh
 
 # Build the task driver plugin
-sudo -E ./build.sh
+make dev
 
 # Copy the build nomad-driver-plugin executable to examples/plugins/
-cp nomad-driver-podman examples/plugins/
+cp ./build/nomad-driver-podman examples/plugins/
 
 # Start Nomad
 nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
@@ -573,7 +575,7 @@ nomad agent -config=examples/nomad/server.hcl 2>&1 > server.log &
 sudo nomad agent -config=examples/nomad/client.hcl 2>&1 > client.log &
 
 # Run a job
-nomad job run examples/redis_ports.nomad
+nomad job run examples/jobs/redis_ports.nomad
 
 # Verify
 nomad job status redis
