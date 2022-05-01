@@ -1360,6 +1360,33 @@ func TestPodmanDriver_Privileged(t *testing.T) {
 	require.True(t, inspectData.HostConfig.Privileged)
 }
 
+// check ulimit option
+func TestPodmanDriver_Ulimit(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.Ulimit = map[string]string{"nproc": "4096", "nofile": "2048:4096"}
+	inspectData := startDestroyInspect(t, taskCfg, "ulimits")
+
+	nofileLimit := api.InspectUlimit{
+		Name: "RLIMIT_NOFILE",
+		Soft: uint64(2048),
+		Hard: uint64(4096),
+	}
+	nprocLimit := api.InspectUlimit{
+		Name: "RLIMIT_NPROC",
+		Soft: uint64(4096),
+		Hard: uint64(4096),
+	}
+
+	require.Len(t, inspectData.HostConfig.Ulimits, 2)
+	if inspectData.HostConfig.Ulimits[0].Name == "RLIMIT_NOFILE" {
+		require.Exactly(t, nofileLimit, inspectData.HostConfig.Ulimits[0])
+		require.Exactly(t, nprocLimit, inspectData.HostConfig.Ulimits[1])
+	} else {
+		require.Exactly(t, nofileLimit, inspectData.HostConfig.Ulimits[1])
+		require.Exactly(t, nprocLimit, inspectData.HostConfig.Ulimits[0])
+	}
+}
+
 // check enabled readonly_rootfs option
 func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
