@@ -1,2 +1,6 @@
 # Blanket ownership of all PRs.
 * @jazzyfresh @jrasell @lgfa29 @towe75
+
+# release configuration
+/.release/                              @hashicorp/release-engineering @hashicorp/hc-github-team-nomad-ecosystem
+/.github/workflows/build.yml            @hashicorp/release-engineering @hashicorp/hc-github-team-nomad-ecosystem
