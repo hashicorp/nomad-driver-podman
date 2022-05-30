@@ -450,6 +450,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
 
+	ulimits, err := sliceMergeUlimit(driverConfig.Ulimit)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse ulimit configuration: %v", err)
+	}
+	createOpts.ContainerResourceConfig.Rlimits = ulimits
+
 	// Security config options
 	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
@@ -701,6 +707,41 @@ func memoryInBytes(strmem string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("Invalid memory string: %s", strmem)
 	}
+}
+
+func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) {
+	var ulimits []spec.POSIXRlimit
+
+	for name, ulimitRaw := range ulimitsRaw {
+		if len(ulimitRaw) == 0 {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed ulimit specification %v: %q, cannot be empty", name, ulimitRaw)
+		}
+		// hard limit is optional
+		if !strings.Contains(ulimitRaw, ":") {
+			ulimitRaw = ulimitRaw + ":" + ulimitRaw
+		}
+
+		splitted := strings.SplitN(ulimitRaw, ":", 2)
+		if len(splitted) < 2 {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed ulimit specification %v: %v", name, ulimitRaw)
+		}
+		soft, err := strconv.Atoi(splitted[0])
+		if err != nil {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed soft ulimit %v: %v", name, ulimitRaw)
+		}
+		hard, err := strconv.Atoi(splitted[1])
+		if err != nil {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed hard ulimit %v: %v", name, ulimitRaw)
+		}
+
+		ulimit := spec.POSIXRlimit{
+			Type: name,
+			Soft: uint64(soft),
+			Hard: uint64(hard),
+		}
+		ulimits = append(ulimits, ulimit)
+	}
+	return ulimits, nil
 }
 
 // Creates the requested image if missing from storage

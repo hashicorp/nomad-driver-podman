@@ -425,6 +425,15 @@ config {
 }
 ```
 
+* **ulimit** - (Optional) A key-value map of ulimit configurations to set to the containers to start.
+```hcl
+config {
+  ulimit {
+    nproc = "4242"
+    nofile = "2048:4096"
+  }
+}
+```
 
 
 ## Network Configuration

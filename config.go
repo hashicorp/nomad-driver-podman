@@ -74,6 +74,7 @@ var (
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
+		"ulimit":             hclspec.NewAttr("ulimit", "list(map(string))", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
@@ -137,6 +138,7 @@ type TaskConfig struct {
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
+	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
 	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
