@@ -20,11 +20,19 @@ changelogfmt: ## Format changelog GitHub links
 	@sed -E 's|([^\[])\[GH-([0-9]+)\]|\1[[GH-\2](https://github.com/hashicorp/nomad-driver-podman/issues/\2)]|g' CHANGELOG.md > changelog.tmp && mv changelog.tmp CHANGELOG.md
 
 .PHONY: check
-check: deps ## Lint the source code
+check: deps hclfmt ## Lint the source code
 	@echo "==> Linting source code ..."
 	@$(GOPATH)/bin/golangci-lint run
 	@echo "==> vetting hc-log statements"
 	@$(GOPATH)/bin/hclogvet $(CURDIR)
+
+.PHONY: hclfmt
+hclfmt: ## Format HCL files with hclfmt
+	@echo "--> Formatting HCL"
+	@find . -name '.git' -prune \
+	        -o \( -name '*.nomad' -o -name '*.hcl' -o -name '*.tf' \) \
+	      -print0 | xargs -0 hclfmt -w
+	@if (git status -s | grep -q -e '\.hcl$$' -e '\.nomad$$' -e '\.tf$$'); then echo The following HCL files are out of sync; git status -s | grep -e '\.hcl$$' -e '\.nomad$$' -e '\.tf$$'; exit 1; fi
 
 .PHONY: deps
 deps: ## Install build dependencies
@@ -32,6 +40,7 @@ deps: ## Install build dependencies
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.2
 	go install github.com/hashicorp/go-hclog/hclogvet@main
 	go install gotest.tools/gotestsum@v1.8.0
+	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 
 .PHONY: clean
 clean: ## Cleanup previous build

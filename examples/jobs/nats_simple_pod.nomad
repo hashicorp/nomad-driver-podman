@@ -31,7 +31,7 @@ job "nats" {
       template {
         change_mode = "noop"
         destination = "local/nats-server.conf"
-        data = file("./templates/nats-server.conf.tpl")
+        data        = file("./templates/nats-server.conf.tpl")
       }
 
       config {
@@ -46,8 +46,8 @@ job "nats" {
         // environment, so we will also pre-define the exporter
         // port mapping here
         ports = [
-            "server",
-            "exporter"
+          "server",
+          "exporter"
         ]
       }
     }
@@ -59,7 +59,7 @@ job "nats" {
       // ensure to run the exporter _after_ the server
       // so that we can join the network namespace
       lifecycle {
-        hook = "poststart"
+        hook    = "poststart"
         sidecar = "true"
       }
 
