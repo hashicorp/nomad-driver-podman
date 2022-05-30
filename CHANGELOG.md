@@ -6,6 +6,7 @@ FEATURES:
 * config: Privileged containers.
 * config: Add `cpu_hard_limit` and `cpu_cfs_period` options [[GH-149](https://github.com/hashicorp/nomad-driver-podman/pull/149)]
 * config: Allow mounting rootfs as read-only. [[GH-133](https://github.com/hashicorp/nomad-driver-podman/pull/133)]
+* runtime: Add support for host and CSI volumes and using podman tasks as CSI plugins [[GH-169](https://github.com/hashicorp/nomad-driver-podman/pull/169)]
 
 BUG FIXES:
 * log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
