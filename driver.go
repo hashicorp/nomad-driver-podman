@@ -1084,6 +1084,19 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		binds = append(binds, bind)
 	}
 
+	// create binds for host volumes, CSI plugins, and CSI volumes
+	for _, m := range task.Mounts {
+		bind := spec.Mount{
+			Type:        "bind",
+			Destination: m.TaskPath,
+			Source:      m.HostPath,
+		}
+		if m.Readonly {
+			bind.Options = append(bind.Options, "ro")
+		}
+		binds = append(binds, bind)
+	}
+
 	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
 		// Apply SELinux Label to each volume
 		for i := range binds {
