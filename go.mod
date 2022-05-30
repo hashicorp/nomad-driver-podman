@@ -22,5 +22,6 @@ require (
 	github.com/onsi/ginkgo v1.13.0 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/stretchr/testify v1.7.0
+	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 
 )
