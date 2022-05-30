@@ -24,7 +24,7 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell" do |p|
     p.privileged = false
     p.inline = <<-SHELL
-      go_version=1.14.12
+      go_version=1.17.9
       if [ ! -f /usr/local/go/bin/go ]; then
         curl -sSL -o go.tgz "https://dl.google.com/go/go${go_version}.linux-amd64.tar.gz"
         sudo tar -C /usr/local -xzf go.tgz
@@ -36,7 +36,7 @@ Vagrant.configure("2") do |config|
         sudo apt-get install -y unzip
       fi
 
-      nomad_version=1.0.0
+      nomad_version=1.3.1
       if [ ! -f /usr/bin/nomad ]; then
         curl -o nomad.zip -sSL https://releases.hashicorp.com/nomad/${nomad_version}/nomad_${nomad_version}_linux_amd64.zip
         sudo unzip nomad.zip -d /usr/bin
