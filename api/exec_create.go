@@ -69,7 +69,7 @@ func (c *API) ExecCreate(ctx context.Context, name string, config ExecConfig) (s
 
 	if res.StatusCode != http.StatusCreated {
 		body, _ := ioutil.ReadAll(res.Body)
-		return "", fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("cannot create exec session, status code: %d: %s", res.StatusCode, body)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)

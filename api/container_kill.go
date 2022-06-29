@@ -19,5 +19,5 @@ func (c *API) ContainerKill(ctx context.Context, name string, signal string) err
 	if res.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+	return fmt.Errorf("cannot kill container, status code: %d", res.StatusCode)
 }

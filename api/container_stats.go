@@ -31,7 +31,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, ContainerWrongState
 	}
 	if res.StatusCode != http.StatusOK {
-		return stats, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return stats, fmt.Errorf("cannot get stats of container, status code: %d", res.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)

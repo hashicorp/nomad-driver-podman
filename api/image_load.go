@@ -33,7 +33,7 @@ func (c *API) ImageLoad(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("cannot load image, status code: %d: %s", res.StatusCode, body)
 	}
 	err = json.Unmarshal(body, &response)
 	if err != nil {

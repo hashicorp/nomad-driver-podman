@@ -21,7 +21,7 @@ func (c *API) ExecInspect(ctx context.Context, sessionId string) (InspectExecSes
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return inspectData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return inspectData, fmt.Errorf("cannot inspect exec session, status code: %d", res.StatusCode)
 	}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {

@@ -20,7 +20,7 @@ func (c *API) ContainerStart(ctx context.Context, name string) error {
 
 	if res.StatusCode != http.StatusNoContent {
 		body, _ := ioutil.ReadAll(res.Body)
-		return fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return fmt.Errorf("cannot start container, status code: %d: %s", res.StatusCode, body)
 	}
 
 	// wait max 10 seconds for running state
