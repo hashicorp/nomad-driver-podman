@@ -168,6 +168,14 @@ plugin "nomad-driver-podman" {
 }
 ```
 
+* client_http_timeout (string) Defaults to `60s` default timeout used by http.Client requests
+```
+plugin "nomad-driver-podman" {
+  config {
+    client_http_timeout = "60s"
+  }
+```
+
 ## Task Configuration
 
 * **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
@@ -434,6 +442,12 @@ config {
     nproc = "4242"
     nofile = "2048:4096"
   }
+```
+
+* **image_pull_timeout** - (Optional) time duration for your pull timeout (default to 5m), cannot be longer than the client_http_timeout
+```
+config {
+  image_pull_timeout = "5m"
 }
 ```
 

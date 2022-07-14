@@ -1801,7 +1801,7 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, task)
+	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
 	require.NoError(t, err)
 	require.Equal(t, imageID, inspectData.Image)
 }
@@ -1862,7 +1862,7 @@ func createInspectImage(t *testing.T, image, reference string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, task)
+	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
 	require.NoError(t, err)
 
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
@@ -2094,8 +2094,9 @@ func newTaskConfig(image string, command []string) TaskConfig {
 	return TaskConfig{
 		Image: image,
 		// LoadImage: loadImage,
-		Command: command[0],
-		Args:    command[1:],
+		Command:          command[0],
+		Args:             command[1:],
+		ImagePullTimeout: "5m",
 	}
 }
 

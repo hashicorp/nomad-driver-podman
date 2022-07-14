@@ -98,3 +98,18 @@ func TestConfig_CPUHardLimit(t *testing.T) {
 	require.EqualValues(t, true, tc.CPUHardLimit)
 	require.EqualValues(t, 200000, tc.CPUCFSPeriod)
 }
+
+func TestConfig_ImagePullTimeout(t *testing.T) {
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+
+	validHCL := `
+  config {
+		image = "docker://redis"
+		image_pull_timeout = "10m"
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	require.EqualValues(t, "10m", tc.ImagePullTimeout)
+}
