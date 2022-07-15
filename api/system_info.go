@@ -21,7 +21,7 @@ func (c *API) SystemInfo(ctx context.Context) (Info, error) {
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return infoData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return infoData, fmt.Errorf("cannot fetch Podman system info, status code: %d", res.StatusCode)
 	}
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {

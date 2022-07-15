@@ -20,5 +20,5 @@ func (c *API) ContainerDelete(ctx context.Context, name string, force bool, dele
 	if res.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+	return fmt.Errorf("cannot delete container, status code: %d", res.StatusCode)
 }

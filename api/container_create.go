@@ -28,7 +28,7 @@ func (c *API) ContainerCreate(ctx context.Context, create SpecGenerator) (Contai
 
 	if res.StatusCode != http.StatusCreated {
 		body, _ := ioutil.ReadAll(res.Body)
-		return response, fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return response, fmt.Errorf("cannot create container, status code: %d: %s", res.StatusCode, body)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)

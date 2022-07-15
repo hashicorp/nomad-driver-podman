@@ -19,7 +19,7 @@ func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, s
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return fmt.Errorf("cannot get logs from container, status code: %d", res.StatusCode)
 	}
 
 	defer func() {

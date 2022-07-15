@@ -34,7 +34,7 @@ func (c *API) ImageInspectID(ctx context.Context, image string) (string, error) 
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("cannot inspect image, status code: %d: %s", res.StatusCode, body)
 	}
 	err = json.Unmarshal(body, &inspectData)
 	if err != nil {

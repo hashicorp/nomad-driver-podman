@@ -32,7 +32,7 @@ func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthC
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(res.Body)
-		return "", fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return "", fmt.Errorf("cannot pull image, status code: %d: %s", res.StatusCode, body)
 	}
 
 	dec := json.NewDecoder(res.Body)

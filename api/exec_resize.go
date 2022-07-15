@@ -18,7 +18,7 @@ func (c *API) ExecResize(ctx context.Context, execId string, height int, width i
 
 	if res.StatusCode != http.StatusCreated {
 		body, _ := ioutil.ReadAll(res.Body)
-		return fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		return fmt.Errorf("cannot resize exec session, status code: %d: %s", res.StatusCode, body)
 	}
 
 	return err
