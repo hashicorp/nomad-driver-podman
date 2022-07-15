@@ -63,7 +63,7 @@ jobs:
     strategy:
       matrix:
         goos: ["linux"]
-        goarch: ["amd64", "arm64"]
+        goarch: ["amd64", "arm64", "arm"]
       fail-fast: true
 
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
