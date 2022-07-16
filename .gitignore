@@ -3,3 +3,4 @@ nomad-driver-podman
 pkg/
 .vagrant
 *.log
+.release/linux/package/opt/nomad/plugins/nomad-driver-podman

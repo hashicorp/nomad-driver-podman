@@ -45,7 +45,8 @@ deps: ## Install build dependencies
 .PHONY: clean
 clean: ## Cleanup previous build
 	@echo "==> Cleanup previous build"
-	rm -f ./build/nomad-driver-podman
+	rm -rf ./pkg
+	rm -rf .release/linux/package/opt/nomad/plugins/*
 
 pkg/%/nomad-driver-podman: GO_OUT ?= $@
 pkg/%/nomad-driver-podman: ## Build the nomad-driver-podman plugin for GOOS_GOARCH, e.g. pkg/linux_amd64/nomad-driver-podman
@@ -54,6 +55,10 @@ pkg/%/nomad-driver-podman: ## Build the nomad-driver-podman plugin for GOOS_GOAR
 		GOOS=$(firstword $(subst _, ,$*)) \
 		GOARCH=$(lastword $(subst _, ,$*)) \
 		go build -trimpath -o $(GO_OUT)
+	mkdir -p .release/linux/package/opt/nomad/plugins/
+	cp -v $(CURDIR)/$@ $(CURDIR)/.release/linux/package/opt/nomad/plugins/nomad-driver-podman
+
+##-$(firstword $(subst _, ,$*)).$(lastword $(subst _, ,$*))
 
 .PRECIOUS: pkg/%/nomad-driver-podman
 pkg/%.zip: pkg/%/nomad-driver-podman ## Build and zip the nomad-driver-podman plugin for GOOS_GOARCH, e.g. pkg/linux_amd64.zip
