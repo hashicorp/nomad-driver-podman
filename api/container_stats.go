@@ -38,6 +38,12 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 	if err != nil {
 		return stats, err
 	}
+
+	// Since podman 4.1.1, an empty 200 response is returned for stopped containers.
+	if len(body) == 0 {
+		return stats, ContainerNotFound
+	}
+
 	err = json.Unmarshal(body, &stats)
 	if err != nil {
 		return stats, err
