@@ -30,6 +30,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -104,6 +105,9 @@ type Driver struct {
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
 	cgroupV2 bool
+
+	// singleflight group to prevent parallel image downloads
+	pullGroup singleflight.Group
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -819,12 +823,20 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		Password: auth.Password,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
-	defer cancel()
+	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
 
-	if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
-		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
+		defer cancel()
+
+		if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
+			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+		}
+		return imageID, nil
+	})
+	if err != nil {
+		return "", err
 	}
+	imageID = result.(string)
 	d.logger.Debug("Pulled image ID", "imageID", imageID)
 	return imageID, nil
 }

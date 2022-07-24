@@ -12,6 +12,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20220519231241-2b054e38e91a
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 	github.com/stretchr/testify v1.7.1
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
 
 require (
