@@ -96,6 +96,13 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	return harness
 }
 
+func TestPodmanDriver_PingPodman(t *testing.T) {
+	d := podmanDriverHarness(t, nil)
+	version, err := getPodmanDriver(t, d).podman.Ping(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, version)
+}
+
 func TestPodmanDriver_Start_NoImage(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
