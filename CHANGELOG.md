@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
+* runtime: Prevent concurrent image pulls of same imageRef [[GH-159](https://github.com/hashicorp/nomad-driver-podman/pull/159)]
+
 ## 0.4.0 (July 14, 2022)
 
 FEATURES:
