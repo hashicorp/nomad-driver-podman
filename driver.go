@@ -223,38 +223,51 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 }
 
 func (d *Driver) buildFingerprint() *drivers.Fingerprint {
-	var health drivers.HealthState
-	var desc string
 	attrs := map[string]*pstructs.Attribute{}
 
-	// be negative and guess that we will not be able to get a podman connection
-	health = drivers.HealthStateUndetected
-	desc = "disabled"
-
-	// try to connect and get version info
-	info, err := d.podman.SystemInfo(d.ctx)
-	if err != nil {
-		d.logger.Error("Could not get podman info", "error", err)
-	} else {
-		// yay! we can enable the driver
-		health = drivers.HealthStateHealthy
-		desc = "ready"
-		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
-		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
-		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
-		if d.systemInfo.Version.Version == "" {
-			// keep first received systemInfo in driver struct
-			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
-			d.systemInfo = info
-			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+	// Ping podman api
+	version, err := d.podman.Ping(d.ctx)
+	if err != nil || version == "" {
+		// not reachable?
+		// deactivate driver, forget podman details
+		d.systemInfo = api.Info{}
+		d.logger.Error("Could not get podman version", "error", err)
+		return &drivers.Fingerprint{
+			Attributes:        attrs,
+			Health:            drivers.HealthStateUndetected,
+			HealthDescription: "disabled",
 		}
 	}
 
+	// do we already know details about podman or is the version different?
+	if d.systemInfo.Version.APIVersion != version {
+		// no? then fetch and cache it
+		// try to connect and get version info
+		info, err := d.podman.SystemInfo(d.ctx)
+		if err != nil {
+			d.logger.Error("Could not get podman info", "error", err)
+			return &drivers.Fingerprint{
+				Attributes:        attrs,
+				Health:            drivers.HealthStateUndetected,
+				HealthDescription: "disabled",
+			}
+		}
+
+		// keep first received systemInfo in driver struct
+		// it is used to toggle cgroup v1/v2, rootless/rootful behavior
+		d.systemInfo = info
+		d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+	}
+
+	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+	attrs["driver.podman.version"] = pstructs.NewStringAttribute(version)
+	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
+	attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
+
 	return &drivers.Fingerprint{
 		Attributes:        attrs,
-		Health:            health,
-		HealthDescription: desc,
+		Health:            drivers.HealthStateHealthy,
+		HealthDescription: "ready",
 	}
 }
 
