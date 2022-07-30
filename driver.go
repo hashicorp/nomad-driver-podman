@@ -237,35 +237,32 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 			Health:            drivers.HealthStateUndetected,
 			HealthDescription: "disabled",
 		}
-	} else {
+	}
 
-		// it's reachable
-
-		// do we already know details about podman or is the version different?
-		if d.systemInfo.Version.APIVersion != version {
-			// no? then fetch and cache it
-			// try to connect and get version info
-			info, err := d.podman.SystemInfo(d.ctx)
-			if err != nil {
-				d.logger.Error("Could not get podman info", "error", err)
-				return &drivers.Fingerprint{
-					Attributes:        attrs,
-					Health:            drivers.HealthStateUndetected,
-					HealthDescription: "disabled",
-				}
-			} else {
-				// keep first received systemInfo in driver struct
-				// it is used to toggle cgroup v1/v2, rootless/rootful behavior
-				d.systemInfo = info
-				d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+	// do we already know details about podman or is the version different?
+	if d.systemInfo.Version.APIVersion != version {
+		// no? then fetch and cache it
+		// try to connect and get version info
+		info, err := d.podman.SystemInfo(d.ctx)
+		if err != nil {
+			d.logger.Error("Could not get podman info", "error", err)
+			return &drivers.Fingerprint{
+				Attributes:        attrs,
+				Health:            drivers.HealthStateUndetected,
+				HealthDescription: "disabled",
 			}
 		}
 
-		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-		attrs["driver.podman.version"] = pstructs.NewStringAttribute(version)
-		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
-		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
+		// keep first received systemInfo in driver struct
+		// it is used to toggle cgroup v1/v2, rootless/rootful behavior
+		d.systemInfo = info
+		d.cgroupV2 = info.Host.CGroupsVersion == "v2"
 	}
+
+	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+	attrs["driver.podman.version"] = pstructs.NewStringAttribute(version)
+	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
+	attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
 
 	return &drivers.Fingerprint{
 		Attributes:        attrs,
