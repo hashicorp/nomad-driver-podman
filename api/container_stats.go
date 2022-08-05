@@ -30,6 +30,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 	if res.StatusCode == http.StatusConflict {
 		return stats, ContainerWrongState
 	}
+
 	if res.StatusCode != http.StatusOK {
 		return stats, fmt.Errorf("cannot get stats of container, status code: %d", res.StatusCode)
 	}
@@ -38,6 +39,12 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 	if err != nil {
 		return stats, err
 	}
+
+	// podman v4.1.1 or newer version will return 200 code and empty body if the container is exited
+	if len(body) == 0 {
+		return stats, ContainerWrongState
+	}
+
 	err = json.Unmarshal(body, &stats)
 	if err != nil {
 		return stats, err
