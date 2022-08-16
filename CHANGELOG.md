@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+FEATURES:
+
+* config: Set custom apparmor profile or disable apparmor. [[GH-188](https://github.com/hashicorp/nomad-driver-podman/pull/188)]
+
 IMPROVEMENTS:
 
 * perf: Use ping api instead of system info for fingerprinting [[GH-186](https://github.com/hashicorp/nomad-driver-podman/pull/186)]

@@ -419,6 +419,14 @@ config {
 }
 ```
 
+* **apparmor_profile** - (Optional) Name of a apparmor profile to be used instead of the default profile. The special value `unconfined` disables apparmor for this container:
+
+```
+config {
+  apparmor_profile = "your-profile"
+}
+```
+
 * **force_pull** - (Optional)  true or false (default). Always pull the latest image on container start.
 
 ```hcl
