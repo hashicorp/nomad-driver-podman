@@ -1385,6 +1385,35 @@ func TestPodmanDriver_Privileged(t *testing.T) {
 	require.True(t, inspectData.HostConfig.Privileged)
 }
 
+// check apparmor default value
+func TestPodmanDriver_AppArmorDefault(t *testing.T) {
+	d := podmanDriverHarness(t, nil)
+
+	// Skip test if apparmor is not available
+	if !getPodmanDriver(t, d).systemInfo.Host.Security.AppArmorEnabled {
+		t.Skip("Skipping AppArmor test ")
+	}
+
+	defaultCfg := newTaskConfig("", busyboxLongRunningCmd)
+	defaultInspectResult := startDestroyInspect(t, defaultCfg, "aa-default")
+	require.Contains(t, defaultInspectResult.AppArmorProfile, "containers-default")
+}
+
+// check apparmor option
+func TestPodmanDriver_AppArmorUnconfined(t *testing.T) {
+	d := podmanDriverHarness(t, nil)
+
+	// Skip test if apparmor is not available
+	if !getPodmanDriver(t, d).systemInfo.Host.Security.AppArmorEnabled {
+		t.Skip("Skipping AppArmor test ")
+	}
+
+	unconfinedCfg := newTaskConfig("", busyboxLongRunningCmd)
+	unconfinedCfg.ApparmorProfile = "unconfined"
+	unconfinedInspectResult := startDestroyInspect(t, unconfinedCfg, "aa-unconfined")
+	require.Equal(t, "unconfined", unconfinedInspectResult.AppArmorProfile)
+}
+
 // check ulimit option
 func TestPodmanDriver_Ulimit(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)

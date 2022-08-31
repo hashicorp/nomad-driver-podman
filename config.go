@@ -43,7 +43,8 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"args": hclspec.NewAttr("args", "list(string)", false),
+		"apparmor_profile": hclspec.NewAttr("apparmor_profile", "string", false),
+		"args":             hclspec.NewAttr("args", "list(string)", false),
 		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
@@ -121,6 +122,7 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
+	ApparmorProfile   string             `codec:"apparmor_profile"`
 	Args              []string           `codec:"args"`
 	Auth              AuthConfig         `codec:"auth"`
 	Ports             []string           `codec:"ports"`
