@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -15,7 +15,7 @@ type inspectIDImageResponse struct {
 	Id string `json:"Id"`
 }
 
-// Inspects image and returns the image unique identifier
+// ImageInspectID image and returns the image unique identifier
 func (c *API) ImageInspectID(ctx context.Context, image string) (string, error) {
 	var inspectData inspectIDImageResponse
 
@@ -24,8 +24,8 @@ func (c *API) ImageInspectID(ctx context.Context, image string) (string, error) 
 		return "", err
 	}
 
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	defer ignoreClose(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}

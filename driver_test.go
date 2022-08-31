@@ -3,15 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"runtime"
-	"strings"
-
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,10 +73,10 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	}
 
 	d := NewPodmanDriver(logger).(*Driver)
-	d.SetConfig(&baseConfig)
+	require.NoError(t, d.SetConfig(&baseConfig))
 	d.buildFingerprint()
 	d.config.Volumes.Enabled = true
-	if enforce, err := ioutil.ReadFile("/sys/fs/selinux/enforce"); err == nil {
+	if enforce, err := os.ReadFile("/sys/fs/selinux/enforce"); err == nil {
 		if string(enforce) == "1" {
 			d.logger.Info("Enabling SelinuxLabel")
 			d.config.Volumes.SelinuxLabel = "z"
@@ -128,8 +126,7 @@ func TestPodmanDriver_Start_NoImage(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "image name required")
 
-	d.DestroyTask(task.ID, true)
-
+	_ = d.DestroyTask(task.ID, true)
 }
 
 // start a long running container
@@ -154,7 +151,9 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -189,7 +188,9 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -243,7 +244,11 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	require.NoError(t, err)
 
 	_, _, err = d.StartTask(task)
-	defer d.DestroyTask(task.ID, true)
+
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
+
 	require.NoError(t, err)
 
 	require.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
@@ -279,7 +284,9 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -296,7 +303,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 
 	// Check that data was written to the shared alloc directory.
 	outputFile := filepath.Join(task.TaskDir().SharedAllocDir, file)
-	act, err := ioutil.ReadFile(outputFile)
+	act, err := os.ReadFile(outputFile)
 	if err != nil {
 		t.Fatalf("Couldn't read expected output: %v", err)
 	}
@@ -330,7 +337,9 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -342,7 +351,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 
-	d.DestroyTask(task.ID, true)
+	_ = d.DestroyTask(task.ID, true)
 
 	// see if the container does not exist (404)
 	_, err = getPodmanDriver(t, d).podman.ContainerStats(context.Background(), containerName)
@@ -376,7 +385,9 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -388,7 +399,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 
-	d.DestroyTask(task.ID, true)
+	_ = d.DestroyTask(task.ID, true)
 
 	// see if the stopped container can be inspected
 	_, err = getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
@@ -429,7 +440,9 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -481,7 +494,9 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -530,7 +545,9 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -587,7 +604,9 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
@@ -598,35 +617,26 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 
 	// Verify that the correct ports are bound
 	expectedPortBindings := map[string][]api.InspectHostPort{
-		"8888/tcp": []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[0]),
-			},
-		},
-		"8888/udp": []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[0]),
-			},
-		},
-		"6379/tcp": []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[1]),
-			},
-		},
-		"6379/udp": []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[1]),
-			},
-		},
+		"8888/tcp": {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[0]),
+		}},
+		"8888/udp": {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[0]),
+		}},
+		"6379/tcp": {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[1]),
+		}},
+		"6379/udp": {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[1]),
+		}},
 		// FIXME: REDIS UDP
 	}
 
 	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
-
 }
 
 func TestPodmanDriver_Ports(t *testing.T) {
@@ -688,7 +698,9 @@ func TestPodmanDriver_Ports(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
@@ -697,30 +709,22 @@ func TestPodmanDriver_Ports(t *testing.T) {
 
 	require.Len(t, inspectData.HostConfig.PortBindings, 4)
 	expectedPortBindings := map[string][]api.InspectHostPort{
-		fmt.Sprintf("%d/tcp", 8888): []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[0]),
-			},
-		},
-		fmt.Sprintf("%d/udp", 8888): []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[0]),
-			},
-		},
-		fmt.Sprintf("%d/tcp", ports[1]): []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[1]),
-			},
-		},
-		fmt.Sprintf("%d/udp", ports[1]): []api.InspectHostPort{
-			api.InspectHostPort{
-				HostIP:   "127.0.0.1",
-				HostPort: strconv.Itoa(ports[1]),
-			},
-		},
+		fmt.Sprintf("%d/tcp", 8888): {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[0]),
+		}},
+		fmt.Sprintf("%d/udp", 8888): {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[0]),
+		}},
+		fmt.Sprintf("%d/tcp", ports[1]): {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[1]),
+		}},
+		fmt.Sprintf("%d/udp", ports[1]): {{
+			HostIP:   "127.0.0.1",
+			HostPort: strconv.Itoa(ports[1]),
+		}},
 	}
 	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
 }
@@ -915,7 +919,9 @@ func TestPodmanDriver_Init(t *testing.T) {
 	_, _, err = d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -980,7 +986,9 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	_, _, err = d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1029,7 +1037,9 @@ func TestPodmanDriver_User(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1077,7 +1087,9 @@ func TestPodmanDriver_Device(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1129,7 +1141,9 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1188,7 +1202,9 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1252,7 +1268,9 @@ func TestPodmanDriver_Mount(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1441,7 +1459,9 @@ func TestPodmanDriver_Dns(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -1520,7 +1540,9 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 			_, _, err := d.StartTask(task)
 			require.NoError(t, err)
 
-			defer d.DestroyTask(task.ID, true)
+			defer func() {
+				_ = d.DestroyTask(task.ID, true)
+			}()
 
 			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
 
@@ -1580,7 +1602,9 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 
 	_, _, err := mainHarness.StartTask(mainTask)
 	require.NoError(t, err)
-	defer mainHarness.DestroyTask(mainTask.ID, true)
+	defer func() {
+		_ = mainHarness.DestroyTask(mainTask.ID, true)
+	}()
 
 	sidecarHarness := podmanDriverHarness(t, nil)
 	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
@@ -1588,7 +1612,9 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 
 	_, _, err = sidecarHarness.StartTask(sidecarTask)
 	require.NoError(t, err)
-	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+	defer func() {
+		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
@@ -1653,7 +1679,9 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 
 	_, _, err := mainHarness.StartTask(mainTask)
 	require.NoError(t, err)
-	defer mainHarness.DestroyTask(mainTask.ID, true)
+	defer func() {
+		_ = mainHarness.DestroyTask(mainTask.ID, true)
+	}()
 
 	sidecarHarness := podmanDriverHarness(t, nil)
 	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
@@ -1661,7 +1689,9 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 
 	_, _, err = sidecarHarness.StartTask(sidecarTask)
 	require.NoError(t, err)
-	defer sidecarHarness.DestroyTask(sidecarTask.ID, true)
+	defer func() {
+		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
@@ -1702,7 +1732,9 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	time.Sleep(300 * time.Millisecond)
 	// try to send non-existing singal, should yield an error
@@ -1750,7 +1782,9 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
@@ -2080,7 +2114,7 @@ func Test_parseImage(t *testing.T) {
 // read a tasks stdout logfile into a string, fail on error
 func readStdoutLog(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
-	stdout, err := ioutil.ReadFile(logfile)
+	stdout, err := os.ReadFile(logfile)
 	require.NoError(t, err)
 	return string(stdout)
 }
@@ -2088,7 +2122,7 @@ func readStdoutLog(t *testing.T, task *drivers.TaskConfig) string {
 // read a tasks stderr logfile into a string, fail on error
 func readStderrLog(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StderrPath), fmt.Sprintf("%s.stderr.0", task.Name))
-	stderr, err := ioutil.ReadFile(logfile)
+	stderr, err := os.ReadFile(logfile)
 	require.NoError(t, err)
 	return string(stderr)
 }
@@ -2136,7 +2170,9 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
-	defer d.DestroyTask(task.ID, true)
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)

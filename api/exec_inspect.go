@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -18,12 +18,12 @@ func (c *API) ExecInspect(ctx context.Context, sessionId string) (InspectExecSes
 		return inspectData, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusOK {
 		return inspectData, fmt.Errorf("cannot inspect exec session, status code: %d", res.StatusCode)
 	}
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return inspectData, err
 	}

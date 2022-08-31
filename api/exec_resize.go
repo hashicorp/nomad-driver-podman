@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -14,10 +14,10 @@ func (c *API) ExecResize(ctx context.Context, execId string, height int, width i
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusCreated {
-		body, _ := ioutil.ReadAll(res.Body)
+		body, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("cannot resize exec session, status code: %d: %s", res.StatusCode, body)
 	}
 

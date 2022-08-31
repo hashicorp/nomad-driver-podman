@@ -16,7 +16,7 @@ func (c *API) ContainerStart(ctx context.Context, name string) error {
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(res.Body)

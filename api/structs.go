@@ -17,7 +17,7 @@ import (
 // some fields are reordert to make the linter happy (bytes maligned complains)
 // -------------------------------------------------------------------------------------------------------
 
-//  LogConfig describes the logging characteristics for a container
+// LogConfig describes the logging characteristics for a container
 type LogConfig struct {
 	// LogDriver is the container's log driver.
 	// Optional.
@@ -533,10 +533,10 @@ const (
 	// Slirp indicates that a slirp4netns network stack should
 	// be used
 	Slirp NamespaceMode = "slirp4netns"
-	// KeepId indicates a user namespace to keep the owner uid inside
+	// KeepID indicates a user namespace to keep the owner uid inside
 	// of the namespace itself
 	KeepID NamespaceMode = "keep-id"
-	// KeepId indicates to automatically create a user namespace
+	// Auto indicates automatic namespace mode
 	Auto NamespaceMode = "auto"
 	// DefaultKernelNamespaces is a comma-separated list of default kernel
 	// namespaces.
@@ -777,7 +777,7 @@ type HealthCheckLog struct {
 // (if available).
 // Field names are fixed for compatibility and cannot be changed.
 // As such, silence lint warnings about them.
-//nolint
+// nolint
 type InspectContainerHostConfig struct {
 	// Binds contains an array of user-added mounts.
 	// Both volume mounts and named volumes are included.
@@ -1417,7 +1417,7 @@ type Info struct {
 	Version    Version                `json:"version"`
 }
 
-//HostInfo describes the libpod host
+// HostInfo describes the libpod host
 type SecurityInfo struct {
 	DefaultCapabilities string `json:"capabilities"`
 	AppArmorEnabled     bool   `json:"apparmorEnabled"`
@@ -1426,7 +1426,7 @@ type SecurityInfo struct {
 	SELinuxEnabled      bool   `json:"selinuxEnabled"`
 }
 
-//HostInfo describes the libpod host
+// HostInfo describes the libpod host
 type HostInfo struct {
 	Conmon       *ConmonInfo      `json:"conmon"`
 	Distribution DistributionInfo `json:"distribution"`

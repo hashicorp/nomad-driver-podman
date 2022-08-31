@@ -24,7 +24,7 @@ func (c *API) ContainerCreate(ctx context.Context, create SpecGenerator) (Contai
 		return response, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(res.Body)

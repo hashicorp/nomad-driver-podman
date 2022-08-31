@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -21,7 +21,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
 		return stats, ContainerNotFound
@@ -34,7 +34,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, fmt.Errorf("cannot get stats of container, status code: %d", res.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return stats, err
 	}

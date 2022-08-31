@@ -1,6 +1,6 @@
 module github.com/hashicorp/nomad-driver-podman
 
-go 1.17
+go 1.19
 
 replace github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.3 // Use the same version as Nomad.
 

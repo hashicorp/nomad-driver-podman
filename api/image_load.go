@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 )
@@ -19,7 +19,7 @@ func (c *API) ImageLoad(ctx context.Context, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer archive.Close()
+	defer ignoreClose(archive)
 	response := imageLoadResponse{}
 
 	res, err := c.Post(ctx, "/v1.0.0/libpod/images/load", archive)
@@ -27,8 +27,8 @@ func (c *API) ImageLoad(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 
-	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	defer ignoreClose(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}

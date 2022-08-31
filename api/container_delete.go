@@ -15,7 +15,7 @@ func (c *API) ContainerDelete(ctx context.Context, name string, force bool, dele
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNoContent {
 		return nil

@@ -18,7 +18,7 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 		return inspectData, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
 		return inspectData, ContainerNotFound
