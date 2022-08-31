@@ -146,13 +146,13 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* socket_path (string) Defaults to `"unix://run/podman/io.podman"` when running as root or a cgroup V1 system, and `"unix://run/user/<USER_ID>/podman/io.podman"` for rootless cgroup V2 systems
+* socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems
 
 
 ```hcl
 plugin "nomad-driver-podman" {
   config {
-    socket_path = "unix://run/podman/io.podman"
+    socket_path = "unix:///run/podman/podman.sock"
   }
 }
 ```
