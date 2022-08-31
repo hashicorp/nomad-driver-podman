@@ -592,7 +592,11 @@ vagrant up
 
 # ssh into the vm
 vagrant ssh
+````
 
+Running a Nomad dev agent with the Podman plugin:
+
+```
 # Build the task driver plugin
 make dev
 
@@ -612,4 +616,14 @@ nomad job run examples/jobs/redis_ports.nomad
 nomad job status redis
 
 sudo podman ps
+```
+
+Running the tests:
+
+```
+# Start the Podman server
+systemctl --user start podman.socket
+
+# Run the tests
+CI=1 ./build/bin/gotestsum --junitfile ./build/test/result.xml -- -timeout=15m . ./api
 ```
