@@ -38,7 +38,7 @@ job "nats" {
       template {
         change_mode = "noop"
         destination = "local/nats-server.conf"
-        data = file("./templates/nats-server.conf.tpl")
+        data        = file("./templates/nats-server.conf.tpl")
       }
 
       config {

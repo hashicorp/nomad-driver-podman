@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -21,7 +21,7 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
 		return stats, ContainerNotFound
@@ -31,13 +31,19 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, ContainerWrongState
 	}
 	if res.StatusCode != http.StatusOK {
-		return stats, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return stats, fmt.Errorf("cannot get stats of container, status code: %d", res.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return stats, err
 	}
+
+	// Since podman 4.1.1, an empty 200 response is returned for stopped containers.
+	if len(body) == 0 {
+		return stats, ContainerNotFound
+	}
+
 	err = json.Unmarshal(body, &stats)
 	if err != nil {
 		return stats, err

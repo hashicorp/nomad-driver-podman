@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -65,14 +65,14 @@ func (c *API) ExecCreate(ctx context.Context, name string, config ExecConfig) (s
 		return "", err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusCreated {
-		body, _ := ioutil.ReadAll(res.Body)
-		return "", fmt.Errorf("unknown error, status code: %d: %s", res.StatusCode, body)
+		body, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("cannot create exec session, status code: %d: %s", res.StatusCode, body)
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", err
 	}

@@ -17,7 +17,7 @@ func (c *API) ContainerStop(ctx context.Context, name string, timeout int, ignor
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
 		return ContainerNotFound
@@ -26,5 +26,5 @@ func (c *API) ContainerStop(ctx context.Context, name string, timeout int, ignor
 	if res.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+	return fmt.Errorf("cannot stop container, status code: %d", res.StatusCode)
 }

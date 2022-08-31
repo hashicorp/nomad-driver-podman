@@ -1,50 +1,90 @@
 name: build
 
-on: 
-  pull_request:
-    branches:
-      - main
+on:
+  push:
   workflow_dispatch:
+  workflow_call:
 
 env:
-  ARCHIVE_DIR: /tmp
+  PKG_NAME: "nomad-driver-podman"
 
 jobs:
-  build:
-
+  get-go-version:
+    name: "Determine Go toolchain version"
     runs-on: ubuntu-20.04
+    outputs:
+      go-version: ${{ steps.get-go-version.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Determine Go version
+        id: get-go-version
+        run: |
+          echo "Building with Go $(cat .go-version)"
+          echo "::set-output name=go-version::$(cat .go-version)"
+
+  get-product-version:
+    runs-on: ubuntu-20.04
+    outputs:
+      product-version: ${{ steps.get-product-version.outputs.product-version }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: get product version
+        id: get-product-version
+        run: |
+          make version
+          echo "::set-output name=product-version::$(make version)"
+
+  generate-metadata-file:
+    needs: get-product-version
+    runs-on: ubuntu-20.04
+    outputs:
+      filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
+    steps:
+      - name: "Checkout directory"
+        uses: actions/checkout@v2
+      - name: Generate metadata file
+        id: generate-metadata-file
+        uses: hashicorp/actions-generate-metadata@v1
+        with:
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          product: ${{ env.PKG_NAME }}
+          repositoryOwner: "hashicorp"
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: metadata.json
+          path: ${{ steps.generate-metadata-file.outputs.filepath }}
+
+  build-linux:
+    needs:
+      - get-go-version
+      - get-product-version
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        goos: ["linux"]
+        goarch: ["amd64", "arm64", "arm"]
+      fail-fast: true
+
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
 
     steps:
-    - uses: actions/checkout@v1
-
-    - name: Show go version
-      run: go version
-
-    - name: Install deps
-      run: make deps
-
-    - name: Lint
-      run: make check
-
-    - name: Prepare machine
-      run: sudo bash -e .github/machinesetup.sh
-
-    - name: Compile driver
-      run: sudo -E ./build.sh
-
-    - name: Archive production artifacts
-      uses: actions/upload-artifact@v1
-      with:
-        name: nomad-driver-podman
-        path: nomad-driver-podman
-
-    - name: Produce oci and docker archives
-      run: sudo podman pull alpine:latest && sudo podman save --format docker-archive --output $ARCHIVE_DIR/docker-archive alpine:latest && sudo podman save --format oci-archive --output $ARCHIVE_DIR/oci-archive alpine:latest && sudo podman image rm alpine:latest
-
-    - name: Test
-      run: sudo -E GOPATH=$PWD/build CI=1 build/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api
-    - name: Archive test result
-      uses: actions/upload-artifact@v1
-      with:
-        name: test-result
-        path: build/test/result.xml
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ needs.get-go-version.outputs.go-version }}
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          mv \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip

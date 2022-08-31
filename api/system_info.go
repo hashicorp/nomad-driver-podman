@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -18,12 +18,12 @@ func (c *API) SystemInfo(ctx context.Context) (Info, error) {
 		return infoData, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusOK {
-		return infoData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return infoData, fmt.Errorf("cannot fetch Podman system info, status code: %d", res.StatusCode)
 	}
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return infoData, err
 	}

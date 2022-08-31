@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -18,16 +18,16 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 		return inspectData, err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
 		return inspectData, ContainerNotFound
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return inspectData, fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return inspectData, fmt.Errorf("cannot inspect container, status code: %d", res.StatusCode)
 	}
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return inspectData, err
 	}

@@ -37,27 +37,35 @@ var (
 		// disable_log_collection indicates whether nomad should collect logs of podman
 		// task containers.  If true, logs are not forwarded to nomad.
 		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
+		"client_http_timeout":    hclspec.NewAttr("client_http_timeout", "string", false),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"args": hclspec.NewAttr("args", "list(string)", false),
+		"apparmor_profile": hclspec.NewAttr("apparmor_profile", "string", false),
+		"args":             hclspec.NewAttr("args", "list(string)", false),
 		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
 		})),
-		"command":     hclspec.NewAttr("command", "string", false),
-		"cap_add":     hclspec.NewAttr("cap_add", "list(string)", false),
-		"cap_drop":    hclspec.NewAttr("cap_drop", "list(string)", false),
-		"devices":     hclspec.NewAttr("devices", "list(string)", false),
-		"entrypoint":  hclspec.NewAttr("entrypoint", "string", false),
-		"working_dir": hclspec.NewAttr("working_dir", "string", false),
-		"hostname":    hclspec.NewAttr("hostname", "string", false),
-		"image":       hclspec.NewAttr("image", "string", true),
-		"init":        hclspec.NewAttr("init", "bool", false),
-		"init_path":   hclspec.NewAttr("init_path", "string", false),
-		"labels":      hclspec.NewAttr("labels", "list(map(string))", false),
+		"command":        hclspec.NewAttr("command", "string", false),
+		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
+		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
+		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
+		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
+		"devices":        hclspec.NewAttr("devices", "list(string)", false),
+		"entrypoint":     hclspec.NewAttr("entrypoint", "string", false),
+		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
+		"hostname":       hclspec.NewAttr("hostname", "string", false),
+		"image":          hclspec.NewAttr("image", "string", true),
+		"image_pull_timeout": hclspec.NewDefault(
+			hclspec.NewAttr("image_pull_timeout", "string", false),
+			hclspec.NewLiteral(`"5m"`),
+		),
+		"init":      hclspec.NewAttr("init", "bool", false),
+		"init_path": hclspec.NewAttr("init_path", "string", false),
+		"labels":    hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
 			"options": hclspec.NewAttr("options", "list(map(string))", false),
@@ -72,8 +80,10 @@ var (
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
+		"ulimit":             hclspec.NewAttr("ulimit", "list(map(string))", false),
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
+		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
 	})
 )
 
@@ -107,10 +117,12 @@ type PluginConfig struct {
 	RecoverStopped       bool         `codec:"recover_stopped"`
 	DisableLogCollection bool         `codec:"disable_log_collection"`
 	SocketPath           string       `codec:"socket_path"`
+	ClientHttpTimeout    string       `codec:"client_http_timeout"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
+	ApparmorProfile   string             `codec:"apparmor_profile"`
 	Args              []string           `codec:"args"`
 	Auth              AuthConfig         `codec:"auth"`
 	Ports             []string           `codec:"ports"`
@@ -124,17 +136,22 @@ type TaskConfig struct {
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
+	ImagePullTimeout  string             `codec:"image_pull_timeout"`
 	InitPath          string             `codec:"init_path"`
 	Logging           LoggingConfig      `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
+	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
+	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
+	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
 	ForcePull         bool               `codec:"force_pull"`
 	Privileged        bool               `codec:"privileged"`
+	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
 }

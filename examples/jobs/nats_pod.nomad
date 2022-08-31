@@ -28,7 +28,7 @@ job "nats" {
       // run the pause container before
       // the main workload and other sidecars
       lifecycle {
-        hook = "prestart"
+        hook    = "prestart"
         sidecar = "true"
       }
 
@@ -38,8 +38,8 @@ job "nats" {
         // the "pod" task must define the complete network
         // port mapping here
         ports = [
-            "server",
-            "exporter"
+          "server",
+          "exporter"
         ]
       }
     }
@@ -53,7 +53,7 @@ job "nats" {
       template {
         change_mode = "noop"
         destination = "local/nats-server.conf"
-        data = file("./templates/nats-server.conf.tpl")
+        data        = file("./templates/nats-server.conf.tpl")
       }
 
       config {
@@ -76,7 +76,7 @@ job "nats" {
 
       // ensure to start the exporter _after_ the server
       lifecycle {
-        hook = "poststart"
+        hook    = "poststart"
         sidecar = "true"
       }
 

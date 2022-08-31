@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -103,6 +105,9 @@ type Driver struct {
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
 	cgroupV2 bool
+
+	// singleflight group to prevent parallel image downloads
+	pullGroup singleflight.Group
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -163,6 +168,14 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		clientConfig.SocketPath = pluginConfig.SocketPath
 	}
 
+	if pluginConfig.ClientHttpTimeout != "" {
+		t, err := time.ParseDuration(pluginConfig.ClientHttpTimeout)
+		if err != nil {
+			return err
+		}
+		clientConfig.HttpTimeout = t
+	}
+
 	d.podman = api.NewClient(d.logger, clientConfig)
 	return nil
 }
@@ -210,38 +223,51 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 }
 
 func (d *Driver) buildFingerprint() *drivers.Fingerprint {
-	var health drivers.HealthState
-	var desc string
 	attrs := map[string]*pstructs.Attribute{}
 
-	// be negative and guess that we will not be able to get a podman connection
-	health = drivers.HealthStateUndetected
-	desc = "disabled"
-
-	// try to connect and get version info
-	info, err := d.podman.SystemInfo(d.ctx)
-	if err != nil {
-		d.logger.Error("Could not get podman info", "error", err)
-	} else {
-		// yay! we can enable the driver
-		health = drivers.HealthStateHealthy
-		desc = "ready"
-		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-		attrs["driver.podman.version"] = pstructs.NewStringAttribute(info.Version.Version)
-		attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
-		attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
-		if d.systemInfo.Version.Version == "" {
-			// keep first received systemInfo in driver struct
-			// it is used to toggle cgroup v1/v2, rootless/rootful behavior
-			d.systemInfo = info
-			d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+	// Ping podman api
+	apiVersion, err := d.podman.Ping(d.ctx)
+	if err != nil || apiVersion == "" {
+		// not reachable?
+		// deactivate driver, forget podman details
+		d.systemInfo = api.Info{}
+		d.logger.Error("Could not get podman version", "error", err)
+		return &drivers.Fingerprint{
+			Attributes:        attrs,
+			Health:            drivers.HealthStateUndetected,
+			HealthDescription: "disabled",
 		}
 	}
 
+	// do we already know details about podman or is the version different?
+	if d.systemInfo.Version.APIVersion != apiVersion {
+		// no? then fetch and cache it
+		// try to connect and get version info
+		info, err := d.podman.SystemInfo(d.ctx)
+		if err != nil {
+			d.logger.Error("Could not get podman info", "error", err)
+			return &drivers.Fingerprint{
+				Attributes:        attrs,
+				Health:            drivers.HealthStateUndetected,
+				HealthDescription: "disabled",
+			}
+		}
+
+		// keep first received systemInfo in driver struct
+		// it is used to toggle cgroup v1/v2, rootless/rootful behavior
+		d.systemInfo = info
+		d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+	}
+
+	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+	attrs["driver.podman.version"] = pstructs.NewStringAttribute(apiVersion)
+	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
+	attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
+
 	return &drivers.Fingerprint{
 		Attributes:        attrs,
-		Health:            health,
-		HealthDescription: desc,
+		Health:            drivers.HealthStateHealthy,
+		HealthDescription: "ready",
 	}
 }
 
@@ -332,7 +358,7 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 	return BuildContainerNameForTask(cfg.Name, cfg)
 }
 
-// BuildContainerName returns the podman container name for a specific Task in our group
+// BuildContainerNameForTask returns the podman container name for a specific Task in our group
 func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string {
 	return fmt.Sprintf("%s-%s", taskName, cfg.AllocID)
 }
@@ -359,7 +385,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
-	allArgs := []string{}
+	var allArgs []string
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
 	}
@@ -387,6 +413,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
 		// Only modify container loggin path if LogCollection is not disabled
 		if !d.config.DisableLogCollection {
+			createOpts.LogConfiguration.Driver = "k8s-file"
+
 			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 		}
 	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
@@ -417,6 +445,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		CPU:    &spec.LinuxCPU{},
 	}
 
+	err = setCPUResources(driverConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
 	if err != nil {
 		return nil, nil, err
@@ -442,11 +475,19 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
 
+	ulimits, err := sliceMergeUlimit(driverConfig.Ulimit)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse ulimit configuration: %v", err)
+	}
+	createOpts.ContainerResourceConfig.Rlimits = ulimits
+
 	// Security config options
 	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
 	createOpts.ContainerSecurityConfig.User = cfg.User
 	createOpts.ContainerSecurityConfig.Privileged = driverConfig.Privileged
+	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs
+	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
 
 	// Network config options
 	if cfg.DNS != nil {
@@ -530,7 +571,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, cfg)
+		imagePullTimeout, err := time.ParseDuration(driverConfig.ImagePullTimeout)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", err)
+		}
+
+		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
 		}
@@ -585,7 +631,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
 	}
 
-	net := &drivers.DriverNetwork{
+	driverNet := &drivers.DriverNetwork{
 		PortMap:       driverConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
@@ -596,7 +642,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		TaskConfig:  cfg,
 		LogStreamer: h.logStreamer,
 		StartedAt:   h.startedAt,
-		Net:         net,
+		Net:         driverNet,
 	}
 
 	if err := handle.SetDriverState(&driverState); err != nil {
@@ -611,7 +657,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
-	return handle, net, nil
+	return handle, driverNet, nil
 }
 
 func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
@@ -642,6 +688,34 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 	return nil, reserved, nil
 }
 
+func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
+	if !cfg.CPUHardLimit {
+		return nil
+	}
+
+	period := cfg.CPUCFSPeriod
+	if period > 1000000 {
+		return fmt.Errorf("invalid value for cpu_cfs_period, %d is bigger than 1000000", period)
+	}
+	if period == 0 {
+		period = 100000 // matches cgroup default
+	}
+	if period < 1000 {
+		period = 1000
+	}
+
+	numCores := runtime.NumCPU()
+	quota := int64(systemResources.PercentTicks*float64(period)) * int64(numCores)
+	if quota < 1000 {
+		quota = 1000
+	}
+
+	taskCPU.Period = &period
+	taskCPU.Quota = &quota
+
+	return nil
+}
+
 func memoryInBytes(strmem string) (int64, error) {
 	l := len(strmem)
 	if l < 2 {
@@ -666,9 +740,44 @@ func memoryInBytes(strmem string) (int64, error) {
 	}
 }
 
+func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) {
+	var ulimits []spec.POSIXRlimit
+
+	for name, ulimitRaw := range ulimitsRaw {
+		if len(ulimitRaw) == 0 {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed ulimit specification %v: %q, cannot be empty", name, ulimitRaw)
+		}
+		// hard limit is optional
+		if !strings.Contains(ulimitRaw, ":") {
+			ulimitRaw = ulimitRaw + ":" + ulimitRaw
+		}
+
+		splitted := strings.SplitN(ulimitRaw, ":", 2)
+		if len(splitted) < 2 {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed ulimit specification %v: %v", name, ulimitRaw)
+		}
+		soft, err := strconv.Atoi(splitted[0])
+		if err != nil {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed soft ulimit %v: %v", name, ulimitRaw)
+		}
+		hard, err := strconv.Atoi(splitted[1])
+		if err != nil {
+			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed hard ulimit %v: %v", name, ulimitRaw)
+		}
+
+		ulimit := spec.POSIXRlimit{
+			Type: name,
+			Soft: uint64(soft),
+			Hard: uint64(hard),
+		}
+		ulimits = append(ulimits, ulimit)
+	}
+	return ulimits, nil
+}
+
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg *drivers.TaskConfig) (string, error) {
+func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, imagePullTimeout time.Duration, cfg *drivers.TaskConfig) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -688,8 +797,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 			archiveData := imageRef.StringWithinTransport()
 			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
-			//nolint // ignore returned error, can't react in a good way
-			d.eventer.EmitEvent(&drivers.TaskEvent{
+			_ = d.eventer.EmitEvent(&drivers.TaskEvent{
 				TaskID:    cfg.ID,
 				TaskName:  cfg.Name,
 				AllocID:   cfg.AllocID,
@@ -715,8 +823,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 	}
 
 	d.logger.Info("Pulling image", "image", imageName)
-	//nolint // ignore returned error, can't react in a good way
-	d.eventer.EmitEvent(&drivers.TaskEvent{
+	_ = d.eventer.EmitEvent(&drivers.TaskEvent{
 		TaskID:    cfg.ID,
 		TaskName:  cfg.Name,
 		AllocID:   cfg.AllocID,
@@ -727,9 +834,21 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, cfg
 		Username: auth.Username,
 		Password: auth.Password,
 	}
-	if imageID, err = d.podman.ImagePull(d.ctx, imageName, imageAuth); err != nil {
-		return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+
+	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
+
+		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
+		defer cancel()
+
+		if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
+			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
+		}
+		return imageID, nil
+	})
+	if err != nil {
+		return "", err
 	}
+	imageID = result.(string)
 	d.logger.Debug("Pulled image ID", "imageID", imageID)
 	return imageID, nil
 }
@@ -953,7 +1072,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 	return execResult, nil
 }
 
-// ExecTask function is used by the Nomad client to execute commands inside the task execution context.
+// ExecTaskStreaming function is used by the Nomad client to execute commands inside the task execution context.
 // i.E. nomad alloc exec ....
 func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptions *drivers.ExecOptions) (*drivers.ExitResult, error) {
 	handle, ok := d.tasks.Get(taskID)
@@ -1004,7 +1123,7 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
-	binds := []spec.Mount{}
+	var binds []spec.Mount
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
 	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
@@ -1043,6 +1162,19 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 
 		if mode != "" {
 			bind.Options = append(bind.Options, strings.Split(mode, ",")...)
+		}
+		binds = append(binds, bind)
+	}
+
+	// create binds for host volumes, CSI plugins, and CSI volumes
+	for _, m := range task.Mounts {
+		bind := spec.Mount{
+			Type:        "bind",
+			Destination: m.TaskPath,
+			Source:      m.HostPath,
+		}
+		if m.Readonly {
+			bind.Options = append(bind.Options, "ro")
 		}
 		binds = append(binds, bind)
 	}
@@ -1105,7 +1237,7 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 	} else if len(driverCfg.PortMap) > 0 {
 		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
-		allPorts := []nstructs.Port{}
+		var allPorts []nstructs.Port
 		allPorts = append(allPorts, network.ReservedPorts...)
 		allPorts = append(allPorts, network.DynamicPorts...)
 

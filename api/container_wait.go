@@ -15,10 +15,10 @@ func (c *API) ContainerWait(ctx context.Context, name string, conditions []strin
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusOK {
 		return nil
 	}
-	return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+	return fmt.Errorf("cannot wait for container, status code: %d", res.StatusCode)
 }

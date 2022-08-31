@@ -7,8 +7,8 @@ apt-get update
 apt-get install -y ca-certificates
 
 # add podman repository
-echo "deb https://downloadcontent.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-curl -L https://downloadcontent.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/Release.key | apt-key add -
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/Release.key | apt-key add -
 
 # Ignore apt-get update errors to avoid failing due to misbehaving repo;
 # true errors would fail in the apt-get install phase

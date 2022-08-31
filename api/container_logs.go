@@ -19,11 +19,11 @@ func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, s
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unknown error, status code: %d", res.StatusCode)
+		return fmt.Errorf("cannot get logs from container, status code: %d", res.StatusCode)
 	}
 
 	defer func() {
-		res.Body.Close()
+		ignoreClose(res.Body)
 		c.logger.Debug("Stopped log stream", "container", name)
 	}()
 	buffer := make([]byte, 1024)
@@ -44,14 +44,14 @@ func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, s
 
 		switch fd {
 		case 0:
-			stdout.Write(frame)
-			stdout.Write([]byte("\n"))
+			_, _ = stdout.Write(frame)
+			_, _ = stdout.Write([]byte("\n"))
 		case 1:
-			stdout.Write(frame)
-			stdout.Write([]byte("\n"))
+			_, _ = stdout.Write(frame)
+			_, _ = stdout.Write([]byte("\n"))
 		case 2:
-			stderr.Write(frame)
-			stderr.Write([]byte("\n"))
+			_, _ = stderr.Write(frame)
+			_, _ = stderr.Write([]byte("\n"))
 		case 3:
 			return fmt.Errorf("Error from log service: %s", string(frame))
 		default:

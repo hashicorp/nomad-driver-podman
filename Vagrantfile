@@ -24,7 +24,9 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell" do |p|
     p.privileged = false
     p.inline = <<-SHELL
-      go_version=1.17.9
+
+      go_version=$(cat /home/vagrant/nomad-driver-podman/.go-version)
+
       if [ ! -f /usr/local/go/bin/go ]; then
         curl -sSL -o go.tgz "https://dl.google.com/go/go${go_version}.linux-amd64.tar.gz"
         sudo tar -C /usr/local -xzf go.tgz

@@ -39,10 +39,10 @@ func DefaultClientConfig() ClientConfig {
 	uid := os.Getuid()
 	// are we root?
 	if uid == 0 {
-		cfg.SocketPath = "unix:/run/podman/podman.sock"
+		cfg.SocketPath = "unix:///run/podman/podman.sock"
 	} else {
 		// not? then let's try the default per-user socket location
-		cfg.SocketPath = fmt.Sprintf("unix:/run/user/%d/podman/podman.sock", uid)
+		cfg.SocketPath = fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid)
 	}
 	return cfg
 }
@@ -128,4 +128,8 @@ func NewAuthHeader(auth ImageAuthConfig) (string, error) {
 	}
 	header := base64.StdEncoding.EncodeToString(jsonBytes)
 	return header, nil
+}
+
+func ignoreClose(c io.Closer) {
+	_ = c.Close()
 }

@@ -1,11 +1,33 @@
 ## UNRELEASED
 
 FEATURES:
+
+* config: Set custom apparmor profile or disable apparmor. [[GH-188](https://github.com/hashicorp/nomad-driver-podman/pull/188)]
+
+IMPROVEMENTS:
+
+* perf: Use ping api instead of system info for fingerprinting [[GH-186](https://github.com/hashicorp/nomad-driver-podman/pull/186)]
+* runtime: Prevent concurrent image pulls of same imageRef [[GH-159](https://github.com/hashicorp/nomad-driver-podman/pull/159)]
+
+## 0.4.0 (July 14, 2022)
+
+FEATURES:
+
 * config: Map host devices into container. [[GH-41](https://github.com/hashicorp/nomad-driver-podman/pull/41)]
 * config: Stream logs via API, support journald log driver. [[GH-99](https://github.com/hashicorp/nomad-driver-podman/pull/99)]
-* config: Privileged containers.
+* config: Privileged containers. [[GH-137](https://github.com/hashicorp/nomad-driver-podman/pull/137)]
+* config: Add `cpu_hard_limit` and `cpu_cfs_period` options [[GH-149](https://github.com/hashicorp/nomad-driver-podman/pull/149)]
+* config: Allow mounting rootfs as read-only. [[GH-133](https://github.com/hashicorp/nomad-driver-podman/pull/133)]
+* config: Allow setting `ulimit` configuration. [[GH-166](https://github.com/hashicorp/nomad-driver-podman/pull/166)]
+* config: Allow setting `image_pull_timeout` and `client_http_timeout ` [[GH-131](https://github.com/hashicorp/nomad-driver-podman/pull/131)]
+* runtime: Add support for host and CSI volumes and using podman tasks as CSI plugins [[GH-169](https://github.com/hashicorp/nomad-driver-podman/pull/169)][[GH-152](https://github.com/hashicorp/nomad-driver-podman/pull/152)]
+
+IMPROVEMENTS:
+
+* log: Improve log messages on errors. [[GH-177](https://github.com/hashicorp/nomad-driver-podman/pull/177)]
 
 BUG FIXES:
+
 * log: Use error key context to log errors rather than Go err style. [[GH-126](https://github.com/hashicorp/nomad-driver-podman/pull/126)]
 * telemetry: respect telemetry.collection_interval to reduce cpu churn when running many containers [[GH-130](https://github.com/hashicorp/nomad-driver-podman/pull/130)]
 
