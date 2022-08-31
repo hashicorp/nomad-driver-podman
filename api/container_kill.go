@@ -14,7 +14,7 @@ func (c *API) ContainerKill(ctx context.Context, name string, signal string) err
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNoContent {
 		return nil

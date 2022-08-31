@@ -57,7 +57,7 @@ func (c *API) attachHandleResize(ctx context.Context, resizeChannel <-chan drive
 	}
 }
 
-// ExecStartAndAttach starts and attaches to a given exec session.
+// ExecStart starts and attaches to a given exec session.
 func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStartRequest) error {
 	client := new(http.Client)
 	*client = *c.httpClient
@@ -102,7 +102,7 @@ func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStart
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 	if res.StatusCode != http.StatusOK {
 		return err
 	}

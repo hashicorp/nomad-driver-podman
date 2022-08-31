@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -29,9 +28,9 @@ func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthC
 		return "", err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 	if res.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(res.Body)
+		body, _ := io.ReadAll(res.Body)
 		return "", fmt.Errorf("cannot pull image, status code: %d: %s", res.StatusCode, body)
 	}
 

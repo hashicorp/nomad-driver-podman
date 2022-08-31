@@ -226,8 +226,8 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	attrs := map[string]*pstructs.Attribute{}
 
 	// Ping podman api
-	version, err := d.podman.Ping(d.ctx)
-	if err != nil || version == "" {
+	apiVersion, err := d.podman.Ping(d.ctx)
+	if err != nil || apiVersion == "" {
 		// not reachable?
 		// deactivate driver, forget podman details
 		d.systemInfo = api.Info{}
@@ -240,7 +240,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	}
 
 	// do we already know details about podman or is the version different?
-	if d.systemInfo.Version.APIVersion != version {
+	if d.systemInfo.Version.APIVersion != apiVersion {
 		// no? then fetch and cache it
 		// try to connect and get version info
 		info, err := d.podman.SystemInfo(d.ctx)
@@ -260,7 +260,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	}
 
 	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-	attrs["driver.podman.version"] = pstructs.NewStringAttribute(version)
+	attrs["driver.podman.version"] = pstructs.NewStringAttribute(apiVersion)
 	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
 	attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
 
@@ -358,7 +358,7 @@ func BuildContainerName(cfg *drivers.TaskConfig) string {
 	return BuildContainerNameForTask(cfg.Name, cfg)
 }
 
-// BuildContainerName returns the podman container name for a specific Task in our group
+// BuildContainerNameForTask returns the podman container name for a specific Task in our group
 func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string {
 	return fmt.Sprintf("%s-%s", taskName, cfg.AllocID)
 }
@@ -385,7 +385,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
-	allArgs := []string{}
+	var allArgs []string
 	if driverConfig.Command != "" {
 		allArgs = append(allArgs, driverConfig.Command)
 	}
@@ -630,7 +630,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
 	}
 
-	net := &drivers.DriverNetwork{
+	driverNet := &drivers.DriverNetwork{
 		PortMap:       driverConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
@@ -641,7 +641,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		TaskConfig:  cfg,
 		LogStreamer: h.logStreamer,
 		StartedAt:   h.startedAt,
-		Net:         net,
+		Net:         driverNet,
 	}
 
 	if err := handle.SetDriverState(&driverState); err != nil {
@@ -656,7 +656,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
-	return handle, net, nil
+	return handle, driverNet, nil
 }
 
 func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
@@ -796,8 +796,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 			archiveData := imageRef.StringWithinTransport()
 			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
-			//nolint // ignore returned error, can't react in a good way
-			d.eventer.EmitEvent(&drivers.TaskEvent{
+			_ = d.eventer.EmitEvent(&drivers.TaskEvent{
 				TaskID:    cfg.ID,
 				TaskName:  cfg.Name,
 				AllocID:   cfg.AllocID,
@@ -823,8 +822,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 	}
 
 	d.logger.Info("Pulling image", "image", imageName)
-	//nolint // ignore returned error, can't react in a good way
-	d.eventer.EmitEvent(&drivers.TaskEvent{
+	_ = d.eventer.EmitEvent(&drivers.TaskEvent{
 		TaskID:    cfg.ID,
 		TaskName:  cfg.Name,
 		AllocID:   cfg.AllocID,
@@ -1073,7 +1071,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 	return execResult, nil
 }
 
-// ExecTask function is used by the Nomad client to execute commands inside the task execution context.
+// ExecTaskStreaming function is used by the Nomad client to execute commands inside the task execution context.
 // i.E. nomad alloc exec ....
 func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptions *drivers.ExecOptions) (*drivers.ExitResult, error) {
 	handle, ok := d.tasks.Get(taskID)
@@ -1124,7 +1122,7 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
-	binds := []spec.Mount{}
+	var binds []spec.Mount
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
 	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
@@ -1238,7 +1236,7 @@ func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig)
 	} else if len(driverCfg.PortMap) > 0 {
 		// DEPRECATED: This style of PortMapping was Deprecated in Nomad 0.12
 		network := taskCfg.Resources.NomadResources.Networks[0]
-		allPorts := []nstructs.Port{}
+		var allPorts []nstructs.Port
 		allPorts = append(allPorts, network.ReservedPorts...)
 		allPorts = append(allPorts, network.DynamicPorts...)
 

@@ -129,3 +129,7 @@ func NewAuthHeader(auth ImageAuthConfig) (string, error) {
 	header := base64.StdEncoding.EncodeToString(jsonBytes)
 	return header, nil
 }
+
+func ignoreClose(c io.Closer) {
+	_ = c.Close()
+}

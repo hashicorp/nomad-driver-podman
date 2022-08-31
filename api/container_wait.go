@@ -15,7 +15,7 @@ func (c *API) ContainerWait(ctx context.Context, name string, conditions []strin
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusOK {
 		return nil

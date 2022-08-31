@@ -15,7 +15,7 @@ func (c *API) Ping(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("cannot ping Podman api, status code: %d", res.StatusCode)

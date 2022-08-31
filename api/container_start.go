@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 )
@@ -16,10 +16,10 @@ func (c *API) ContainerStart(ctx context.Context, name string) error {
 		return err
 	}
 
-	defer res.Body.Close()
+	defer ignoreClose(res.Body)
 
 	if res.StatusCode != http.StatusNoContent {
-		body, _ := ioutil.ReadAll(res.Body)
+		body, _ := io.ReadAll(res.Body)
 		return fmt.Errorf("cannot start container, status code: %d: %s", res.StatusCode, body)
 	}
 
