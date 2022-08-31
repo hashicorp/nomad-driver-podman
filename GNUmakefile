@@ -2,6 +2,12 @@ SHELL = bash
 
 GOPATH := $(shell go env GOPATH | cut -d: -f1)
 
+# Respect $GOBIN if set in environment or via $GOENV file.
+BIN := $(shell go env GOBIN)
+ifndef BIN
+BIN := $(GOPATH)/bin
+endif
+
 default: help
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
@@ -22,9 +28,9 @@ changelogfmt: ## Format changelog GitHub links
 .PHONY: check
 check: deps hclfmt ## Lint the source code
 	@echo "==> Linting source code ..."
-	@$(GOPATH)/bin/golangci-lint run
+	@$(BIN)/golangci-lint run
 	@echo "==> vetting hc-log statements"
-	@$(GOPATH)/bin/hclogvet $(CURDIR)
+	@$(BIN)/hclogvet $(CURDIR)
 
 .PHONY: hclfmt
 hclfmt: ## Format HCL files with hclfmt
@@ -37,8 +43,8 @@ hclfmt: ## Format HCL files with hclfmt
 .PHONY: deps
 deps: ## Install build dependencies
 	@echo "==> Installing build dependencies ..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.2
-	go install github.com/hashicorp/go-hclog/hclogvet@main
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.48.0
+	go install github.com/hashicorp/go-hclog/hclogvet@v0.1.5
 	go install gotest.tools/gotestsum@v1.8.0
 	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 
