@@ -386,7 +386,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts := api.SpecGenerator{
 		ContainerCgroupConfig: api.ContainerCgroupConfig{
 			CgroupNS: api.Namespace{
-				NSMode: "host",
+				NSMode: "path",
 				Value:  "",
 			},
 			CgroupsMode:  "enabled",
