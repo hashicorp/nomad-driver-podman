@@ -383,7 +383,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
-	createOpts := api.SpecGenerator{}
+	createOpts := api.SpecGenerator{
+		ContainerCgroupConfig: api.ContainerCgroupConfig{
+			CgroupNS: api.Namespace{
+				NSMode: "path",
+				Value:  "nomad.slice",
+			},
+			CgroupsMode: "",
+			// CgroupParent: "nomad.slice",
+		},
+	}
+
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
 	var allArgs []string
 	if driverConfig.Command != "" {
