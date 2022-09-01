@@ -385,13 +385,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	scope := fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)
 	createOpts := api.SpecGenerator{
+		ContainerBasicConfig: api.ContainerBasicConfig{
+			Name: scope,
+		},
 		ContainerCgroupConfig: api.ContainerCgroupConfig{
 			CgroupNS: api.Namespace{
 				NSMode: "path",
 				Value:  "/sys/fs/cgroup/nomad.slice",
 			},
-			CgroupsMode:  "enabled",
-			CgroupParent: scope,
+			CgroupsMode: "enabled",
+			// CgroupParent: scope,
 		},
 	}
 
