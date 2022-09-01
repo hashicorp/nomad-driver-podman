@@ -383,14 +383,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
+	scope := fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)
 	createOpts := api.SpecGenerator{
 		ContainerCgroupConfig: api.ContainerCgroupConfig{
 			CgroupNS: api.Namespace{
 				NSMode: "path",
-				Value:  "",
+				Value:  "/sys/fs/cgroup/nomad.slice",
 			},
 			CgroupsMode:  "enabled",
-			CgroupParent: filepath.Join("/sys/fs/cgroup/nomad.slice", fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)),
+			CgroupParent: scope,
 		},
 	}
 
