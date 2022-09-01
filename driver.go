@@ -386,11 +386,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts := api.SpecGenerator{
 		ContainerCgroupConfig: api.ContainerCgroupConfig{
 			CgroupNS: api.Namespace{
-				NSMode: "path",
-				Value:  filepath.Join("/sys/fs/cgroup/nomad.slice", fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)),
+				NSMode: "host",
+				Value:  "",
 			},
-			CgroupsMode: "",
-			// CgroupParent: "nomad.slice",
+			CgroupsMode:  "enabled",
+			CgroupParent: filepath.Join("/sys/fs/cgroup/nomad.slice", fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)),
 		},
 	}
 
