@@ -387,7 +387,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		ContainerCgroupConfig: api.ContainerCgroupConfig{
 			CgroupNS: api.Namespace{
 				NSMode: "path",
-				Value:  "/sys/fs/cgroup/nomad.slice",
+				Value:  filepath.Join("/sys/fs/cgroup/nomad.slice", fmt.Sprintf("%s.%s.scope", cfg.AllocID, cfg.Name)),
 			},
 			CgroupsMode: "",
 			// CgroupParent: "nomad.slice",
