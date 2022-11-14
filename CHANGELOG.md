@@ -6,6 +6,7 @@ FEATURES:
 
 IMPROVEMENTS:
 
+* config: Add `selinux_opts` option [[GH-139](https://github.com/hashicorp/nomad-driver-podman/pull/139)]
 * perf: Use ping api instead of system info for fingerprinting [[GH-186](https://github.com/hashicorp/nomad-driver-podman/pull/186)]
 * runtime: Prevent concurrent image pulls of same imageRef [[GH-159](https://github.com/hashicorp/nomad-driver-podman/pull/159)]
 
