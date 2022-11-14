@@ -1341,8 +1341,12 @@ func TestPodmanDriver_DefaultProcessLabel(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	inspectData := startDestroyInspect(t, taskCfg, "defaultprocesslabel")
 
-	// a default container gets "disable" process label
-	require.Contains(t, inspectData.ProcessLabel, "label=disable")
+	// TODO: skip SELinux check in CI since it's not supported yet.
+	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
+	if !tu.IsCI() {
+		// a default container gets "disable" process label
+		require.Contains(t, inspectData.ProcessLabel, "label=disable")
+	}
 }
 
 // check modified capabilities (CapAdd/CapDrop/SelinuxOpts)
@@ -1367,8 +1371,13 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	require.Contains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
 	// we dropped CAP_CHOWN, so we should NOT see it in inspect
 	require.NotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
-	// we added "disable" process label, so we should see it in inspect
-	require.Contains(t, inspectData.ProcessLabel, "label=disable")
+
+	// TODO: skip SELinux check in CI since it's not supported yet.
+	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
+	if !tu.IsCI() {
+		// we added "disable" process label, so we should see it in inspect
+		require.Contains(t, inspectData.ProcessLabel, "label=disable")
+	}
 }
 
 // check enabled tty option
