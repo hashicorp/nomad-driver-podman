@@ -1180,7 +1180,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		binds = append(binds, bind)
 	}
 
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" {
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
 		// Apply SELinux Label to each volume
 		for i := range binds {
 			binds[i].Options = append(binds[i].Options, selinuxLabel)

@@ -12,6 +12,7 @@ IMPROVEMENTS:
 
 BUG FIXES:
 
+* runtime: Don't apply SELinux labels to volumes of privileged containers [[GH-196](https://github.com/hashicorp/nomad-driver-podman/pull/196)]
 * runtime: Fixed a bug caused by a Podman API change that prevented the task driver to detect stopped containers [[GH-183](https://github.com/hashicorp/nomad-driver-podman/pull/183)]
 
 ## 0.4.0 (July 14, 2022)
