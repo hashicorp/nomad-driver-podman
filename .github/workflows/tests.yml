@@ -36,7 +36,7 @@ jobs:
         sudo podman save --format oci-archive --output $ARCHIVE_DIR/oci-archive alpine:latest
         sudo podman image rm alpine:latest
     - name: Run Tests
-      run: sudo -E GOPATH=$PWD/build CI=1 /home/runner/go/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api
+      run: sudo -E GOPATH=$PWD/build CI=1 env PATH="$PATH" /home/runner/go/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api
     - name: Archive test result
       uses: actions/upload-artifact@v1
       with:
