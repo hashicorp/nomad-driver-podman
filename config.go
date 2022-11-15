@@ -52,6 +52,7 @@ var (
 		"command":        hclspec.NewAttr("command", "string", false),
 		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
+		"selinux_opts":   hclspec.NewAttr("selinux_opts", "list(string)", false),
 		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
 		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
@@ -130,6 +131,7 @@ type TaskConfig struct {
 	Volumes           []string           `codec:"volumes"`
 	CapAdd            []string           `codec:"cap_add"`
 	CapDrop           []string           `codec:"cap_drop"`
+	SelinuxOpts       []string           `codec:"selinux_opts"`
 	Command           string             `codec:"command"`
 	Devices           []string           `codec:"devices"`
 	Entrypoint        string             `codec:"entrypoint"`

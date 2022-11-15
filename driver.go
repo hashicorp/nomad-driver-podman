@@ -484,6 +484,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// Security config options
 	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
+	createOpts.ContainerSecurityConfig.SelinuxOpts = driverConfig.SelinuxOpts
 	createOpts.ContainerSecurityConfig.User = cfg.User
 	createOpts.ContainerSecurityConfig.Privileged = driverConfig.Privileged
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs

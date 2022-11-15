@@ -6,8 +6,13 @@ FEATURES:
 
 IMPROVEMENTS:
 
+* config: Add `selinux_opts` option [[GH-139](https://github.com/hashicorp/nomad-driver-podman/pull/139)]
 * perf: Use ping api instead of system info for fingerprinting [[GH-186](https://github.com/hashicorp/nomad-driver-podman/pull/186)]
 * runtime: Prevent concurrent image pulls of same imageRef [[GH-159](https://github.com/hashicorp/nomad-driver-podman/pull/159)]
+
+BUG FIXES:
+
+* runtime: Fixed a bug caused by a Podman API change that prevented the task driver to detect stopped containers [[GH-183](https://github.com/hashicorp/nomad-driver-podman/pull/183)]
 
 ## 0.4.0 (July 14, 2022)
 

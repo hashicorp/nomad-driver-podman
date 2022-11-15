@@ -396,6 +396,16 @@ config {
 }
 ```
 
+* **selinux_opts** - (Optional)  A list of process labels the container will use.
+
+```
+config {
+  selinux_opts = [
+    "type:my_container.process"
+  ]
+}
+```
+
 * **sysctl** - (Optional)  A key-value map of sysctl configurations to set to the containers on start.
 
 ```hcl
