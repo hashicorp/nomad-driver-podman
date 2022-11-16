@@ -10,6 +10,7 @@ project "nomad-driver-podman" {
     repository   = "nomad-driver-podman"
     release_branches = [
       "main",
+      "release/**",
     ]
   }
 }

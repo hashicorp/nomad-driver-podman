@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.4.1 (November 15, 2022)
+
 FEATURES:
 
 * config: Set custom apparmor profile or disable apparmor. [[GH-188](https://github.com/hashicorp/nomad-driver-podman/pull/188)]
