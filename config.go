@@ -75,6 +75,7 @@ var (
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
+		"pids_limit":         hclspec.NewAttr("pids_limit", "number", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
@@ -147,6 +148,7 @@ type TaskConfig struct {
 	NetworkMode       string             `codec:"network_mode"`
 	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
+	PidsLimit         int64              `codec:"pids_limit"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Ulimit            hclutils.MapStrStr `codec:"ulimit"`

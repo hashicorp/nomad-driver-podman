@@ -456,6 +456,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
+	// set PidsLimit only if configured.
+	if driverConfig.PidsLimit > 0 {
+		createOpts.ContainerResourceConfig.ResourceLimits.Pids = &spec.LinuxPids{
+			Limit: driverConfig.PidsLimit,
+		}
+	}
 
 	if driverConfig.MemorySwap != "" {
 		swap, err := memoryInBytes(driverConfig.MemorySwap)

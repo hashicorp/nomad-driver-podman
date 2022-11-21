@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1463,6 +1464,16 @@ func TestPodmanDriver_Ulimit(t *testing.T) {
 		require.Exactly(t, nofileLimit, inspectData.HostConfig.Ulimits[1])
 		require.Exactly(t, nprocLimit, inspectData.HostConfig.Ulimits[0])
 	}
+}
+
+// check pids_limit option
+func TestPodmanDriver_PidsLimit(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// set a random pids limit
+	taskCfg.PidsLimit = int64(100 + rand.Intn(100))
+	inspectData := startDestroyInspect(t, taskCfg, "pidsLimit")
+	// and compare it
+	require.Equal(t, taskCfg.PidsLimit, inspectData.HostConfig.PidsLimit)
 }
 
 // check enabled readonly_rootfs option

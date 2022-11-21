@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+* config: Allow setting `pids_limit` option.
+
 ## 0.4.1 (November 15, 2022)
 
 FEATURES:
