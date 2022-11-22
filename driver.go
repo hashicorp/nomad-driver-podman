@@ -1177,6 +1177,17 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		if m.Readonly {
 			bind.Options = append(bind.Options, "ro")
 		}
+
+		switch m.PropagationMode {
+		case nstructs.VolumeMountPropagationPrivate:
+			bind.Options = append(bind.Options, "rprivate")
+		case nstructs.VolumeMountPropagationHostToTask:
+			bind.Options = append(bind.Options, "rslave")
+		case nstructs.VolumeMountPropagationBidirectional:
+			bind.Options = append(bind.Options, "rshared")
+			// If PropagationMode is something else or unset, Podman defaults to rprivate
+		}
+
 		binds = append(binds, bind)
 	}
 
