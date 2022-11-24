@@ -462,6 +462,13 @@ config {
   }
 ```
 
+* **pids_limit** - (Optional) An integer value that specifies the pid limit for the container.
+```hcl
+config {
+  pids_limit = 64
+}
+```
+
 * **image_pull_timeout** - (Optional) time duration for your pull timeout (default to 5m), cannot be longer than the client_http_timeout
 ```
 config {
