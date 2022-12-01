@@ -440,45 +440,48 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	// Resources config options
-	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
-		Memory: &spec.LinuxMemory{},
-		CPU:    &spec.LinuxCPU{},
-	}
-
-	err = setCPUResources(driverConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
-	if err != nil {
-		return nil, nil, err
-	}
-	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
-	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
-	// set PidsLimit only if configured.
-	if driverConfig.PidsLimit > 0 {
-		createOpts.ContainerResourceConfig.ResourceLimits.Pids = &spec.LinuxPids{
-			Limit: driverConfig.PidsLimit,
+	if !rootless || d.cgroupV2 {
+		//Setting memory and cpu limits will only be applied when we have rootful or using cgroupV2
+		createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
+			Memory: &spec.LinuxMemory{},
+			CPU:    &spec.LinuxCPU{},
 		}
-	}
 
-	if driverConfig.MemorySwap != "" {
-		swap, err := memoryInBytes(driverConfig.MemorySwap)
+		err = setCPUResources(driverConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
 		if err != nil {
 			return nil, nil, err
 		}
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
-	}
-	if !d.cgroupV2 {
-		swappiness := uint64(driverConfig.MemorySwappiness)
-		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
-	}
-	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
-	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
-	if !rootless {
-		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
-		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
+
+		hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
+		if err != nil {
+			return nil, nil, err
+		}
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
+		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
+		// set PidsLimit only if configured.
+		if driverConfig.PidsLimit > 0 {
+			createOpts.ContainerResourceConfig.ResourceLimits.Pids = &spec.LinuxPids{
+				Limit: driverConfig.PidsLimit,
+			}
+		}
+
+		if driverConfig.MemorySwap != "" {
+			swap, err := memoryInBytes(driverConfig.MemorySwap)
+			if err != nil {
+				return nil, nil, err
+			}
+			createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
+		}
+		if !d.cgroupV2 {
+			swappiness := uint64(driverConfig.MemorySwappiness)
+			createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
+		}
+		// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
+		//        see https://github.com/containers/podman/blob/master/troubleshooting.md
+		if !rootless {
+			cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
+			createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
+		}
 	}
 
 	ulimits, err := sliceMergeUlimit(driverConfig.Ulimit)
