@@ -106,7 +106,7 @@ Ensure that Nomad can find the plugin, see [plugin_dir](https://www.nomadproject
 * volumes stanza:
 
   * enabled - Defaults to true. Allows tasks to bind host paths (volumes) inside their container.
-  * selinuxlabel - Allows the operator to set a SELinux label to the allocation and task local bind-mounts to containers. If used with _volumes.enabled_ set to false, the labels will still be applied to the standard binds in the container.
+  * selinuxlabel - Applies SELinux label to the standard binds in the container. To apply it also for additional defined volumes, `z` options needs to be applied in config->volumes section.
 
 ```hcl
 plugin "nomad-driver-podman" {
@@ -238,7 +238,8 @@ config {
 ```hcl
 config {
   volumes = [
-    "/some/host/data:/container/data:ro,noexec"
+    "/some/host/data:/container/data:ro,noexec",
+    "/additional/host/selinux_data:/container/selinux_data:z"
   ]
 }
 ```

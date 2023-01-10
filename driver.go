@@ -1135,6 +1135,13 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
 
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
+		// Apply SELinux Label to job default volumes
+		for i := range binds {
+			binds[i].Options = append(binds[i].Options, selinuxLabel)
+		}
+	}
+
 	// TODO support volume drivers
 	// https://github.com/containers/libpod/pull/4548
 	taskLocalBindVolume := true
@@ -1195,13 +1202,6 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		}
 
 		binds = append(binds, bind)
-	}
-
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
-		// Apply SELinux Label to each volume
-		for i := range binds {
-			binds[i].Options = append(binds[i].Options, selinuxLabel)
-		}
 	}
 
 	for _, dst := range driverConfig.Tmpfs {
