@@ -391,9 +391,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
 
-	if driverConfig.Entrypoint != "" {
-		createOpts.ContainerBasicConfig.Entrypoint = append(createOpts.ContainerBasicConfig.Entrypoint, driverConfig.Entrypoint)
-	}
+	createOpts.ContainerBasicConfig.Entrypoint = driverConfig.Entrypoint
 
 	containerName := BuildContainerName(cfg)
 
