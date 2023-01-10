@@ -56,7 +56,7 @@ var (
 		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
 		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
-		"entrypoint":     hclspec.NewAttr("entrypoint", "string", false),
+		"entrypoint":     hclspec.NewAttr("entrypoint", "list(string)", false),
 		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
 		"hostname":       hclspec.NewAttr("hostname", "string", false),
 		"image":          hclspec.NewAttr("image", "string", true),
@@ -135,7 +135,7 @@ type TaskConfig struct {
 	SelinuxOpts       []string           `codec:"selinux_opts"`
 	Command           string             `codec:"command"`
 	Devices           []string           `codec:"devices"`
-	Entrypoint        string             `codec:"entrypoint"`
+	Entrypoint        []string           `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
