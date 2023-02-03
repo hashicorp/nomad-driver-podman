@@ -294,7 +294,7 @@ type ContainerSecurityConfig struct {
 	// created.
 	// If set to private, IDMappings must be set.
 	// Mandatory.
-	// UserNS Namespace `json:"userns,omitempty"`
+	UserNS Namespace `json:"userns,omitempty"`
 
 	// IDMappings are UID and GID mappings that will be used by user
 	// namespaces.

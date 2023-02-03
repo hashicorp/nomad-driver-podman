@@ -86,6 +86,7 @@ var (
 		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
 		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
 		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
+		"userns":             hclspec.NewAttr("userns", "string", false),
 	})
 )
 
@@ -158,4 +159,5 @@ type TaskConfig struct {
 	ForcePull         bool               `codec:"force_pull"`
 	Privileged        bool               `codec:"privileged"`
 	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
+	UserNS            string             `codec:"userns"`
 }
