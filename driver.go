@@ -1308,6 +1308,13 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	// https://github.com/containers/libpod/pull/4548
 	taskLocalBindVolume := true
 
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
+		// Apply SELinux Label to each volume
+		for i := range binds {
+			binds[i].Options = append(binds[i].Options, selinuxLabel)
+		}
+	}
+
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
 		if err != nil {
@@ -1352,6 +1359,9 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		if m.Readonly {
 			bind.Options = append(bind.Options, "ro")
 		}
+		if m.SELinuxLabel != "" {
+			bind.Options = append(bind.Options, m.SELinuxLabel)
+		}
 
 		switch m.PropagationMode {
 		case nstructs.VolumeMountPropagationPrivate:
@@ -1364,13 +1374,6 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		}
 
 		binds = append(binds, bind)
-	}
-
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
-		// Apply SELinux Label to each volume
-		for i := range binds {
-			binds[i].Options = append(binds[i].Options, selinuxLabel)
-		}
 	}
 
 	for _, dst := range driverConfig.Tmpfs {
