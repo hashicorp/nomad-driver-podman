@@ -89,6 +89,11 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 			d.config.GC.Container = bv
 		}
 	}
+	if v, ok := cfg["extra_labels"]; ok {
+		if bv, ok := v.([]string); ok {
+			d.config.ExtraLabels = bv
+		}
+	}
 
 	harness := dtestutil.NewDriverHarness(t, d)
 
@@ -514,6 +519,66 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 	stdoutLog := readStdoutLog(t, task)
 	require.Contains(t, stdoutLog, stdoutMagic, "stdoutMagic in stdout")
 	require.Contains(t, stdoutLog, stderrMagic, "stderrMagic in stdout")
+}
+
+// check if extra labels make it into logs
+func TestPodmanDriver_ExtraLabels(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+
+	taskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		fmt.Sprintf("sleep 1"),
+	})
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "extra_labels",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	opts := make(map[string]interface{})
+	opts["extra_labels"] = []string{"task_name"}
+
+	containerName := BuildContainerName(task)
+
+	d := podmanDriverHarness(t, opts)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	require.NoError(t, err)
+
+	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
+	require.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(time.Duration(tu.TestMultiplier()*4) * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	expectedLabels := map[string]string{
+		"com.hashicorp.nomad.alloc_id":  string(task.AllocID),
+		"com.hashicorp.nomad.task_name": "extra_labels",
+	}
+	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
 }
 
 // check hostname task config options
@@ -1246,7 +1311,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 		"mount|grep check",
 	})
 	taskCfg.Volumes = []string{
-		// explicitely check that we can have more then one option
+		// explicitly check that we can have more then one option
 		"/tmp:/checka:ro,shared",
 		"/tmp:/checkb:private",
 		"/tmp:/checkc",

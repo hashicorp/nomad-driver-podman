@@ -133,7 +133,7 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* recover_stopped (bool) Defaults to true. Allows the driver to start and resuse a previously stopped container after
+* recover_stopped (bool) Defaults to true. Allows the driver to start and reuse a previously stopped container after
   a Nomad client restart.
   Consider a simple single node system and a complete reboot. All previously managed containers
   will be reused instead of disposed and recreated.
@@ -168,8 +168,28 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* client_http_timeout (string) Defaults to `60s` default timeout used by http.Client requests
+* extra_labels ([]string) Defaults to `[]`. Setting this will automatically append Nomad-related labels to Podman tasks. Possible values are:
+
 ```
+job_name
+job_id
+task_group_name
+task_name
+namespace
+node_name
+node_id
+```
+
+```hcl
+plugin "nomad-driver-podman" {
+  config {
+    extra_labels = ["job_name", "job_id", "task_group_name", "task_name", "namespace", "node_name", "node_id"]
+  }
+}
+```
+
+* client_http_timeout (string) Defaults to `60s` default timeout used by http.Client requests
+```hcl
 plugin "nomad-driver-podman" {
   config {
     client_http_timeout = "60s"
@@ -505,7 +525,7 @@ Be aware that ports must be defined in the parent network namespace, here *serve
 
 See `examples/jobs/nats_pod.nomad`
 
-A slightly different setup is demonstrated in this job. It reassembles more closesly the idea of a *pod* by starting a
+A slightly different setup is demonstrated in this job. It reassembles more closely the idea of a *pod* by starting a
 pause task, named *pod* via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
 
 Next, the main workload, *server* is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
