@@ -168,7 +168,7 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* extra_labels ([]string) Defaults to `[]`. Setting this will automatically append Nomad-related labels to Podman tasks. Possible values are:
+* extra_labels ([]string) Defaults to `[]`. Setting this will automatically append Nomad-related labels to Podman tasks. Supports glob matching such as `task*`. Possible values are:
 
 ```
 job_name

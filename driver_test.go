@@ -534,23 +534,22 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	})
 
 	task := &drivers.TaskConfig{
-		ID:        uuid.Generate(),
-		Name:      "extra_labels",
-		AllocID:   uuid.Generate(),
-		Resources: createBasicResources(),
+		ID:            uuid.Generate(),
+		Name:          "my-task",
+		TaskGroupName: "my-group",
+		AllocID:       uuid.Generate(),
+		Resources:     createBasicResources(),
 	}
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
-	opts := make(map[string]interface{})
-	opts["extra_labels"] = []string{"task_name"}
-
-	containerName := BuildContainerName(task)
-
+	opts := map[string]interface{}{
+		"extra_labels": []string{
+			"task*",
+		},
+	}
 	d := podmanDriverHarness(t, opts)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
-
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
@@ -563,6 +562,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
 	require.NoError(t, err)
 
+	containerName := BuildContainerName(task)
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	require.NoError(t, err)
 
@@ -573,8 +573,9 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	}
 
 	expectedLabels := map[string]string{
-		"com.hashicorp.nomad.alloc_id":  string(task.AllocID),
-		"com.hashicorp.nomad.task_name": "extra_labels",
+		"com.hashicorp.nomad.alloc_id":        string(task.AllocID),
+		"com.hashicorp.nomad.task_group_name": "my-group",
+		"com.hashicorp.nomad.task_name":       "my-task",
 	}
 	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
 }
