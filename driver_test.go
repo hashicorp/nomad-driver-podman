@@ -552,8 +552,6 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 
 	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
-	defer cleanup()
-
 	_, _, err := d.StartTask(task)
 	require.NoError(t, err)
 
