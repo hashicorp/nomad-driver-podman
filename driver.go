@@ -104,6 +104,10 @@ type Driver struct {
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
 
+	// slowPodman is a Podman client with no timeout configured that is used
+	// for slow operations that may need longer timeouts.
+	slowPodman *api.API
+
 	// SystemInfo collected at first fingerprint query
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
@@ -166,21 +170,32 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		d.nomadConfig = cfg.AgentConfig.Driver
 	}
 
-	clientConfig := api.DefaultClientConfig()
-	if pluginConfig.SocketPath != "" {
-		clientConfig.SocketPath = pluginConfig.SocketPath
-	}
-
+	var timeout time.Duration
 	if pluginConfig.ClientHttpTimeout != "" {
 		t, err := time.ParseDuration(pluginConfig.ClientHttpTimeout)
 		if err != nil {
 			return err
 		}
-		clientConfig.HttpTimeout = t
+		timeout = t
 	}
 
-	d.podman = api.NewClient(d.logger, clientConfig)
+	d.podman = d.newPodmanClient(timeout)
+	d.slowPodman = d.newPodmanClient(0)
+
 	return nil
+}
+
+// newPodmanClient returns Podman client configured with the provided timeout.
+// This method must be called after the driver configuration has been loaded.
+func (d *Driver) newPodmanClient(timeout time.Duration) *api.API {
+	clientConfig := api.DefaultClientConfig()
+	clientConfig.HttpTimeout = timeout
+
+	if d.config.SocketPath != "" {
+		clientConfig.SocketPath = d.config.SocketPath
+	}
+
+	return api.NewClient(d.logger, clientConfig)
 }
 
 // TaskConfigSchema returns the schema for the driver configuration of the task.
@@ -850,7 +865,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
+		if imageID, err = d.slowPodman.ImagePull(ctx, imageName, imageAuth); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil
