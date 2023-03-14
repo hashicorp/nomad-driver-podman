@@ -497,7 +497,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
 
 	// Populate --userns mode only if configured
-	if len(driverConfig.UserNS) > 0 {
+	if driverConfig.UserNS != "" {
 		userns := strings.Split(driverConfig.UserNS, ":")
 		mode, err := parseNamespaceMode(userns[0])
 		if err != nil {
