@@ -498,11 +498,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// Populate --userns mode only if configured
 	if driverConfig.UserNS != "" {
-		userns := strings.Split(driverConfig.UserNS, ":")
-		mode, err := parseNamespaceMode(userns[0])
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse userns configuration: %v", err)
-		}
+		userns := strings.SplitN(driverConfig.UserNS, ":", 2)
+		mode := api.NamespaceMode(userns[0])
 		// Populate value only if specified
 		if len(userns) > 1 {
 			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode, Value: userns[1]}
@@ -680,29 +677,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, driverNet, nil
-}
-
-func parseNamespaceMode(s string) (c api.NamespaceMode, err error) {
-	mode := map[api.NamespaceMode]struct{}{
-		api.Host:                    {},
-		api.Path:                    {},
-		api.Auto:                    {},
-		api.FromContainer:           {},
-		api.FromPod:                 {},
-		api.Private:                 {},
-		api.NoNetwork:               {},
-		api.Bridge:                  {},
-		api.Slirp:                   {},
-		api.KeepID:                  {},
-		api.DefaultKernelNamespaces: {},
-	}
-
-	m := api.NamespaceMode(s)
-	_, ok := mode[m]
-	if !ok {
-		return c, fmt.Errorf(`cannot parse:[%s] as userns (namespace mode)`, s)
-	}
-	return m, nil
 }
 
 func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
