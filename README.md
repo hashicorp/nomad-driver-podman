@@ -482,6 +482,13 @@ config {
   }
 ```
 
+* **userns** - (Optional) Set the [user namespace mode](https://docs.podman.io/en/latest/markdown/podman-run.1.html#userns-mode) for the container.
+```hcl
+config {
+  userns = "keep-id:uid=200,gid=210"
+}
+```
+
 * **pids_limit** - (Optional) An integer value that specifies the pid limit for the container.
 ```hcl
 config {

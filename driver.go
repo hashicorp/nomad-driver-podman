@@ -566,6 +566,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
 
+	// Populate --userns mode only if configured
+	if driverConfig.UserNS != "" {
+		userns := strings.SplitN(driverConfig.UserNS, ":", 2)
+		mode := api.NamespaceMode(userns[0])
+		// Populate value only if specified
+		if len(userns) > 1 {
+			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode, Value: userns[1]}
+		} else {
+			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode}
+		}
+	}
+
 	// Network config options
 	if cfg.DNS != nil {
 		for _, strdns := range cfg.DNS.Servers {

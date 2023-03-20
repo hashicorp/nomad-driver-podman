@@ -1566,6 +1566,30 @@ func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
 	require.True(t, inspectData.HostConfig.ReadonlyRootfs)
 }
 
+// check userns mode configuration (single value)
+func TestPodmanDriver_UsernsMode(t *testing.T) {
+	// TODO: run test once CI can use rootless Podman.
+	t.Skip("Test suite requires rootful Podman")
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.UserNS = "host"
+	inspectData := startDestroyInspect(t, taskCfg, "userns")
+
+	require.Equal(t, "host", inspectData.HostConfig.UsernsMode)
+}
+
+// check userns mode configuration (parsed value)
+func TestPodmanDriver_UsernsModeParsed(t *testing.T) {
+	// TODO: run test once CI can use rootless Podman.
+	t.Skip("Test suite requires rootful Podman")
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.UserNS = "keep-id:uid=200,gid=210"
+	inspectData := startDestroyInspect(t, taskCfg, "userns")
+
+	require.Equal(t, "keep-id:uid=200,gid=210", inspectData.HostConfig.UsernsMode)
+}
+
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
 	if !tu.IsCI() {

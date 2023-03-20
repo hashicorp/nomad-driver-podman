@@ -246,6 +246,12 @@ type ContainerSecurityConfig struct {
 	// If unset, the container will be run as root.
 	// Optional.
 	User string `json:"user,omitempty"`
+	// UserNS is the container's user namespace.
+	// It defaults to host, indicating that no user namespace will be
+	// created.
+	// If set to private, IDMappings must be set.
+	// Mandatory.
+	UserNS Namespace `json:"userns,omitempty"`
 	// Groups are a list of supplemental groups the container's user will
 	// be granted access to.
 	// Optional.
@@ -292,12 +298,6 @@ type ContainerSecurityConfig struct {
 	// privileges flag on create, which disables gaining additional
 	// privileges (e.g. via setuid) in the container.
 	NoNewPrivileges bool `json:"no_new_privileges,omitempty"`
-	// UserNS is the container's user namespace.
-	// It defaults to host, indicating that no user namespace will be
-	// created.
-	// If set to private, IDMappings must be set.
-	// Mandatory.
-	// UserNS Namespace `json:"userns,omitempty"`
 
 	// IDMappings are UID and GID mappings that will be used by user
 	// namespaces.
