@@ -6,6 +6,9 @@ IMPROVEMENTS:
 * config: Allow setting `pids_limit` option. [[GH-203](https://github.com/hashicorp/nomad-driver-podman/pull/203)]
 * runtime: Set mount propagation from TaskConfig [[GH-204](https://github.com/hashicorp/nomad-driver-podman/pull/204)]
 
+BUG FIXES:
+
+* driver: Fixed a bug that caused `image_pull_timeout` to the capped by the value of `client_http_timeout` [[GH-218](https://github.com/hashicorp/nomad-driver-podman/pull/218)]
 
 ## 0.4.1 (November 15, 2022)
 

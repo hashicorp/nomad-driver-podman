@@ -7,6 +7,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,6 +77,15 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 
 	baseConfig := base.Config{}
 	pluginConfig := PluginConfig{}
+
+	// Set ClientHttpTimeout before calling SetConfig() because it affects the
+	// HTTP client that is created.
+	if v, ok := cfg["ClientHttpTimeout"]; ok {
+		if sv, ok := v.(string); ok {
+			pluginConfig.ClientHttpTimeout = sv
+		}
+	}
+
 	if err := base.MsgPackEncode(&baseConfig.PluginConfig, &pluginConfig); err != nil {
 		t.Error("Unable to encode plugin config", err)
 	}
@@ -1976,6 +1990,91 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
 	require.NoError(t, err)
 	require.Equal(t, imageID, inspectData.Image)
+}
+
+// TestPodmanDriver_Pull_Timeout verifies that the task image_pull_timeout
+// configuration is respected and that it can be set to higher value than the
+// driver's client_http_timeout.
+//
+// This test starts a proxy on port 5000 and requires the machine running the
+// test to allow an insecure registry at localhost:5000. To run this test add
+// the following to /etc/containers/registries.conf:
+//
+// [[registry]]
+// location = "localhost:5000"
+// insecure = true
+func TestPodmanDriver_Pull_Timeout(t *testing.T) {
+	// Check if the machine running the test is properly configured to run this
+	// test.
+	expectedRegistry := `[[registry]]
+location = "localhost:5000"
+insecure = true`
+
+	content, err := os.ReadFile("/etc/containers/registries.conf")
+	require.NoError(t, err)
+	if !strings.Contains(string(content), expectedRegistry) {
+		t.Skip("Skipping test because /etc/containers/registries.conf doesn't have insecure registry config for localhost:5000")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create a listener on port 5000.
+	l, err := net.Listen("tcp", "127.0.0.1:5000")
+	require.NoError(t, err)
+
+	// Proxy requests to quay.io except when trying to pull a busybox image.
+	parsedURL, err := url.Parse("https://quay.io")
+	require.NoError(t, err)
+
+	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if strings.Contains(resp.Request.URL.Path, "busybox") {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Second):
+				return fmt.Errorf("expected image pull to timeout")
+			}
+		}
+		return nil
+	}
+	// Create a new HTTP test server but don't start it so we can use our
+	// own listener on port 5000.
+	ts := httptest.NewUnstartedServer(proxy)
+	ts.Listener.Close()
+	ts.Listener = l
+	ts.Start()
+	defer ts.Close()
+
+	// Create the test harness and a sample task.
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"ClientHttpTimeout": "1s",
+	})
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "test",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+
+	// Time how long it takes to pull the image.
+	now := time.Now()
+
+	resultCh := make(chan error)
+	go func() {
+		// Pull image using our proxy.
+		image := "localhost:5000/quay/busybox:latest"
+		_, err = getPodmanDriver(t, d).createImage(image, &AuthConfig{}, true, 3*time.Second, task)
+		resultCh <- err
+	}()
+
+	err = <-resultCh
+	cancel()
+
+	// Verify that the timeout happened after client_http_timeout.
+	require.Greater(t, time.Now().Sub(now), 2*time.Second)
+	require.ErrorContains(t, err, "context deadline exceeded")
 }
 
 func Test_createImage(t *testing.T) {
