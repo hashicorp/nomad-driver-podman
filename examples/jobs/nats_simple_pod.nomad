@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 //
 // This job runs a pair of nats-server and prometheus-nats-exporter tasks
 //

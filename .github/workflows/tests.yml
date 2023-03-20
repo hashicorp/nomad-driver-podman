@@ -35,6 +35,15 @@ jobs:
         sudo podman save --format docker-archive --output $ARCHIVE_DIR/docker-archive alpine:latest
         sudo podman save --format oci-archive --output $ARCHIVE_DIR/oci-archive alpine:latest
         sudo podman image rm alpine:latest
+    - name: Setup registries for testing
+      run: |
+        sudo bash -c 'cat <<EOF > /etc/containers/registries.conf
+        unqualified-search-registries = ["docker.io", "quay.io"]
+
+        [[registry]]
+        location = "localhost:5000"
+        insecure = true
+        EOF'
     - name: Run Tests
       run: sudo -E GOPATH=$PWD/build CI=1 env PATH="$PATH" /home/runner/go/bin/gotestsum --junitfile build/test/result.xml -- -timeout=15m . ./api
     - name: Archive test result

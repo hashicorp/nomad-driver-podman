@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package main
 
 import (
@@ -32,6 +35,8 @@ var (
 			hclspec.NewAttr("recover_stopped", "bool", false),
 			hclspec.NewLiteral("true"),
 		),
+		// optional extra_labels to append to all tasks for observability. Globs supported
+		"extra_labels": hclspec.NewAttr("extra_labels", "list(string)", false),
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
 		// disable_log_collection indicates whether nomad should collect logs of podman
@@ -121,6 +126,7 @@ type PluginConfig struct {
 	DisableLogCollection bool         `codec:"disable_log_collection"`
 	SocketPath           string       `codec:"socket_path"`
 	ClientHttpTimeout    string       `codec:"client_http_timeout"`
+	ExtraLabels          []string     `codec:"extra_labels"`
 }
 
 // TaskConfig is the driver configuration of a task within a job
