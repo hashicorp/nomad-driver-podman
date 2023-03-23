@@ -24,8 +24,8 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
+	"github.com/hashicorp/nomad-driver-podman/ci"
 	"github.com/hashicorp/nomad/client/taskenv"
-	"github.com/hashicorp/nomad/helper/freeport"
 	"github.com/hashicorp/nomad/helper/testlog"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
@@ -652,8 +652,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
-	ports := freeport.MustTake(2)
-	defer freeport.Return(ports)
+	ports := ci.PortAllocator.Grab(2)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 
@@ -726,8 +725,7 @@ func TestPodmanDriver_Ports(t *testing.T) {
 		t.Parallel()
 	}
 
-	ports := freeport.MustTake(2)
-	defer freeport.Return(ports)
+	ports := ci.PortAllocator.Grab(2)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 
@@ -816,8 +814,7 @@ func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
 		t.Parallel()
 	}
 
-	ports := freeport.MustTake(1)
-	defer freeport.Return(ports)
+	ports := ci.PortAllocator.Grab(1)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 
@@ -868,8 +865,7 @@ func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
 		t.Parallel()
 	}
 
-	ports := freeport.MustTake(1)
-	defer freeport.Return(ports)
+	ports := ci.PortAllocator.Grab(1)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Ports = []string{
@@ -907,8 +903,7 @@ func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
 		t.Parallel()
 	}
 
-	ports := freeport.MustTake(1)
-	defer freeport.Return(ports)
+	ports := ci.PortAllocator.Grab(1)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 
