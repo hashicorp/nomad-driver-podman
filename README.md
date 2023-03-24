@@ -218,11 +218,14 @@ config {
 }
 ```
 
-* **entrypoint** - (Optional) The entrypoint for the container. Defaults to the entrypoint set in the image.
+* **entrypoint** - (Optional) A string list overriding the image's entrypoint. Defaults to the entrypoint set in the image.
 
 ```hcl
 config {
-  entrypoint = "/entrypoint.sh"
+  entrypoint = [
+    "/bin/bash",
+    "-c"
+  ]
 }
 ```
 
