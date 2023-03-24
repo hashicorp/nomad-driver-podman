@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package main
 
 import (
@@ -30,6 +33,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/ryanuber/go-glob"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -46,6 +50,15 @@ const (
 
 	LOG_DRIVER_NOMAD    = "nomad"
 	LOG_DRIVER_JOURNALD = "journald"
+
+	labelAllocID       = "com.hashicorp.nomad.alloc_id"
+	labelJobName       = "com.hashicorp.nomad.job_name"
+	labelJobID         = "com.hashicorp.nomad.job_id"
+	labelTaskGroupName = "com.hashicorp.nomad.task_group_name"
+	labelTaskName      = "com.hashicorp.nomad.task_name"
+	labelNamespace     = "com.hashicorp.nomad.namespace"
+	labelNodeName      = "com.hashicorp.nomad.node_name"
+	labelNodeID        = "com.hashicorp.nomad.node_id"
 )
 
 var (
@@ -100,6 +113,10 @@ type Driver struct {
 
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
+
+	// slowPodman is a Podman client with no timeout configured that is used
+	// for slow operations that may need longer timeouts.
+	slowPodman *api.API
 
 	// SystemInfo collected at first fingerprint query
 	systemInfo api.Info
@@ -163,21 +180,32 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		d.nomadConfig = cfg.AgentConfig.Driver
 	}
 
-	clientConfig := api.DefaultClientConfig()
-	if pluginConfig.SocketPath != "" {
-		clientConfig.SocketPath = pluginConfig.SocketPath
-	}
-
+	var timeout time.Duration
 	if pluginConfig.ClientHttpTimeout != "" {
 		t, err := time.ParseDuration(pluginConfig.ClientHttpTimeout)
 		if err != nil {
 			return err
 		}
-		clientConfig.HttpTimeout = t
+		timeout = t
 	}
 
-	d.podman = api.NewClient(d.logger, clientConfig)
+	d.podman = d.newPodmanClient(timeout)
+	d.slowPodman = d.newPodmanClient(0)
+
 	return nil
+}
+
+// newPodmanClient returns Podman client configured with the provided timeout.
+// This method must be called after the driver configuration has been loaded.
+func (d *Driver) newPodmanClient(timeout time.Duration) *api.API {
+	clientConfig := api.DefaultClientConfig()
+	clientConfig.HttpTimeout = timeout
+
+	if d.config.SocketPath != "" {
+		clientConfig.SocketPath = d.config.SocketPath
+	}
+
+	return api.NewClient(d.logger, clientConfig)
 }
 
 // TaskConfigSchema returns the schema for the driver configuration of the task.
@@ -412,6 +440,48 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// ensure to include port_map into tasks environment map
 	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
 
+	if len(driverConfig.Labels) > 0 {
+		createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
+	}
+
+	labels := make(map[string]string, len(driverConfig.Labels)+1)
+	for k, v := range driverConfig.Labels {
+		labels[k] = v
+	}
+
+	if len(d.config.ExtraLabels) > 0 {
+		// main mandatory label
+		labels[labelAllocID] = cfg.AllocID
+	}
+
+	//optional labels, as configured in plugin configuration
+	for _, configurationExtraLabel := range d.config.ExtraLabels {
+		if glob.Glob(configurationExtraLabel, "job_name") {
+			labels[labelJobName] = cfg.JobName
+		}
+		if glob.Glob(configurationExtraLabel, "job_id") {
+			labels[labelJobID] = cfg.JobID
+		}
+		if glob.Glob(configurationExtraLabel, "task_group_name") {
+			labels[labelTaskGroupName] = cfg.TaskGroupName
+		}
+		if glob.Glob(configurationExtraLabel, "task_name") {
+			labels[labelTaskName] = cfg.Name
+		}
+		if glob.Glob(configurationExtraLabel, "namespace") {
+			labels[labelNamespace] = cfg.Namespace
+		}
+		if glob.Glob(configurationExtraLabel, "node_name") {
+			labels[labelNodeName] = cfg.NodeName
+		}
+		if glob.Glob(configurationExtraLabel, "node_id") {
+			labels[labelNodeID] = cfg.NodeID
+		}
+	}
+
+	driverConfig.Labels = labels
+	d.logger.Debug("applied labels on the container", "labels", driverConfig.Labels)
+
 	// Basic config options
 	createOpts.ContainerBasicConfig.Name = containerName
 	createOpts.ContainerBasicConfig.Command = allArgs
@@ -423,7 +493,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// Logging
 	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
-		// Only modify container loggin path if LogCollection is not disabled
+		// Only modify container logging path if LogCollection is not disabled
 		if !d.config.DisableLogCollection {
 			createOpts.LogConfiguration.Driver = "k8s-file"
 
@@ -508,12 +578,24 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
 
+	// Populate --userns mode only if configured
+	if driverConfig.UserNS != "" {
+		userns := strings.SplitN(driverConfig.UserNS, ":", 2)
+		mode := api.NamespaceMode(userns[0])
+		// Populate value only if specified
+		if len(userns) > 1 {
+			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode, Value: userns[1]}
+		} else {
+			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode}
+		}
+	}
+
 	// Network config options
 	if cfg.DNS != nil {
 		for _, strdns := range cfg.DNS.Servers {
 			ipdns := net.ParseIP(strdns)
 			if ipdns == nil {
-				return nil, nil, fmt.Errorf("Invald dns server address")
+				return nil, nil, fmt.Errorf("Invalid dns server address")
 			}
 			createOpts.ContainerNetworkConfig.DNSServers = append(createOpts.ContainerNetworkConfig.DNSServers, ipdns)
 		}
@@ -771,15 +853,15 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 			ulimitRaw = ulimitRaw + ":" + ulimitRaw
 		}
 
-		splitted := strings.SplitN(ulimitRaw, ":", 2)
-		if len(splitted) < 2 {
+		split := strings.SplitN(ulimitRaw, ":", 2)
+		if len(split) < 2 {
 			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed ulimit specification %v: %v", name, ulimitRaw)
 		}
-		soft, err := strconv.Atoi(splitted[0])
+		soft, err := strconv.Atoi(split[0])
 		if err != nil {
 			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed soft ulimit %v: %v", name, ulimitRaw)
 		}
-		hard, err := strconv.Atoi(splitted[1])
+		hard, err := strconv.Atoi(split[1])
 		if err != nil {
 			return []spec.POSIXRlimit{}, fmt.Errorf("Malformed hard ulimit %v: %v", name, ulimitRaw)
 		}
@@ -859,7 +941,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.podman.ImagePull(ctx, imageName, imageAuth); err != nil {
+		if imageID, err = d.slowPodman.ImagePull(ctx, imageName, imageAuth); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil
