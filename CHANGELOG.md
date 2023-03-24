@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.4.2 (March 24, 2023)
 
 IMPROVEMENTS:
 
