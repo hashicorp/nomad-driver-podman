@@ -5,6 +5,7 @@ IMPROVEMENTS:
 * config: Add `extra_labels` option [[GH-215](https://github.com/hashicorp/nomad-driver-podman/pull/215)]
 * config: Allow setting `pids_limit` option. [[GH-203](https://github.com/hashicorp/nomad-driver-podman/pull/203)]
 * config: Allow setting `userns` option. [[GH-212](https://github.com/hashicorp/nomad-driver-podman/pull/212)]
+* config: Allow setting `entrypoint` as a list of strings. [[GH-209](https://github.com/hashicorp/nomad-driver-podman/pull/209)]
 * runtime: Set mount propagation from TaskConfig [[GH-204](https://github.com/hashicorp/nomad-driver-podman/pull/204)]
 
 BUG FIXES:
