@@ -391,7 +391,21 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 	allArgs = append(allArgs, driverConfig.Args...)
 
-	createOpts.ContainerBasicConfig.Entrypoint = driverConfig.Entrypoint
+	// Parse entrypoint.
+	switch v := driverConfig.Entrypoint.(type) {
+	case string:
+		// Check for a string type to maintain backwards compatibility.
+		createOpts.ContainerBasicConfig.Entrypoint = append(createOpts.ContainerBasicConfig.Entrypoint, v)
+	case []interface{}:
+		entrypoint := make([]string, len(v))
+		for i, e := range v {
+			entrypoint[i] = fmt.Sprintf("%v", e)
+		}
+		createOpts.ContainerBasicConfig.Entrypoint = entrypoint
+	case nil:
+	default:
+		return nil, nil, fmt.Errorf("invalid entrypoint type %T", driverConfig.Entrypoint)
+	}
 
 	containerName := BuildContainerName(cfg)
 

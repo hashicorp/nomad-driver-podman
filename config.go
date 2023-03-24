@@ -56,10 +56,13 @@ var (
 		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
 		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
-		"entrypoint":     hclspec.NewAttr("entrypoint", "list(string)", false),
-		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
-		"hostname":       hclspec.NewAttr("hostname", "string", false),
-		"image":          hclspec.NewAttr("image", "string", true),
+
+		// Use `any` to maintain backwards compability.
+		// Expected type is `list(string)` but may be `string` for old tasks.
+		"entrypoint":  hclspec.NewAttr("entrypoint", "any", false),
+		"working_dir": hclspec.NewAttr("working_dir", "string", false),
+		"hostname":    hclspec.NewAttr("hostname", "string", false),
+		"image":       hclspec.NewAttr("image", "string", true),
 		"image_pull_timeout": hclspec.NewDefault(
 			hclspec.NewAttr("image_pull_timeout", "string", false),
 			hclspec.NewLiteral(`"5m"`),
@@ -124,18 +127,21 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	ApparmorProfile   string             `codec:"apparmor_profile"`
-	Args              []string           `codec:"args"`
-	Auth              AuthConfig         `codec:"auth"`
-	Ports             []string           `codec:"ports"`
-	Tmpfs             []string           `codec:"tmpfs"`
-	Volumes           []string           `codec:"volumes"`
-	CapAdd            []string           `codec:"cap_add"`
-	CapDrop           []string           `codec:"cap_drop"`
-	SelinuxOpts       []string           `codec:"selinux_opts"`
-	Command           string             `codec:"command"`
-	Devices           []string           `codec:"devices"`
-	Entrypoint        []string           `codec:"entrypoint"`
+	ApparmorProfile string     `codec:"apparmor_profile"`
+	Args            []string   `codec:"args"`
+	Auth            AuthConfig `codec:"auth"`
+	Ports           []string   `codec:"ports"`
+	Tmpfs           []string   `codec:"tmpfs"`
+	Volumes         []string   `codec:"volumes"`
+	CapAdd          []string   `codec:"cap_add"`
+	CapDrop         []string   `codec:"cap_drop"`
+	SelinuxOpts     []string   `codec:"selinux_opts"`
+	Command         string     `codec:"command"`
+	Devices         []string   `codec:"devices"`
+
+	// Use `any` to maintain backwards compability.
+	// Expected type is `[]string` but may be `string` for old tasks.
+	Entrypoint        any                `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
