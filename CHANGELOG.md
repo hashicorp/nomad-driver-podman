@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.4.2 (March 24, 2023)
+
 IMPROVEMENTS:
 
 * config: Add `extra_labels` option [[GH-215](https://github.com/hashicorp/nomad-driver-podman/pull/215)]
