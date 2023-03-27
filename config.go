@@ -62,7 +62,7 @@ var (
 		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
 
-		// Use `any` to maintain backwards compability.
+		// Use `any` to maintain backwards compatibility.
 		// Expected type is `list(string)` but may be `string` for old tasks.
 		"entrypoint":  hclspec.NewAttr("entrypoint", "any", false),
 		"working_dir": hclspec.NewAttr("working_dir", "string", false),
@@ -146,7 +146,7 @@ type TaskConfig struct {
 	Command         string     `codec:"command"`
 	Devices         []string   `codec:"devices"`
 
-	// Use `any` to maintain backwards compability.
+	// Use `any` to maintain backwards compatibility.
 	// Expected type is `[]string` but may be `string` for old tasks.
 	Entrypoint        any                `codec:"entrypoint"`
 	WorkingDir        string             `codec:"working_dir"`
