@@ -8,7 +8,7 @@ require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
 	github.com/containers/image/v5 v5.21.0
 	github.com/hashicorp/go-hclog v1.4.0
-	github.com/hashicorp/nomad v1.5.2
+	github.com/hashicorp/nomad v1.5.3
 	github.com/hashicorp/nomad/api v0.0.0-20230321225438-9a2fdb5f53dc
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 	github.com/ryanuber/go-glob v1.0.0
