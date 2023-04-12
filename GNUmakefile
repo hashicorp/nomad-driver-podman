@@ -26,7 +26,7 @@ changelogfmt: ## Format changelog GitHub links
 	@sed -E 's|([^\[])\[GH-([0-9]+)\]|\1[[GH-\2](https://github.com/hashicorp/nomad-driver-podman/issues/\2)]|g' CHANGELOG.md > changelog.tmp && mv changelog.tmp CHANGELOG.md
 
 .PHONY: check
-check: deps hclfmt ## Lint the source code
+check: hclfmt ## Lint the source code
 	@echo "==> Linting source code ..."
 	@$(BIN)/golangci-lint run
 	@echo "==> vetting hc-log statements"
