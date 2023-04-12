@@ -320,7 +320,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
 	inspectData, err := d.podman.ContainerInspect(d.ctx, taskState.ContainerID)
-	if err == api.ContainerNotFound {
+	if errors.Is(err, api.ContainerNotFound) {
 		d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
 		return nil
 	} else if err != nil {
@@ -347,10 +347,11 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		removeContainerOnExit: d.config.GC.Container,
 	}
 
-	if inspectData.State.Running {
+	switch {
+	case inspectData.State.Running:
 		d.logger.Info("Recovered a still running container", "container", inspectData.State.Pid)
 		h.procState = drivers.TaskStateRunning
-	} else if inspectData.State.Status == "exited" {
+	case inspectData.State.Status == "exited":
 		// are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
 			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid)
@@ -368,7 +369,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 			}
 			h.procState = drivers.TaskStateExited
 		}
-	} else {
+	default:
 		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID)
 		h.procState = drivers.TaskStateUnknown
 	}
@@ -401,7 +402,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	var driverConfig TaskConfig
 	if err := cfg.DecodeDriverConfig(&driverConfig); err != nil {
-		return nil, nil, fmt.Errorf("failed to decode driver config: %v", err)
+		return nil, nil, fmt.Errorf("failed to decode driver config: %w", err)
 	}
 
 	handle := drivers.NewTaskHandle(taskHandleVersion)
@@ -455,7 +456,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		labels[labelAllocID] = cfg.AllocID
 	}
 
-	//optional labels, as configured in plugin configuration
+	// optional labels, as configured in plugin configuration
 	for _, configurationExtraLabel := range d.config.ExtraLabels {
 		if glob.Glob(configurationExtraLabel, "job_name") {
 			labels[labelJobName] = cfg.JobName
@@ -493,16 +494,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
 	// Logging
-	if driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD {
+	switch driverConfig.Logging.Driver {
+	case "", LOG_DRIVER_NOMAD:
 		// Only modify container logging path if LogCollection is not disabled
 		if !d.config.DisableLogCollection {
 			createOpts.LogConfiguration.Driver = "k8s-file"
 
 			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 		}
-	} else if driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD {
+	case LOG_DRIVER_JOURNALD:
 		createOpts.LogConfiguration.Driver = "journald"
-	} else {
+	default:
 		return nil, nil, fmt.Errorf("Invalid logging.driver option")
 	}
 	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
@@ -547,9 +549,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if driverConfig.MemorySwap != "" {
-		swap, err := memoryInBytes(driverConfig.MemorySwap)
-		if err != nil {
-			return nil, nil, err
+		swap, memErr := memoryInBytes(driverConfig.MemorySwap)
+		if memErr != nil {
+			return nil, nil, memErr
 		}
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
 	}
@@ -564,9 +566,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
 
-	ulimits, err := sliceMergeUlimit(driverConfig.Ulimit)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse ulimit configuration: %v", err)
+	ulimits, ulimitErr := sliceMergeUlimit(driverConfig.Ulimit)
+	if ulimitErr != nil {
+		return nil, nil, fmt.Errorf("failed to parse ulimit configuration: %w", ulimitErr)
 	}
 	createOpts.ContainerResourceConfig.Rlimits = ulimits
 
@@ -608,7 +610,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
 		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
 	} else {
-		if driverConfig.NetworkMode == "" {
+		switch {
+		case driverConfig.NetworkMode == "":
 			if !rootless {
 				// should we join the group shared network namespace?
 				if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Mode == drivers.NetIsolationModeGroup {
@@ -623,25 +626,25 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				// slirp4netns is default for rootless podman
 				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
 			}
-		} else if driverConfig.NetworkMode == "bridge" {
+		case driverConfig.NetworkMode == "bridge":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
-		} else if driverConfig.NetworkMode == "host" {
+		case driverConfig.NetworkMode == "host":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Host
-		} else if driverConfig.NetworkMode == "none" {
+		case driverConfig.NetworkMode == "none":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NoNetwork
-		} else if driverConfig.NetworkMode == "slirp4netns" {
+		case driverConfig.NetworkMode == "slirp4netns":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
-		} else if strings.HasPrefix(driverConfig.NetworkMode, "container:") {
+		case strings.HasPrefix(driverConfig.NetworkMode, "container:"):
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
-		} else if strings.HasPrefix(driverConfig.NetworkMode, "ns:") {
+		case strings.HasPrefix(driverConfig.NetworkMode, "ns:"):
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
 			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "ns:")
-		} else if strings.HasPrefix(driverConfig.NetworkMode, "task:") {
+		case strings.HasPrefix(driverConfig.NetworkMode, "task:"):
 			otherTaskName := strings.TrimPrefix(driverConfig.NetworkMode, "task:")
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
-		} else {
+		default:
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
 		}
 	}
@@ -673,30 +676,30 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imagePullTimeout, err := time.ParseDuration(driverConfig.ImagePullTimeout)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", err)
+		imagePullTimeout, parseErr := time.ParseDuration(driverConfig.ImagePullTimeout)
+		if parseErr != nil {
+			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", parseErr)
 		}
 
-		imageID, err := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, err)
+		imageID, createErr := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
+		if createErr != nil {
+			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, createErr)
 		}
 		createOpts.Image = imageID
 
-		createResponse, err := d.podman.ContainerCreate(d.ctx, createOpts)
+		createResponse, createErr := d.podman.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
 			d.logger.Warn("Create Warning", "warning", w)
 		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to start task, could not create container: %v", err)
+		if createErr != nil {
+			return nil, nil, fmt.Errorf("failed to start task, could not create container: %w", createErr)
 		}
 		containerID = createResponse.Id
 	}
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
-		if err := d.podman.ContainerDelete(d.ctx, containerID, true, true); err != nil {
+		if err = d.podman.ContainerDelete(d.ctx, containerID, true, true); err != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", err)
 		}
 	}
@@ -722,7 +725,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if !recoverRunningContainer {
 		if err = d.podman.ContainerStart(d.ctx, containerID); err != nil {
 			cleanup()
-			return nil, nil, fmt.Errorf("failed to start task, could not start container: %v", err)
+			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", err)
 		}
 	}
 
@@ -730,7 +733,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err != nil {
 		d.logger.Error("failed to inspect container", "error", err)
 		cleanup()
-		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %v", err)
+		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %w", err)
 	}
 
 	driverNet := &drivers.DriverNetwork{
@@ -750,7 +753,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err := handle.SetDriverState(&driverState); err != nil {
 		d.logger.Error("failed to start task, error setting driver state", "error", err)
 		cleanup()
-		return nil, nil, fmt.Errorf("failed to set driver state: %v", err)
+		return nil, nil, fmt.Errorf("failed to set driver state: %w", err)
 	}
 
 	d.tasks.Set(cfg.ID, h)
@@ -914,7 +917,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 	}
 
 	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
-	if err != nil && err != api.ImageNotFound {
+	if err != nil && !errors.Is(err, api.ImageNotFound) {
 		// If ImageInspectID errors, continue the operation and try
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "error", err)
@@ -1019,12 +1022,13 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 
 	// fixme send proper signal to container
 	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	} else if err == api.ContainerNotFound {
+	case errors.Is(err, api.ContainerNotFound):
 		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "error", err)
 		return nil
-	} else {
+	default:
 		d.logger.Error("Could not stop/kill container", "containerID", handle.containerID, "error", err)
 		return err
 	}
@@ -1237,7 +1241,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
 		if err != nil {
-			return nil, fmt.Errorf("invalid docker volume %q: %v", userbind, err)
+			return nil, fmt.Errorf("invalid docker volume %q: %w", userbind, err)
 		}
 
 		// Paths inside task dir are always allowed when using the default driver,

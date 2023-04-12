@@ -116,7 +116,7 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 		h.stateLock.Lock()
 		t := time.Now()
 
-		//FIXME implement cpu stats correctly
+		// FIXME implement cpu stats correctly
 		totalPercent := h.totalCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.TotalUsage))
 		cs := &drivers.CpuStats{
 			SystemMode: h.systemCPUStats.Percent(float64(h.containerStats.CPUStats.CPUUsage.UsageInKernelmode)),
@@ -219,7 +219,7 @@ func (h *TaskHandle) runContainerMonitor() {
 				h.stateLock.Lock()
 				h.completedAt = time.Now()
 				if err != nil {
-					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %v", h.containerID, err)
+					h.exitResult.Err = fmt.Errorf("Driver was unable to get the exit code. %s: %w", h.containerID, err)
 					h.logger.Error("Failed to inspect stopped container, can not get exit code", "container", h.containerID, "error", err)
 					h.exitResult.Signal = 0
 				} else {

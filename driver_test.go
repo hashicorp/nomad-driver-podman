@@ -547,7 +547,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	taskCfg := newTaskConfig("", []string{
 		"sh",
 		"-c",
-		fmt.Sprintf("sleep 1"),
+		"sleep 1",
 	})
 
 	task := &drivers.TaskConfig{
@@ -590,7 +590,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	}
 
 	expectedLabels := map[string]string{
-		"com.hashicorp.nomad.alloc_id":        string(task.AllocID),
+		"com.hashicorp.nomad.alloc_id":        task.AllocID,
 		"com.hashicorp.nomad.task_group_name": "my-group",
 		"com.hashicorp.nomad.task_name":       "my-task",
 	}
@@ -964,8 +964,8 @@ func TestPodmanDriver_Init(t *testing.T) {
 	initPath := "/usr/libexec/podman/catatonit"
 	_, err := os.Stat(initPath)
 	if os.IsNotExist(err) {
-		path, err := exec.LookPath("catatonit")
-		if err != nil {
+		path, pathErr := exec.LookPath("catatonit")
+		if pathErr != nil {
 			t.Skip("Skipping --init test because catatonit is not installed")
 			return
 		}
@@ -1036,8 +1036,8 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	initPath := "/usr/libexec/podman/catatonit"
 	_, err := os.Stat(initPath)
 	if os.IsNotExist(err) {
-		path, err := exec.LookPath("catatonit")
-		if err != nil {
+		path, pathErr := exec.LookPath("catatonit")
+		if pathErr != nil {
 			t.Skip("Skipping oom test because catatonit is not installed")
 			return
 		}
@@ -2092,7 +2092,7 @@ insecure = true`
 	cancel()
 
 	// Verify that the timeout happened after client_http_timeout.
-	require.Greater(t, time.Now().Sub(now), 2*time.Second)
+	require.Greater(t, time.Since(now), 2*time.Second)
 	require.ErrorContains(t, err, "context deadline exceeded")
 }
 
