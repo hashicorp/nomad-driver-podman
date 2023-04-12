@@ -15,11 +15,6 @@ run:
     - examples
     - scripts
 
-  # Skip files
-  skip-files:
-    - ".*\\.generated\\.go$"
-    - ".*bindata_assetfs\\.go$"
-
 # Output configuration
 output:
   format: colored-line-number
