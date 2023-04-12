@@ -591,7 +591,7 @@ type InspectContainerConfig struct {
 	// Container stop signal
 	StopSignal uint `json:"StopSignal"`
 	// Configured healthcheck for the container
-	//Healthcheck *manifest.Schema2HealthConfig `json:"Healthcheck,omitempty"`
+	// Healthcheck *manifest.Schema2HealthConfig `json:"Healthcheck,omitempty"`
 	// CreateCommand is the full command plus arguments of the process the
 	// container has been created with.
 	CreateCommand []string `json:"CreateCommand,omitempty"`
@@ -639,7 +639,7 @@ type InspectRestartPolicy struct {
 // and is presently unused. It is retained for Docker compatibility.
 type InspectLogConfig struct {
 	Type   string            `json:"Type"`
-	Config map[string]string `json:"Config"` //idk type, TODO
+	Config map[string]string `json:"Config"` // idk type, TODO
 }
 
 // InspectBlkioWeightDevice holds information about the relative weight
@@ -1159,12 +1159,12 @@ type InspectNetworkSettings struct {
 type InspectContainerData struct {
 	State           *InspectContainerState      `json:"State"`
 	Mounts          []InspectMount              `json:"Mounts"`
-	NetworkSettings *InspectNetworkSettings     `json:"NetworkSettings"` //TODO
+	NetworkSettings *InspectNetworkSettings     `json:"NetworkSettings"` // TODO
 	Config          *InspectContainerConfig     `json:"Config"`
 	HostConfig      *InspectContainerHostConfig `json:"HostConfig"`
 	ID              string                      `json:"Id"`
 	// FIXME can not parse date/time: "Created": "2020-07-05 11:32:38.541987006 -0400 -0400",
-	//Created         time.Time              `json:"Created"`
+	// Created         time.Time              `json:"Created"`
 	Path            string   `json:"Path"`
 	Args            []string `json:"Args"`
 	Image           string   `json:"Image"`
@@ -1191,7 +1191,7 @@ type InspectContainerData struct {
 	Dependencies    []string `json:"Dependencies"`
 	ExitCommand     []string `json:"ExitCommand"`
 	Namespace       string   `json:"Namespace"`
-	//GraphDriver     *driver.Data                `json:"GraphDriver"`
+	// GraphDriver     *driver.Data                `json:"GraphDriver"`
 	SizeRw       *int64 `json:"SizeRw,omitempty"`
 	SizeRootFs   int64  `json:"SizeRootFs,omitempty"`
 	RestartCount int32  `json:"RestartCount"`
@@ -1438,7 +1438,7 @@ type SecurityInfo struct {
 type HostInfo struct {
 	Conmon       *ConmonInfo      `json:"conmon"`
 	Distribution DistributionInfo `json:"distribution"`
-	//IDMappings     IDMappings             `json:"idMappings,omitempty"`
+	// IDMappings     IDMappings             `json:"idMappings,omitempty"`
 	OCIRuntime     *OCIRuntimeInfo        `json:"ociRuntime"`
 	RemoteSocket   *RemoteSocket          `json:"remoteSocket,omitempty"`
 	Security       SecurityInfo           `json:"security"`

@@ -39,6 +39,9 @@ linters-settings:
   govet:
     # Complain about shadowing
     check-shadowing: true
+    settings:
+      shadow:
+        strict: false
   gofmt:
     # Complain about un-simplified code
     simplify: true

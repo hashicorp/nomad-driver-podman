@@ -40,10 +40,11 @@ func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthC
 	dec := json.NewDecoder(res.Body)
 	var report ImagePullReport
 	for {
-		if err = dec.Decode(&report); err == io.EOF {
+		decErr := dec.Decode(&report)
+		if errors.Is(decErr, io.EOF) {
 			break
-		} else if err != nil {
-			return "", fmt.Errorf("Error reading response: %w", err)
+		} else if decErr != nil {
+			return "", fmt.Errorf("Error reading response: %w", decErr)
 		}
 
 		if report.Error != "" {
