@@ -494,15 +494,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
 	// Logging
-	switch {
-	case driverConfig.Logging.Driver == "" || driverConfig.Logging.Driver == LOG_DRIVER_NOMAD:
+	switch driverConfig.Logging.Driver {
+	case "", LOG_DRIVER_NOMAD:
 		// Only modify container logging path if LogCollection is not disabled
 		if !d.config.DisableLogCollection {
 			createOpts.LogConfiguration.Driver = "k8s-file"
 
 			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
 		}
-	case driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD:
+	case LOG_DRIVER_JOURNALD:
 		createOpts.LogConfiguration.Driver = "journald"
 	default:
 		return nil, nil, fmt.Errorf("Invalid logging.driver option")
