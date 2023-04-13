@@ -954,16 +954,11 @@ func TestPodmanDriver_Init(t *testing.T) {
 	}
 
 	// only test --init if catatonit is installed
-	initPath := "/usr/libexec/podman/catatonit"
-	_, err := os.Stat(initPath)
+	initPath, err := exec.LookPath("catatonit")
 	if os.IsNotExist(err) {
-		path, pathErr := exec.LookPath("catatonit")
-		if pathErr != nil {
-			t.Skip("Skipping --init test because catatonit is not installed")
-			return
-		}
-		initPath = path
+		t.Skip("Skipping --init test because catatonit is not installed")
 	}
+	must.NoError(t, err)
 
 	taskCfg := newTaskConfig("", []string{
 		// print pid 1 filename to stdout
