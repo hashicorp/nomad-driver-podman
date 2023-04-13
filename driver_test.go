@@ -126,9 +126,7 @@ func TestPodmanDriver_PingPodman(t *testing.T) {
 }
 
 func TestPodmanDriver_Start_NoImage(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := TaskConfig{
 		Command: "echo",
@@ -155,9 +153,7 @@ func TestPodmanDriver_Start_NoImage(t *testing.T) {
 
 // start a long running container
 func TestPodmanDriver_Start_Wait(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	task := &drivers.TaskConfig{
@@ -192,9 +188,7 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 
 // test a short-living container
 func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{"echo", "hello"})
 	task := &drivers.TaskConfig{
@@ -233,9 +227,7 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 //
 // See https://github.com/hashicorp/nomad/issues/3419
 func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{"sleep", "5"})
 	task := &drivers.TaskConfig{
@@ -278,9 +270,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 }
 
 func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	exp := []byte{'w', 'i', 'n'}
 	file := "output.txt"
@@ -335,9 +325,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 
 // check if container is destroyed if gc.container=true
 func TestPodmanDriver_GC_Container_on(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	task := &drivers.TaskConfig{
@@ -380,9 +368,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 // check if container is destroyed if gc.container=false
 func TestPodmanDriver_GC_Container_off(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	task := &drivers.TaskConfig{
@@ -432,9 +418,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 // Check log_opt=journald logger
 func TestPodmanDriver_logJournald(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	stdoutMagic := uuid.Generate()
 	stderrMagic := uuid.Generate()
@@ -485,9 +469,7 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 
 // Check log_opt=nomad logger
 func TestPodmanDriver_logNomad(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	stdoutMagic := uuid.Generate()
 	stderrMagic := uuid.Generate()
@@ -536,9 +518,7 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 
 // check if extra labels make it into logs
 func TestPodmanDriver_ExtraLabels(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		"sh",
@@ -595,9 +575,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 
 // check hostname task config options
 func TestPodmanDriver_Hostname(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		// print hostname to stdout
@@ -645,9 +623,8 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 // check port_map feature
 func TestPodmanDriver_PortMap(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
+
 	ports := ci.PortAllocator.Grab(2)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
@@ -717,9 +694,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 }
 
 func TestPodmanDriver_Ports(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	ports := ci.PortAllocator.Grab(2)
 
@@ -805,9 +780,7 @@ func TestPodmanDriver_Ports(t *testing.T) {
 }
 
 func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	ports := ci.PortAllocator.Grab(1)
 
@@ -855,9 +828,7 @@ func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
 }
 
 func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	ports := ci.PortAllocator.Grab(1)
 
@@ -893,9 +864,7 @@ func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
 }
 
 func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	ports := ci.PortAllocator.Grab(1)
 
@@ -950,9 +919,7 @@ func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
 
 // check --init with default path
 func TestPodmanDriver_Init(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	// only test --init if catatonit is installed
 	initPath, err := exec.LookPath("catatonit")
@@ -1007,12 +974,9 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 // test oom flag propagation
 func TestPodmanDriver_OOM(t *testing.T) {
+	ci.Parallel(t)
 
 	t.Skip("Skipping oom test because of podman cgroup v2 bugs")
-
-	if !tu.IsCI() {
-		t.Parallel()
-	}
 
 	taskCfg := newTaskConfig("", []string{
 		// Incrementally creates a bigger and bigger variable.
@@ -1075,9 +1039,7 @@ func TestPodmanDriver_User(t *testing.T) {
 	// if os.Getuid() != 0 {
 	// 	t.Skip("Skipping User test ")
 	// }
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
@@ -1126,9 +1088,7 @@ func TestPodmanDriver_User(t *testing.T) {
 }
 
 func TestPodmanDriver_Device(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
@@ -1177,9 +1137,7 @@ func TestPodmanDriver_Device(t *testing.T) {
 
 // test memory/swap options
 func TestPodmanDriver_Swap(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	task := &drivers.TaskConfig{
@@ -1236,9 +1194,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 
 // check tmpfs mounts
 func TestPodmanDriver_Tmpfs(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
@@ -1300,9 +1256,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 // check mount options
 func TestPodmanDriver_Mount(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		// print our username to stdout
@@ -1409,7 +1363,7 @@ func TestPodmanDriver_DefaultProcessLabel(t *testing.T) {
 
 	// TODO: skip SELinux check in CI since it's not supported yet.
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
-	if !tu.IsCI() {
+	if os.Getenv("CI") == "" {
 		// a default container gets "disable" process label
 		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
@@ -1440,7 +1394,7 @@ func TestPodmanDriver_Caps(t *testing.T) {
 
 	// TODO: skip SELinux check in CI since it's not supported yet.
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
-	if !tu.IsCI() {
+	if os.Getenv("CI") != "" {
 		// we added "disable" process label, so we should see it in inspect
 		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
@@ -1570,9 +1524,7 @@ func TestPodmanDriver_UsernsModeParsed(t *testing.T) {
 
 // check dns server configuration
 func TestPodmanDriver_Dns(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
 		"sh",
@@ -1633,9 +1585,7 @@ func TestPodmanDriver_Dns(t *testing.T) {
 // TestPodmanDriver_NetworkMode asserts we can specify different network modes
 // Default podman cni subnet 10.88.0.0/16
 func TestPodmanDriver_NetworkModes(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	testCases := []struct {
 		mode     string
@@ -1705,9 +1655,8 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 
 // let a task join NetworkNS of another container via network_mode=container:
 func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
+
 	allocId := uuid.Generate()
 
 	// we're running "nc" on localhost here
@@ -1782,9 +1731,8 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 
 // let a task joint NetorkNS of another container via network_mode=task:
 func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
+
 	allocId := uuid.Generate()
 
 	// we're running "nc" on localhost here
@@ -1859,9 +1807,7 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 
 // test kill / signal support
 func TestPodmanDriver_SignalTask(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	task := &drivers.TaskConfig{
@@ -1903,9 +1849,7 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 }
 
 func TestPodmanDriver_Sysctl(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	// set a uncommon somaxconn value and echo the effective
 	// in-container value
@@ -1950,9 +1894,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 // Make sure we can pull and start "non-latest" containers
 func TestPodmanDriver_Pull(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	type imageTestCase struct {
 		Image    string
@@ -2080,9 +2022,7 @@ insecure = true`
 }
 
 func Test_createImage(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	testCases := []struct {
 		Image     string
@@ -2099,9 +2039,7 @@ func Test_createImage(t *testing.T) {
 }
 
 func Test_createImageArchives(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	doesNotExist := func(filepath string) bool {
 		_, err := os.Stat(filepath)
@@ -2324,9 +2262,7 @@ func Test_memoryLimits(t *testing.T) {
 }
 
 func Test_parseImage(t *testing.T) {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	digest := "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	testCases := []struct {
@@ -2395,9 +2331,7 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 
 // helper to start, destroy and inspect a long running container
 func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.InspectContainerData {
-	if !tu.IsCI() {
-		t.Parallel()
-	}
+	ci.Parallel(t)
 
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
