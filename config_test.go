@@ -6,15 +6,16 @@ package main
 import (
 	"testing"
 
+	"github.com/hashicorp/nomad-driver-podman/ci"
 	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
 	"github.com/shoenig/test/must"
 )
 
 func TestConfig_Ports(t *testing.T) {
+	ci.Parallel(t)
+
 	parser := hclutils.NewConfigParser(taskConfigSpec)
-
 	expectedPorts := []string{"redis"}
-
 	validHCL := `
   config {
 	image = "docker://redis"
@@ -28,11 +29,11 @@ func TestConfig_Ports(t *testing.T) {
 }
 
 func TestConfig_Logging(t *testing.T) {
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	ci.Parallel(t)
 
+	parser := hclutils.NewConfigParser(taskConfigSpec)
 	expectedDriver := "journald"
 	expectedTag := "redis"
-
 	validHCL := `
   config {
 	  image = "docker://redis"
@@ -54,8 +55,9 @@ func TestConfig_Logging(t *testing.T) {
 }
 
 func TestConfig_Labels(t *testing.T) {
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	ci.Parallel(t)
 
+	parser := hclutils.NewConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 	  image = "docker://redis"
@@ -71,8 +73,9 @@ func TestConfig_Labels(t *testing.T) {
 }
 
 func TestConfig_ForcePull(t *testing.T) {
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	ci.Parallel(t)
 
+	parser := hclutils.NewConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"
@@ -86,8 +89,9 @@ func TestConfig_ForcePull(t *testing.T) {
 }
 
 func TestConfig_CPUHardLimit(t *testing.T) {
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	ci.Parallel(t)
 
+	parser := hclutils.NewConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"
@@ -103,8 +107,9 @@ func TestConfig_CPUHardLimit(t *testing.T) {
 }
 
 func TestConfig_ImagePullTimeout(t *testing.T) {
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	ci.Parallel(t)
 
+	parser := hclutils.NewConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"

@@ -68,7 +68,6 @@ func createBasicResources() *drivers.Resources {
 // podmanDriverHarness wires up everything needed to launch a task with a podman driver.
 // A driver plugin interface and cleanup function is returned
 func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.DriverHarness {
-
 	logger := testlog.HCLogger(t)
 	if testing.Verbose() {
 		logger.SetLevel(hclog.Trace)
@@ -119,6 +118,8 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 }
 
 func TestPodmanDriver_PingPodman(t *testing.T) {
+	ci.Parallel(t)
+
 	d := podmanDriverHarness(t, nil)
 	version, err := getPodmanDriver(t, d).podman.Ping(context.Background())
 	must.NoError(t, err)
@@ -1347,6 +1348,8 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 // check default capabilities
 func TestPodmanDriver_DefaultCaps(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	inspectData := startDestroyInspect(t, taskCfg, "defaultcaps")
 
@@ -1358,12 +1361,14 @@ func TestPodmanDriver_DefaultCaps(t *testing.T) {
 
 // check default process label
 func TestPodmanDriver_DefaultProcessLabel(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	inspectData := startDestroyInspect(t, taskCfg, "defaultprocesslabel")
 
 	// TODO: skip SELinux check in CI since it's not supported yet.
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
-	if os.Getenv("CI") == "" {
+	if ci.TestSELinux() {
 		// a default container gets "disable" process label
 		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
@@ -1371,6 +1376,8 @@ func TestPodmanDriver_DefaultProcessLabel(t *testing.T) {
 
 // check modified capabilities (CapAdd/CapDrop/SelinuxOpts)
 func TestPodmanDriver_Caps(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	// 	cap_add = [
 	//     "SYS_TIME",
@@ -1394,7 +1401,7 @@ func TestPodmanDriver_Caps(t *testing.T) {
 
 	// TODO: skip SELinux check in CI since it's not supported yet.
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
-	if os.Getenv("CI") != "" {
+	if ci.TestSELinux() {
 		// we added "disable" process label, so we should see it in inspect
 		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
@@ -1402,6 +1409,8 @@ func TestPodmanDriver_Caps(t *testing.T) {
 
 // check enabled tty option
 func TestPodmanDriver_Tty(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Tty = true
 	inspectData := startDestroyInspect(t, taskCfg, "tty")
@@ -1410,6 +1419,8 @@ func TestPodmanDriver_Tty(t *testing.T) {
 
 // check labels option
 func TestPodmanDriver_Labels(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Labels = map[string]string{"nomad": "job"}
 	inspectData := startDestroyInspect(t, taskCfg, "labels")
@@ -1419,6 +1430,8 @@ func TestPodmanDriver_Labels(t *testing.T) {
 
 // check enabled privileged option
 func TestPodmanDriver_Privileged(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Privileged = true
 	inspectData := startDestroyInspect(t, taskCfg, "privileged")
@@ -1427,6 +1440,8 @@ func TestPodmanDriver_Privileged(t *testing.T) {
 
 // check apparmor default value
 func TestPodmanDriver_AppArmorDefault(t *testing.T) {
+	ci.Parallel(t)
+
 	d := podmanDriverHarness(t, nil)
 
 	// Skip test if apparmor is not available
@@ -1441,6 +1456,8 @@ func TestPodmanDriver_AppArmorDefault(t *testing.T) {
 
 // check apparmor option
 func TestPodmanDriver_AppArmorUnconfined(t *testing.T) {
+	ci.Parallel(t)
+
 	d := podmanDriverHarness(t, nil)
 
 	// Skip test if apparmor is not available
@@ -1456,6 +1473,8 @@ func TestPodmanDriver_AppArmorUnconfined(t *testing.T) {
 
 // check ulimit option
 func TestPodmanDriver_Ulimit(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Ulimit = map[string]string{"nproc": "4096", "nofile": "2048:4096"}
 	inspectData := startDestroyInspect(t, taskCfg, "ulimits")
@@ -1483,6 +1502,8 @@ func TestPodmanDriver_Ulimit(t *testing.T) {
 
 // check pids_limit option
 func TestPodmanDriver_PidsLimit(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	// set a random pids limit
 	taskCfg.PidsLimit = int64(100 + rand.Intn(100))
@@ -1493,6 +1514,8 @@ func TestPodmanDriver_PidsLimit(t *testing.T) {
 
 // check enabled readonly_rootfs option
 func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
+	ci.Parallel(t)
+
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.ReadOnlyRootfs = true
 	inspectData := startDestroyInspect(t, taskCfg, "readonly_rootfs")
@@ -1501,6 +1524,8 @@ func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
 
 // check userns mode configuration (single value)
 func TestPodmanDriver_UsernsMode(t *testing.T) {
+	ci.Parallel(t)
+
 	// TODO: run test once CI can use rootless Podman.
 	t.Skip("Test suite requires rootful Podman")
 
@@ -1513,6 +1538,8 @@ func TestPodmanDriver_UsernsMode(t *testing.T) {
 
 // check userns mode configuration (parsed value)
 func TestPodmanDriver_UsernsModeParsed(t *testing.T) {
+	ci.Parallel(t)
+
 	// TODO: run test once CI can use rootless Podman.
 	t.Skip("Test suite requires rootful Podman")
 
@@ -1523,7 +1550,7 @@ func TestPodmanDriver_UsernsModeParsed(t *testing.T) {
 }
 
 // check dns server configuration
-func TestPodmanDriver_Dns(t *testing.T) {
+func TestPodmanDriver_DNS(t *testing.T) {
 	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
@@ -1948,6 +1975,8 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 // location = "localhost:5000"
 // insecure = true
 func TestPodmanDriver_Pull_Timeout(t *testing.T) {
+	ci.Parallel(t)
+
 	// Check if the machine running the test is properly configured to run this
 	// test.
 	expectedRegistry := `[[registry]]
@@ -2096,6 +2125,8 @@ func createInspectImage(t *testing.T, image, reference string) {
 }
 
 func Test_cpuLimits(t *testing.T) {
+	ci.Parallel(t)
+
 	numCores := runtime.NumCPU()
 	cases := []struct {
 		name            string
@@ -2184,6 +2215,8 @@ func Test_cpuLimits(t *testing.T) {
 }
 
 func Test_memoryLimits(t *testing.T) {
+	ci.Parallel(t)
+
 	cases := []struct {
 		name         string
 		memResources drivers.MemoryResources
@@ -2331,8 +2364,6 @@ func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 
 // helper to start, destroy and inspect a long running container
 func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.InspectContainerData {
-	ci.Parallel(t)
-
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
 		Name:      taskName,

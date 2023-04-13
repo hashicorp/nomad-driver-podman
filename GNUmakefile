@@ -81,7 +81,6 @@ test: ## Run unit tests
 	go test -v -race ./...
 
 .PHONY: test-ci
-test-ci: CI=1
 test-ci: ## Run unit tests in CI
 	@echo "==> Running unit tests in CI ..."
 	@$(BIN)/gotestsum --format=testname --rerun-fails=0 --packages=". ./api" -- \
