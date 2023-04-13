@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -2101,6 +2102,20 @@ func Test_createImageArchives(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
+
+	doesNotExist := func(filepath string) bool {
+		_, err := os.Stat(filepath)
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
+		must.NoError(t, err)
+		return false
+	}
+
+	if doesNotExist("/tmp/oci-archive") || doesNotExist("/tmp/docker-archive") {
+		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
+	}
+
 	archiveDir := os.Getenv("ARCHIVE_DIR")
 	if archiveDir == "" {
 		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
