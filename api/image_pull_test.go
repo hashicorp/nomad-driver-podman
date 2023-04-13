@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/shoenig/test/must"
 )
 
 func TestApi_Image_Pull(t *testing.T) {
@@ -27,10 +27,10 @@ func TestApi_Image_Pull(t *testing.T) {
 	for _, testCase := range testCases {
 		id, err := api.ImagePull(ctx, testCase.Image, ImageAuthConfig{})
 		if testCase.Exists {
-			assert.NoError(t, err)
-			assert.NotEqual(t, "", id)
+			must.NoError(t, err)
+			must.NotEq(t, "", id)
 		} else {
-			assert.Error(t, err)
+			must.Error(t, err)
 		}
 	}
 }

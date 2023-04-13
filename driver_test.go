@@ -34,7 +34,7 @@ import (
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/stretchr/testify/require"
+	"github.com/shoenig/test/must"
 )
 
 var (
@@ -91,7 +91,7 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	}
 
 	d := NewPodmanDriver(logger).(*Driver)
-	require.NoError(t, d.SetConfig(&baseConfig))
+	must.NoError(t, d.SetConfig(&baseConfig))
 	d.buildFingerprint()
 	d.config.Volumes.Enabled = true
 	if enforce, err := os.ReadFile("/sys/fs/selinux/enforce"); err == nil {
@@ -120,8 +120,8 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 func TestPodmanDriver_PingPodman(t *testing.T) {
 	d := podmanDriverHarness(t, nil)
 	version, err := getPodmanDriver(t, d).podman.Ping(context.Background())
-	require.NoError(t, err)
-	require.NotEmpty(t, version)
+	must.NoError(t, err)
+	must.NotEq(t, "", version)
 }
 
 func TestPodmanDriver_Start_NoImage(t *testing.T) {
@@ -139,15 +139,15 @@ func TestPodmanDriver_Start_NoImage(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, false)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "image name required")
+	must.Error(t, err)
+	must.ErrorContains(t, err, "image name required")
 
 	_ = d.DestroyTask(task.ID, true)
 }
@@ -165,14 +165,14 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -180,7 +180,7 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -202,14 +202,14 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -217,15 +217,13 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
-		if !res.Successful() {
-			require.Fail(t, "ExitResult should be successful: %v", res)
-		}
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
-		require.Fail(t, "timeout")
+		must.Unreachable(t, must.Sprint("timeout"))
 	}
 }
 
@@ -245,7 +243,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -264,7 +262,7 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 	}
 
 	_, err := getPodmanDriver(t, d).podman.ContainerCreate(context.Background(), createOpts)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	_, _, err = d.StartTask(task)
 
@@ -272,10 +270,10 @@ func TestPodmanDriver_Start_StoppedContainer(t *testing.T) {
 		_ = d.DestroyTask(task.ID, true)
 	}()
 
-	require.NoError(t, err)
+	must.NoError(t, err)
 
-	require.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
-	require.NoError(t, d.DestroyTask(task.ID, true))
+	must.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
+	must.NoError(t, d.DestroyTask(task.ID, true))
 }
 
 func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
@@ -298,14 +296,14 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -313,15 +311,13 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
-		if !res.Successful() {
-			require.Fail(t, fmt.Sprintf("ExitResult should be successful: %v", res))
-		}
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
-		require.Fail(t, "timeout")
+		must.Unreachable(t, must.Sprint("timeout"))
 	}
 
 	// Check that data was written to the shared alloc directory.
@@ -349,7 +345,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -358,7 +354,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 	containerName := BuildContainerName(task)
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -366,7 +362,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -378,7 +374,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 	// see if the container does not exist (404)
 	_, err = getPodmanDriver(t, d).podman.ContainerStats(context.Background(), containerName)
-	require.Error(t, err, api.ContainerNotFound)
+	must.ErrorIs(t, err, api.ContainerNotFound)
 }
 
 // check if container is destroyed if gc.container=false
@@ -394,7 +390,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	opts := make(map[string]interface{})
 	opts["GC.Container"] = false
@@ -406,7 +402,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	containerName := BuildContainerName(task)
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -414,7 +410,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -426,11 +422,11 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 
 	// see if the stopped container can be inspected
 	_, err = getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	// and cleanup after ourself
 	err = getPodmanDriver(t, d).podman.ContainerDelete(context.Background(), containerName, true, true)
-	require.NoError(t, err)
+	must.NoError(t, err)
 }
 
 // Check log_opt=journald logger
@@ -454,14 +450,14 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -469,7 +465,7 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -478,13 +474,12 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 	}
 
 	stdoutLog := readStdoutLog(t, task)
-	require.Contains(t, stdoutLog, stdoutMagic, "stdoutMagic in stdout")
-	require.NotContains(t, stdoutLog, stderrMagic, "stderrMagic NOT in stdout")
+	must.StrContains(t, stdoutLog, stdoutMagic)
+	must.StrNotContains(t, stdoutLog, stderrMagic)
 
 	stderrLog := readStderrLog(t, task)
-	require.Contains(t, stderrLog, stderrMagic, "stderrMagic in stderr")
-	require.NotContains(t, stderrLog, stdoutMagic, "stderrMagic NOT in stderr")
-
+	must.StrContains(t, stderrLog, stderrMagic)
+	must.StrNotContains(t, stderrLog, stdoutMagic)
 }
 
 // Check log_opt=nomad logger
@@ -508,14 +503,14 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -523,7 +518,7 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -534,8 +529,8 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 	// log_driver=nomad combines both streams into stdout, so we will find both
 	// magic values in the same stream
 	stdoutLog := readStdoutLog(t, task)
-	require.Contains(t, stdoutLog, stdoutMagic, "stdoutMagic in stdout")
-	require.Contains(t, stdoutLog, stderrMagic, "stderrMagic in stdout")
+	must.StrContains(t, stdoutLog, stdoutMagic)
+	must.StrContains(t, stdoutLog, stderrMagic)
 }
 
 // check if extra labels make it into logs
@@ -557,7 +552,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 		AllocID:       uuid.Generate(),
 		Resources:     createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	opts := map[string]interface{}{
 		"extra_labels": []string{
@@ -569,7 +564,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -577,11 +572,11 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	containerName := BuildContainerName(task)
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -594,7 +589,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 		"com.hashicorp.nomad.task_group_name": "my-group",
 		"com.hashicorp.nomad.task_name":       "my-task",
 	}
-	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
+	must.MapEq(t, expectedLabels, inspectData.Config.Labels)
 }
 
 // check hostname task config options
@@ -618,14 +613,14 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -633,7 +628,7 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -643,7 +638,7 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 	// check if the hostname was visible in the container
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, shouldHaveHostname)
+	must.StrContains(t, tasklog, shouldHaveHostname)
 
 }
 
@@ -674,7 +669,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 			DynamicPorts:  []structs.Port{{Label: "REDIS", Value: ports[1]}},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -683,18 +678,18 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 	containerName := BuildContainerName(task)
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
 	}()
 
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	// Verify that the port environment variables are set
-	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
-	require.Contains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
+	must.SliceContains(t, inspectData.Config.Env, "NOMAD_PORT_main=8888")
+	must.SliceContains(t, inspectData.Config.Env, "NOMAD_PORT_REDIS=6379")
 
 	// Verify that the correct ports are bound
 	expectedPortBindings := map[string][]api.InspectHostPort{
@@ -717,7 +712,7 @@ func TestPodmanDriver_PortMap(t *testing.T) {
 		// FIXME: REDIS UDP
 	}
 
-	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
+	must.MapEq(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
 }
 
 func TestPodmanDriver_Ports(t *testing.T) {
@@ -767,7 +762,7 @@ func TestPodmanDriver_Ports(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -776,18 +771,17 @@ func TestPodmanDriver_Ports(t *testing.T) {
 	containerName := BuildContainerName(task)
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
 	}()
 
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
+	must.SliceContains(t, inspectData.Config.Env, fmt.Sprintf("NOMAD_PORT_redis=%d", ports[0]))
 
-	require.Contains(t, inspectData.Config.Env, fmt.Sprintf("NOMAD_PORT_redis=%d", ports[0]))
-
-	require.Len(t, inspectData.HostConfig.PortBindings, 4)
+	must.MapLen(t, 4, inspectData.HostConfig.PortBindings)
 	expectedPortBindings := map[string][]api.InspectHostPort{
 		fmt.Sprintf("%d/tcp", 8888): {{
 			HostIP:   "127.0.0.1",
@@ -806,7 +800,7 @@ func TestPodmanDriver_Ports(t *testing.T) {
 			HostPort: strconv.Itoa(ports[1]),
 		}},
 	}
-	require.Exactly(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
+	must.MapEq(t, expectedPortBindings, inspectData.HostConfig.PortBindings)
 }
 
 func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
@@ -849,15 +843,14 @@ func TestPodmanDriver_Ports_MissingFromGroup(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Port \"missing\" not found, check network stanza")
+	must.ErrorContains(t, err, `Port "missing" not found, check network stanza`)
 }
 
 func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
@@ -887,15 +880,15 @@ func TestPodmanDriver_Ports_MissingDriverConfig(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "No ports defined in network stanza")
+	must.Error(t, err)
+	must.ErrorContains(t, err, "No ports defined in network stanza")
 }
 
 func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
@@ -943,15 +936,15 @@ func TestPodmanDriver_Ports_WithPortMap(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Invalid port declaration; use of port_map and ports")
+	must.Error(t, err)
+	must.ErrorContains(t, err, "Invalid port declaration; use of port_map and ports")
 }
 
 // check --init with default path
@@ -987,14 +980,14 @@ func TestPodmanDriver_Init(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err = d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1002,7 +995,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -1012,7 +1005,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	// podman maps init process to /dev/init, so we should see this
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, "/dev/init")
+	must.StrContains(t, tasklog, "/dev/init")
 
 }
 
@@ -1054,14 +1047,14 @@ func TestPodmanDriver_OOM(t *testing.T) {
 	}
 	// limit memory to 5MB to trigger oom soon enough
 	task.Resources.NomadResources.Memory.MemoryMB = 10
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err = d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1069,15 +1062,15 @@ func TestPodmanDriver_OOM(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
-		require.False(t, res.Successful(), "Should have failed because of oom but was successful")
-		require.True(t, res.OOMKilled, "OOM Flag not set")
-		require.Contains(t, res.Err.Error(), "OOM killer")
+		must.False(t, res.Successful(), must.Sprint("Should have failed because of oom but was successful"))
+		must.True(t, res.OOMKilled, must.Sprint("OOM Flag not set"))
+		must.ErrorContains(t, res.Err, "OOM killer")
 	case <-time.After(time.Duration(tu.TestMultiplier()*3) * time.Second):
-		t.Fatalf("Container did not exit in time")
+		must.Unreachable(t, must.Sprint("Container did not exit in time"))
 	}
 }
 
@@ -1105,14 +1098,14 @@ func TestPodmanDriver_User(t *testing.T) {
 	}
 	// use "www-data" as a user for our test, it's part of the busybox image
 	task.User = "www-data"
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1120,19 +1113,19 @@ func TestPodmanDriver_User(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		require.True(t, res.Successful())
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
-		t.Fatalf("Container did not exit in time")
+		must.Unreachable(t, must.Sprint("Container did not exit in time"))
 	}
 
 	// see if stdout was populated with the "whoami" output
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, "www-data")
+	must.StrContains(t, tasklog, "www-data")
 
 }
 
@@ -1155,14 +1148,14 @@ func TestPodmanDriver_Device(t *testing.T) {
 		Resources: createBasicResources(),
 	}
 	taskCfg.Devices = []string{"/dev/net/tun"}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1170,19 +1163,19 @@ func TestPodmanDriver_Device(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		require.True(t, res.Successful())
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
 	// see if stdout was populated with the "whoami" output
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, "dev/net/tun")
+	must.StrContains(t, tasklog, "dev/net/tun")
 
 }
 
@@ -1207,7 +1200,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	taskCfg.MemorySwap = "100m"
 	// set a swappiness of 60
 	taskCfg.MemorySwappiness = 60
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	containerName := BuildContainerName(task)
 
@@ -1216,7 +1209,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1224,7 +1217,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -1233,15 +1226,15 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	}
 	// inspect container to learn about the actual podman limits
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	// see if the configured values are set correctly
-	require.Equal(t, int64(52428800), inspectData.HostConfig.Memory)
-	require.Equal(t, int64(41943040), inspectData.HostConfig.MemoryReservation)
-	require.Equal(t, int64(104857600), inspectData.HostConfig.MemorySwap)
+	must.Eq(t, 52428800, inspectData.HostConfig.Memory)
+	must.Eq(t, 41943040, inspectData.HostConfig.MemoryReservation)
+	must.Eq(t, 104857600, inspectData.HostConfig.MemorySwap)
 
 	if !getPodmanDriver(t, d).cgroupV2 {
-		require.Equal(t, int64(60), inspectData.HostConfig.MemorySwappiness)
+		must.Eq(t, 60, inspectData.HostConfig.MemorySwappiness)
 	}
 }
 
@@ -1269,7 +1262,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 		Resources: createBasicResources(),
 	}
 	// use "www-data" as a user for our test, it's part of the busybox image
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -1277,7 +1270,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	containerName := BuildContainerName(task)
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1285,7 +1278,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -1295,18 +1288,18 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	// see if tmpfs was propagated to podman
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	expectedFilesystem := map[string]string{
 		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
 		"/tmpdata2": "rw,rprivate,nosuid,nodev,tmpcopyup",
 	}
-	require.Exactly(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
+	must.MapEq(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, " on /tmpdata1 type tmpfs ")
-	require.Contains(t, tasklog, " on /tmpdata2 type tmpfs ")
+	must.StrContains(t, tasklog, " on /tmpdata1 type tmpfs ")
+	must.StrContains(t, tasklog, " on /tmpdata2 type tmpfs ")
 }
 
 // check mount options
@@ -1335,7 +1328,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 		Resources: createBasicResources(),
 	}
 	// use "www-data" as a user for our test, it's part of the busybox image
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -1343,7 +1336,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 	containerName := BuildContainerName(task)
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1351,7 +1344,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -1361,7 +1354,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 	// see if options where correctly sent to podman
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	aok := false
 	bok := false
@@ -1375,31 +1368,31 @@ func TestPodmanDriver_Mount(t *testing.T) {
 			prefix := bind[0:13]
 			opts := strings.Split(bind[13:], ",")
 			if prefix == "/tmp:/checka:" {
-				require.Contains(t, opts, "ro")
-				require.Contains(t, opts, "shared")
+				must.SliceContains(t, opts, "ro")
+				must.SliceContains(t, opts, "shared")
 				aok = true
 			}
 			if prefix == "/tmp:/checkb:" {
-				require.Contains(t, opts, "rw")
-				require.Contains(t, opts, "private")
+				must.SliceContains(t, opts, "rw")
+				must.SliceContains(t, opts, "private")
 				bok = true
 			}
 			if prefix == "/tmp:/checkc:" {
-				require.Contains(t, opts, "rw")
-				require.Contains(t, opts, "rprivate")
+				must.SliceContains(t, opts, "rw")
+				must.SliceContains(t, opts, "rprivate")
 				cok = true
 			}
 		}
 	}
-	require.True(t, aok, "checka not ok")
-	require.True(t, bok, "checkb not ok")
-	require.True(t, cok, "checkc not ok")
+	must.True(t, aok, must.Sprint("checka not ok"))
+	must.True(t, bok, must.Sprint("checkb not ok"))
+	must.True(t, cok, must.Sprint("checkc not ok"))
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, " on /checka type ")
-	require.Contains(t, tasklog, " on /checkb type ")
-	require.Contains(t, tasklog, " on /checkc type ")
+	must.StrContains(t, tasklog, " on /checka type ")
+	must.StrContains(t, tasklog, " on /checkb type ")
+	must.StrContains(t, tasklog, " on /checkc type ")
 }
 
 // check default capabilities
@@ -1408,9 +1401,9 @@ func TestPodmanDriver_DefaultCaps(t *testing.T) {
 	inspectData := startDestroyInspect(t, taskCfg, "defaultcaps")
 
 	// a default container should not have SYS_TIME
-	require.NotContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
+	must.SliceNotContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
 	// a default container gets CHOWN cap
-	require.Contains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
+	must.SliceContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 }
 
 // check default process label
@@ -1422,7 +1415,7 @@ func TestPodmanDriver_DefaultProcessLabel(t *testing.T) {
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
 	if !tu.IsCI() {
 		// a default container gets "disable" process label
-		require.Contains(t, inspectData.ProcessLabel, "label=disable")
+		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
 }
 
@@ -1445,15 +1438,15 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	inspectData := startDestroyInspect(t, taskCfg, "caps")
 
 	// we added SYS_TIME, so we should see it in inspect
-	require.Contains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
+	must.SliceContains(t, inspectData.EffectiveCaps, "CAP_SYS_TIME")
 	// we dropped CAP_CHOWN, so we should NOT see it in inspect
-	require.NotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
+	must.SliceNotContains(t, inspectData.EffectiveCaps, "CAP_CHOWN")
 
 	// TODO: skip SELinux check in CI since it's not supported yet.
 	// https://github.com/hashicorp/nomad-driver-podman/pull/139#issuecomment-1192929834
 	if !tu.IsCI() {
 		// we added "disable" process label, so we should see it in inspect
-		require.Contains(t, inspectData.ProcessLabel, "label=disable")
+		must.StrContains(t, inspectData.ProcessLabel, "label=disable")
 	}
 }
 
@@ -1462,8 +1455,7 @@ func TestPodmanDriver_Tty(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Tty = true
 	inspectData := startDestroyInspect(t, taskCfg, "tty")
-
-	require.True(t, inspectData.Config.Tty)
+	must.True(t, inspectData.Config.Tty)
 }
 
 // check labels option
@@ -1471,10 +1463,8 @@ func TestPodmanDriver_Labels(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Labels = map[string]string{"nomad": "job"}
 	inspectData := startDestroyInspect(t, taskCfg, "labels")
-
 	expectedLabels := map[string]string{"nomad": "job"}
-
-	require.Exactly(t, expectedLabels, inspectData.Config.Labels)
+	must.MapEq(t, expectedLabels, inspectData.Config.Labels)
 }
 
 // check enabled privileged option
@@ -1482,8 +1472,7 @@ func TestPodmanDriver_Privileged(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.Privileged = true
 	inspectData := startDestroyInspect(t, taskCfg, "privileged")
-
-	require.True(t, inspectData.HostConfig.Privileged)
+	must.True(t, inspectData.HostConfig.Privileged)
 }
 
 // check apparmor default value
@@ -1497,7 +1486,7 @@ func TestPodmanDriver_AppArmorDefault(t *testing.T) {
 
 	defaultCfg := newTaskConfig("", busyboxLongRunningCmd)
 	defaultInspectResult := startDestroyInspect(t, defaultCfg, "aa-default")
-	require.Contains(t, defaultInspectResult.AppArmorProfile, "containers-default")
+	must.StrContains(t, defaultInspectResult.AppArmorProfile, "containers-default")
 }
 
 // check apparmor option
@@ -1512,7 +1501,7 @@ func TestPodmanDriver_AppArmorUnconfined(t *testing.T) {
 	unconfinedCfg := newTaskConfig("", busyboxLongRunningCmd)
 	unconfinedCfg.ApparmorProfile = "unconfined"
 	unconfinedInspectResult := startDestroyInspect(t, unconfinedCfg, "aa-unconfined")
-	require.Equal(t, "unconfined", unconfinedInspectResult.AppArmorProfile)
+	must.Eq(t, "unconfined", unconfinedInspectResult.AppArmorProfile)
 }
 
 // check ulimit option
@@ -1532,13 +1521,13 @@ func TestPodmanDriver_Ulimit(t *testing.T) {
 		Hard: uint64(4096),
 	}
 
-	require.Len(t, inspectData.HostConfig.Ulimits, 2)
+	must.Len(t, 2, inspectData.HostConfig.Ulimits)
 	if inspectData.HostConfig.Ulimits[0].Name == "RLIMIT_NOFILE" {
-		require.Exactly(t, nofileLimit, inspectData.HostConfig.Ulimits[0])
-		require.Exactly(t, nprocLimit, inspectData.HostConfig.Ulimits[1])
+		must.Eq(t, nofileLimit, inspectData.HostConfig.Ulimits[0])
+		must.Eq(t, nprocLimit, inspectData.HostConfig.Ulimits[1])
 	} else {
-		require.Exactly(t, nofileLimit, inspectData.HostConfig.Ulimits[1])
-		require.Exactly(t, nprocLimit, inspectData.HostConfig.Ulimits[0])
+		must.Eq(t, nofileLimit, inspectData.HostConfig.Ulimits[1])
+		must.Eq(t, nprocLimit, inspectData.HostConfig.Ulimits[0])
 	}
 }
 
@@ -1549,7 +1538,7 @@ func TestPodmanDriver_PidsLimit(t *testing.T) {
 	taskCfg.PidsLimit = int64(100 + rand.Intn(100))
 	inspectData := startDestroyInspect(t, taskCfg, "pidsLimit")
 	// and compare it
-	require.Equal(t, taskCfg.PidsLimit, inspectData.HostConfig.PidsLimit)
+	must.Eq(t, taskCfg.PidsLimit, inspectData.HostConfig.PidsLimit)
 }
 
 // check enabled readonly_rootfs option
@@ -1557,8 +1546,7 @@ func TestPodmanDriver_ReadOnlyFilesystem(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.ReadOnlyRootfs = true
 	inspectData := startDestroyInspect(t, taskCfg, "readonly_rootfs")
-
-	require.True(t, inspectData.HostConfig.ReadonlyRootfs)
+	must.True(t, inspectData.HostConfig.ReadonlyRootfs)
 }
 
 // check userns mode configuration (single value)
@@ -1570,7 +1558,7 @@ func TestPodmanDriver_UsernsMode(t *testing.T) {
 	taskCfg.UserNS = "host"
 	inspectData := startDestroyInspect(t, taskCfg, "userns")
 
-	require.Equal(t, "host", inspectData.HostConfig.UsernsMode)
+	must.Eq(t, "host", inspectData.HostConfig.UsernsMode)
 }
 
 // check userns mode configuration (parsed value)
@@ -1581,8 +1569,7 @@ func TestPodmanDriver_UsernsModeParsed(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	taskCfg.UserNS = "keep-id:uid=200,gid=210"
 	inspectData := startDestroyInspect(t, taskCfg, "userns")
-
-	require.Equal(t, "keep-id:uid=200,gid=210", inspectData.HostConfig.UsernsMode)
+	must.Eq(t, "keep-id:uid=200,gid=210", inspectData.HostConfig.UsernsMode)
 }
 
 // check dns server configuration
@@ -1614,14 +1601,14 @@ func TestPodmanDriver_Dns(t *testing.T) {
 			Options:  []string{"ndots:2"},
 		},
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1629,21 +1616,21 @@ func TestPodmanDriver_Dns(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		require.True(t, res.Successful())
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
 	// see if stdout was populated with the correct output
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, "nameserver 1.1.1.1")
-	require.Contains(t, tasklog, "search internal.corp")
-	require.Contains(t, tasklog, "options ndots:2")
+	must.StrContains(t, tasklog, "nameserver 1.1.1.1")
+	must.StrContains(t, tasklog, "search internal.corp")
+	must.StrContains(t, tasklog, "options ndots:2")
 
 }
 
@@ -1695,27 +1682,27 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 				Resources: createBasicResources(),
 			}
 
-			require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 			d := podmanDriverHarness(t, nil)
 			defer d.MkAllocDir(task, true)()
 
 			containerName := BuildContainerName(task)
 			_, _, err := d.StartTask(task)
-			require.NoError(t, err)
+			must.NoError(t, err)
 
 			defer func() {
 				_ = d.DestroyTask(task.ID, true)
 			}()
 
-			require.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
+			must.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
 
 			inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-			require.NoError(t, err)
+			must.NoError(t, err)
 			if tc.mode == "host" {
-				require.Equal(t, "host", inspectData.HostConfig.NetworkMode)
+				must.Eq(t, "host", inspectData.HostConfig.NetworkMode)
 			}
-			require.Equal(t, tc.gateway, inspectData.NetworkSettings.Gateway)
+			must.Eq(t, tc.gateway, inspectData.NetworkSettings.Gateway)
 		})
 	}
 }
@@ -1742,7 +1729,7 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 		AllocID:   allocId,
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+	must.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
 
 	// we're running a second task in same networkNS and invoke netstat in it
 	sidecarTaskCfg := newTaskConfig("", []string{
@@ -1758,14 +1745,14 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 		AllocID:   allocId,
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+	must.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
 
 	mainHarness := podmanDriverHarness(t, nil)
 	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
 	defer mainCleanup()
 
 	_, _, err := mainHarness.StartTask(mainTask)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	defer func() {
 		_ = mainHarness.DestroyTask(mainTask.ID, true)
 	}()
@@ -1775,26 +1762,26 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 	defer sidecarCleanup()
 
 	_, _, err = sidecarHarness.StartTask(sidecarTask)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	defer func() {
 		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
 	}()
 
 	// Attempt to wait
 	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		require.True(t, res.Successful())
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 		t.Fatalf("Sidecar did not exit in time")
 	}
 
 	// see if stdout was populated with the correct output
 	tasklog := readStdoutLog(t, sidecarTask)
-	require.Contains(t, tasklog, "127.0.0.1:6748")
+	must.StrContains(t, tasklog, "127.0.0.1:6748")
 }
 
 // let a task joint NetorkNS of another container via network_mode=task:
@@ -1819,7 +1806,7 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 		AllocID:   allocId,
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+	must.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
 
 	// we're running a second task in same networkNS and invoke netstat in it
 	sidecarTaskCfg := newTaskConfig("", []string{
@@ -1835,14 +1822,14 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 		AllocID:   allocId,
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+	must.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
 
 	mainHarness := podmanDriverHarness(t, nil)
 	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
 	defer mainCleanup()
 
 	_, _, err := mainHarness.StartTask(mainTask)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	defer func() {
 		_ = mainHarness.DestroyTask(mainTask.ID, true)
 	}()
@@ -1852,26 +1839,26 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 	defer sidecarCleanup()
 
 	_, _, err = sidecarHarness.StartTask(sidecarTask)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	defer func() {
 		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
 	}()
 
 	// Attempt to wait
 	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		require.True(t, res.Successful())
+		must.True(t, res.Successful())
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 		t.Fatalf("Sidecar did not exit in time")
 	}
 
 	// see if stdout was populated with the correct output
 	tasklog := readStdoutLog(t, sidecarTask)
-	require.Contains(t, tasklog, "127.0.0.1:6748")
+	must.StrContains(t, tasklog, "127.0.0.1:6748")
 }
 
 // test kill / signal support
@@ -1887,14 +1874,14 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1902,18 +1889,18 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 	// try to send non-existing singal, should yield an error
-	require.Error(t, d.SignalTask(task.ID, "FOO"))
+	must.Error(t, d.SignalTask(task.ID, "FOO"))
 	time.Sleep(300 * time.Millisecond)
 	// send a friendly CTRL+C to busybox to stop the container
-	require.NoError(t, d.SignalTask(task.ID, "SIGINT"))
+	must.NoError(t, d.SignalTask(task.ID, "SIGINT"))
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case res := <-waitCh:
-		require.Equal(t, 130, res.ExitCode, "Should have got exit code 130")
+		must.Eq(t, 130, res.ExitCode)
 	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
@@ -1937,14 +1924,14 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
 	defer cleanup()
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -1952,7 +1939,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -1961,7 +1948,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 	}
 
 	tasklog := readStdoutLog(t, task)
-	require.Contains(t, tasklog, "net.core.somaxconn = 12321")
+	must.StrContains(t, tasklog, "net.core.somaxconn = 12321")
 
 }
 
@@ -2007,8 +1994,8 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 		Resources: createBasicResources(),
 	}
 	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
-	require.NoError(t, err)
-	require.Equal(t, imageID, inspectData.Image)
+	must.NoError(t, err)
+	must.Eq(t, imageID, inspectData.Image)
 }
 
 // TestPodmanDriver_Pull_Timeout verifies that the task image_pull_timeout
@@ -2030,7 +2017,7 @@ location = "localhost:5000"
 insecure = true`
 
 	content, err := os.ReadFile("/etc/containers/registries.conf")
-	require.NoError(t, err)
+	must.NoError(t, err)
 	if !strings.Contains(string(content), expectedRegistry) {
 		t.Skip("Skipping test because /etc/containers/registries.conf doesn't have insecure registry config for localhost:5000")
 	}
@@ -2040,11 +2027,11 @@ insecure = true`
 
 	// Create a listener on port 5000.
 	l, err := net.Listen("tcp", "127.0.0.1:5000")
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	// Proxy requests to quay.io except when trying to pull a busybox image.
 	parsedURL, err := url.Parse("https://quay.io")
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
 	proxy.ModifyResponse = func(resp *http.Response) error {
@@ -2092,8 +2079,8 @@ insecure = true`
 	cancel()
 
 	// Verify that the timeout happened after client_http_timeout.
-	require.Greater(t, time.Since(now), 2*time.Second)
-	require.ErrorContains(t, err, "context deadline exceeded")
+	must.Greater(t, 2*time.Second, time.Since(now))
+	must.ErrorContains(t, err, "context deadline exceeded")
 }
 
 func Test_createImage(t *testing.T) {
@@ -2153,11 +2140,11 @@ func createInspectImage(t *testing.T, image, reference string) {
 		Resources: createBasicResources(),
 	}
 	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)
-	require.NoError(t, err)
-	require.Equal(t, idRef, idTest)
+	must.NoError(t, err)
+	must.Eq(t, idRef, idTest)
 }
 
 func Test_cpuLimits(t *testing.T) {
@@ -2232,17 +2219,17 @@ func Test_cpuLimits(t *testing.T) {
 				CPUCFSPeriod: c.period,
 			}
 			err := setCPUResources(cfg, &c.systemResources, taskCPU)
-			require.Nil(t, err)
+			must.Nil(t, err)
 
 			if c.hardLimit {
-				require.NotNil(t, taskCPU.Quota)
-				require.Equal(t, c.expectedQuota*int64(numCores), *taskCPU.Quota)
+				must.NotNil(t, taskCPU.Quota)
+				must.Eq(t, c.expectedQuota*int64(numCores), *taskCPU.Quota)
 
-				require.NotNil(t, taskCPU.Period)
-				require.Equal(t, c.expectedPeriod, *taskCPU.Period)
+				must.NotNil(t, taskCPU.Period)
+				must.Eq(t, c.expectedPeriod, *taskCPU.Period)
 			} else {
-				require.Nil(t, taskCPU.Quota)
-				require.Nil(t, taskCPU.Period)
+				must.Nil(t, taskCPU.Quota)
+				must.Nil(t, taskCPU.Period)
 			}
 		})
 	}
@@ -2307,20 +2294,20 @@ func Test_memoryLimits(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			hard, soft, err := memoryLimits(c.memResources, c.reservation)
-			require.NoError(t, err)
+			must.NoError(t, err)
 
 			if c.expectedHard > 0 {
-				require.NotNil(t, hard)
-				require.Equal(t, c.expectedHard, *hard)
+				must.NotNil(t, hard)
+				must.Eq(t, c.expectedHard, *hard)
 			} else {
-				require.Nil(t, hard)
+				must.Nil(t, hard)
 			}
 
 			if c.expectedSoft > 0 {
-				require.NotNil(t, soft)
-				require.Equal(t, c.expectedSoft, *soft)
+				must.NotNil(t, soft)
+				must.Eq(t, c.expectedSoft, *soft)
 			} else {
-				require.Nil(t, soft)
+				must.Nil(t, soft)
 			}
 		})
 	}
@@ -2349,12 +2336,12 @@ func Test_parseImage(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		ref, err := parseImage(testCase.Input)
-		require.NoError(t, err)
-		require.Equal(t, testCase.Transport, ref.Transport().Name())
+		must.NoError(t, err)
+		must.Eq(t, testCase.Transport, ref.Transport().Name())
 		if ref.Transport().Name() == "docker" {
-			require.Equal(t, testCase.Name, ref.DockerReference().String())
+			must.Eq(t, testCase.Name, ref.DockerReference().String())
 		} else {
-			require.Equal(t, testCase.Name, ref.StringWithinTransport())
+			must.Eq(t, testCase.Name, ref.StringWithinTransport())
 		}
 
 	}
@@ -2364,7 +2351,7 @@ func Test_parseImage(t *testing.T) {
 func readStdoutLog(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StdoutPath), fmt.Sprintf("%s.stdout.0", task.Name))
 	stdout, err := os.ReadFile(logfile)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	return string(stdout)
 }
 
@@ -2372,7 +2359,7 @@ func readStdoutLog(t *testing.T, task *drivers.TaskConfig) string {
 func readStderrLog(t *testing.T, task *drivers.TaskConfig) string {
 	logfile := filepath.Join(filepath.Dir(task.StderrPath), fmt.Sprintf("%s.stderr.0", task.Name))
 	stderr, err := os.ReadFile(logfile)
-	require.NoError(t, err)
+	must.NoError(t, err)
 	return string(stderr)
 }
 
@@ -2392,7 +2379,7 @@ func newTaskConfig(image string, command []string) TaskConfig {
 
 func getPodmanDriver(t *testing.T, harness *dtestutil.DriverHarness) *Driver {
 	driver, ok := harness.Impl().(*Driver)
-	require.True(t, ok)
+	must.True(t, ok)
 	return driver
 }
 
@@ -2408,7 +2395,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
 	cleanup := d.MkAllocDir(task, true)
@@ -2417,7 +2404,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 	containerName := BuildContainerName(task)
 
 	_, _, err := d.StartTask(task)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
@@ -2425,7 +2412,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 
 	// Attempt to wait
 	waitCh, err := d.WaitTask(context.Background(), task.ID)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	select {
 	case <-waitCh:
@@ -2433,7 +2420,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
 	}
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
-	require.NoError(t, err)
+	must.NoError(t, err)
 
 	return inspectData
 }

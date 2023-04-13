@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
-	"github.com/stretchr/testify/require"
+	"github.com/shoenig/test/must"
 )
 
 func TestConfig_Ports(t *testing.T) {
@@ -24,7 +24,7 @@ func TestConfig_Ports(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, expectedPorts, tc.Ports)
+	must.SliceContainsAll(t, expectedPorts, tc.Ports)
 }
 
 func TestConfig_Logging(t *testing.T) {
@@ -49,8 +49,8 @@ func TestConfig_Logging(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, expectedDriver, tc.Logging.Driver)
-	require.EqualValues(t, expectedTag, tc.Logging.Options["tag"])
+	must.Eq(t, expectedDriver, tc.Logging.Driver)
+	must.Eq(t, expectedTag, tc.Logging.Options["tag"])
 }
 
 func TestConfig_Labels(t *testing.T) {
@@ -67,7 +67,7 @@ func TestConfig_Labels(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, "job", tc.Labels["nomad"])
+	must.Eq(t, "job", tc.Labels["nomad"])
 }
 
 func TestConfig_ForcePull(t *testing.T) {
@@ -82,7 +82,7 @@ func TestConfig_ForcePull(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, true, tc.ForcePull)
+	must.Eq(t, true, tc.ForcePull)
 }
 
 func TestConfig_CPUHardLimit(t *testing.T) {
@@ -98,8 +98,8 @@ func TestConfig_CPUHardLimit(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, true, tc.CPUHardLimit)
-	require.EqualValues(t, 200000, tc.CPUCFSPeriod)
+	must.True(t, tc.CPUHardLimit)
+	must.Eq(t, 200000, tc.CPUCFSPeriod)
 }
 
 func TestConfig_ImagePullTimeout(t *testing.T) {
@@ -114,5 +114,5 @@ func TestConfig_ImagePullTimeout(t *testing.T) {
 
 	var tc *TaskConfig
 	parser.ParseHCL(t, validHCL, &tc)
-	require.EqualValues(t, "10m", tc.ImagePullTimeout)
+	must.Eq(t, "10m", tc.ImagePullTimeout)
 }
