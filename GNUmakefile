@@ -1,5 +1,6 @@
 SHELL = bash
 
+# Handle multi-path environments
 GOPATH := $(shell go env GOPATH | cut -d: -f1)
 
 # Respect $GOBIN if set in environment or via $GOENV file.
@@ -78,6 +79,16 @@ build/nomad-driver-podman:
 test: ## Run unit tests
 	@echo "==> Running unit tests ..."
 	go test -v -race ./...
+
+.PHONY: test-ci
+test-ci: CI=1
+test-ci: ## Run unit tests in CI
+	@echo "==> Running unit tests in CI ..."
+	@$(BIN)/gotestsum --format=testname --rerun-fails=0 --packages=". ./api" -- \
+		-cover \
+		-timeout=10m \
+		-count=1 \
+		. ./api
 
 .PHONY: version
 version:
