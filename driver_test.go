@@ -33,7 +33,6 @@ import (
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
 	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
-	tu "github.com/hashicorp/nomad/testutil"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shoenig/test/must"
 )
@@ -183,7 +182,7 @@ func TestPodmanDriver_Start_Wait(t *testing.T) {
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 	}
 }
 
@@ -218,7 +217,7 @@ func TestPodmanDriver_Start_WaitFinish(t *testing.T) {
 	select {
 	case res := <-waitCh:
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
+	case <-time.After(20 * time.Second):
 		must.Unreachable(t, must.Sprint("timeout"))
 	}
 }
@@ -308,7 +307,7 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	select {
 	case res := <-waitCh:
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
+	case <-time.After(20 * time.Second):
 		must.Unreachable(t, must.Sprint("timeout"))
 	}
 
@@ -357,7 +356,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 	}
 
 	_ = d.DestroyTask(task.ID, true)
@@ -403,7 +402,7 @@ func TestPodmanDriver_GC_Container_off(t *testing.T) {
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 	}
 
 	_ = d.DestroyTask(task.ID, true)
@@ -455,7 +454,7 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -506,7 +505,7 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -562,7 +561,7 @@ func TestPodmanDriver_ExtraLabels(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*4) * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -612,7 +611,7 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -963,7 +962,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -1030,7 +1029,7 @@ func TestPodmanDriver_OOM(t *testing.T) {
 		must.False(t, res.Successful(), must.Sprint("Should have failed because of oom but was successful"))
 		must.True(t, res.OOMKilled, must.Sprint("OOM Flag not set"))
 		must.ErrorContains(t, res.Err, "OOM killer")
-	case <-time.After(time.Duration(tu.TestMultiplier()*3) * time.Second):
+	case <-time.After(20 * time.Second):
 		must.Unreachable(t, must.Sprint("Container did not exit in time"))
 	}
 }
@@ -1078,7 +1077,7 @@ func TestPodmanDriver_User(t *testing.T) {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		must.Unreachable(t, must.Sprint("Container did not exit in time"))
 	}
 
@@ -1126,7 +1125,7 @@ func TestPodmanDriver_Device(t *testing.T) {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -1177,7 +1176,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 	}
 	// inspect container to learn about the actual podman limits
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
@@ -1235,7 +1234,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -1299,7 +1298,7 @@ func TestPodmanDriver_Mount(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -1597,7 +1596,7 @@ func TestPodmanDriver_DNS(t *testing.T) {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -1668,7 +1667,7 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 				_ = d.DestroyTask(task.ID, true)
 			}()
 
-			must.NoError(t, d.WaitUntilStarted(task.ID, time.Duration(tu.TestMultiplier()*3)*time.Second))
+			must.NoError(t, d.WaitUntilStarted(task.ID, 20*time.Second))
 
 			inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 			must.NoError(t, err)
@@ -1747,7 +1746,7 @@ func TestPodmanDriver_NetworkMode_Container(t *testing.T) {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Sidecar did not exit in time")
 	}
 
@@ -1823,7 +1822,7 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
 		must.True(t, res.Successful())
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatalf("Sidecar did not exit in time")
 	}
 
@@ -1870,7 +1869,7 @@ func TestPodmanDriver_SignalTask(t *testing.T) {
 	select {
 	case res := <-waitCh:
 		must.Eq(t, 130, res.ExitCode)
-	case <-time.After(time.Duration(tu.TestMultiplier()*5) * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 }
@@ -1910,7 +1909,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 
 	select {
 	case <-waitCh:
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatalf("Container did not exit in time")
 	}
 
@@ -2392,7 +2391,7 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 	select {
 	case <-waitCh:
 		t.Fatalf("wait channel should not have received an exit result")
-	case <-time.After(time.Duration(tu.TestMultiplier()*2) * time.Second):
+	case <-time.After(20 * time.Second):
 	}
 	inspectData, err := getPodmanDriver(t, d).podman.ContainerInspect(context.Background(), containerName)
 	must.NoError(t, err)
