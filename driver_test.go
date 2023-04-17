@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -954,16 +955,11 @@ func TestPodmanDriver_Init(t *testing.T) {
 	}
 
 	// only test --init if catatonit is installed
-	initPath := "/usr/libexec/podman/catatonit"
-	_, err := os.Stat(initPath)
+	initPath, err := exec.LookPath("catatonit")
 	if os.IsNotExist(err) {
-		path, pathErr := exec.LookPath("catatonit")
-		if pathErr != nil {
-			t.Skip("Skipping --init test because catatonit is not installed")
-			return
-		}
-		initPath = path
+		t.Skip("Skipping --init test because catatonit is not installed")
 	}
+	must.NoError(t, err)
 
 	taskCfg := newTaskConfig("", []string{
 		// print pid 1 filename to stdout
@@ -2106,6 +2102,20 @@ func Test_createImageArchives(t *testing.T) {
 	if !tu.IsCI() {
 		t.Parallel()
 	}
+
+	doesNotExist := func(filepath string) bool {
+		_, err := os.Stat(filepath)
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
+		must.NoError(t, err)
+		return false
+	}
+
+	if doesNotExist("/tmp/oci-archive") || doesNotExist("/tmp/docker-archive") {
+		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
+	}
+
 	archiveDir := os.Getenv("ARCHIVE_DIR")
 	if archiveDir == "" {
 		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")

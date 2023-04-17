@@ -1,70 +1,32 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+
 # Copyright (c) HashiCorp, Inc.
 # SPDX-License-Identifier: MPL-2.0
 
+set -euo pipefail
 
-# Update ca-certificates first to prevent using outdated certificates for the
-# podman repository.
-# https://github.com/containers/podman/issues/8533#issuecomment-944873690
+echo "====== Install tools from apt"
 apt-get update
-apt-get install -y ca-certificates
+apt-get install -y ca-certificates podman curl build-essential
 
-# add podman repository
-echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/ /" | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_$(lsb_release -rs)/Release.key | apt-key add -
+echo "====== Install catatonit"
+curl -v -L -o /usr/local/bin/catatonit https://github.com/openSUSE/catatonit/releases/download/v0.1.7/catatonit.x86_64
+chmod +x /usr/local/bin/catatonit
 
-# Ignore apt-get update errors to avoid failing due to misbehaving repo;
-# true errors would fail in the apt-get install phase
-apt-get update || true
-
-# install podman for running the test suite
-apt-get install -y podman wget build-essential
-
-# get catatonit (to check podman --init switch)
-cd /tmp
-wget https://github.com/openSUSE/catatonit/releases/download/v0.1.4/catatonit.x86_64
-mkdir -p /usr/libexec/podman
-mv catatonit* /usr/libexec/podman/catatonit
-chmod +x /usr/libexec/podman/catatonit
-
-echo "====== Installed podman:"
-# ensure to remember the used version when checking a build log
+echo "====== Podman info"
+podman version
 podman info
 
-echo "====== Podman version:"
-podman version
+echo "====== Setup archives"
+podman pull alpine:3
+podman save --format docker-archive --output /tmp/docker-archive alpine:3
+podman save --format oci-archive --output /tmp/oci-archive alpine:3
+podman image rm alpine:3
 
-# enable http socket
-cat > /etc/systemd/system/podman.service << EOF
-[Unit]
-Description=Podman API Service
-Requires=podman.socket
-After=podman.socket
-Documentation=man:podman-system-service(1)
-StartLimitIntervalSec=0
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/podman system service
-
-[Install]
-WantedBy=multi-user.target
-Also=podman.socket
+echo "===== Configure registries"
+cat <<EOF > /etc/containers/registries.conf
+unqualified-search-registries = ["docker.io", "quay.io"]
+[[registry]]
+location = "localhost:5000"
+insecure = true
 EOF
-
-cat > /etc/systemd/system/podman.socket << EOF
-[Unit]
-Description=Podman API Socket
-Documentation=man:podman-system-service(1)
-
-[Socket]
-ListenStream=%t/podman/podman.sock
-SocketMode=0660
-
-[Install]
-WantedBy=sockets.target
-EOF
-
-systemctl daemon-reload
-# enable http api
-systemctl start podman
