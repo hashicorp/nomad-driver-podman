@@ -19,9 +19,9 @@ jobs:
     needs: build-artifacts
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Download built artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           path: out/
       # Set BUILD_OUTPUT_LIST to out\<project>-<version>.<fileext>\*,out\...
@@ -33,12 +33,12 @@ jobs:
           echo "BUILD_OUTPUT_LIST=$(cat tmp2.txt | tr '\n' ',' | perl -ple 'chop')" >> $GITHUB_ENV
           rm -rf tmp.txt && rm -rf tmp2.txt
       - name: Advance nightly tag
-        uses: actions/github-script@v3
+        uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
-                await github.git.deleteRef({
+                await github.rest.git.deleteRef({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: "tags/nightly"
@@ -46,7 +46,7 @@ jobs:
             } catch (e) {
               console.log("Warning: The nightly tag doesn't exist yet, so there's nothing to do. Trace: " + e)
             }
-            await github.git.createRef({
+            await github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: "refs/tags/nightly",
