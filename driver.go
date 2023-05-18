@@ -524,6 +524,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerStorageConfig.Devices[idx] = spec.LinuxDevice{Path: device}
 	}
 
+	// Set the nomad slice as cgroup parent
+	createOpts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
+
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
 		Memory: &spec.LinuxMemory{},
