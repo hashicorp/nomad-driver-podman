@@ -524,6 +524,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerStorageConfig.Devices[idx] = spec.LinuxDevice{Path: device}
 	}
 
+	// Set the nomad slice as cgroup parent
+	d.setupCgroup(createOpts)
+
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
 		Memory: &spec.LinuxMemory{},
@@ -763,6 +766,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, driverNet, nil
+}
+
+// setupCgroup customizes where the cgroup lives (v2 only)
+func (d *Driver) setupCgroup(opts api.SpecGenerator) {
+	if d.cgroupV2 {
+		opts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
+	}
 }
 
 func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
