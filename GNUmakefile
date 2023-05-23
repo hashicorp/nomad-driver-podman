@@ -68,7 +68,7 @@ pkg/%.zip: pkg/%/nomad-driver-podman ## Build and zip the nomad-driver-podman pl
 	zip -j $@ $(dir $<)*
 
 .PHONY: dev
-dev: check clean build/nomad-driver-podman ## Build the nomad-driver-podman plugin
+dev: clean build/nomad-driver-podman ## Build the nomad-driver-podman plugin
 
 build/nomad-driver-podman:
 	@echo "==> Building driver plugin ..."
