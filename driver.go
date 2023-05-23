@@ -4,6 +4,8 @@
 package main
 
 import (
+	"github.com/shoenig/netlog"
+
 	"context"
 	"errors"
 	"fmt"
@@ -797,6 +799,8 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 }
 
 func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
+	netlog.Info("cpu", "cfg.CPUHardLimit", cfg.CPUHardLimit)
+
 	if !cfg.CPUHardLimit {
 		return nil
 	}
@@ -820,6 +824,10 @@ func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, ta
 
 	taskCPU.Period = &period
 	taskCPU.Quota = &quota
+
+	// YOU ARE HERE
+	// assign Cpus (cpuset)
+	// with what?
 
 	return nil
 }
