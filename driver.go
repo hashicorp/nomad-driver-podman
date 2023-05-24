@@ -39,6 +39,8 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+var log = netlog.New("pod")
+
 const (
 	// pluginName is the name of the plugin
 	pluginName = "podman"
@@ -799,7 +801,7 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 }
 
 func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
-	netlog.Info("cpu", "cfg.CPUHardLimit", cfg.CPUHardLimit)
+	log.Info("cpu", "cfg.CPUHardLimit", cfg.CPUHardLimit)
 
 	if !cfg.CPUHardLimit {
 		return nil
@@ -825,9 +827,9 @@ func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, ta
 	taskCPU.Period = &period
 	taskCPU.Quota = &quota
 
+	taskCPU.Cpus = systemResources.CpusetCpus
+	log.Info("cpu", "cpuset", taskCPU.Cpus)
 	// YOU ARE HERE
-	// assign Cpus (cpuset)
-	// with what?
 
 	return nil
 }
