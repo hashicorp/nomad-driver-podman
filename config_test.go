@@ -121,3 +121,19 @@ func TestConfig_ImagePullTimeout(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	must.Eq(t, "10m", tc.ImagePullTimeout)
 }
+
+func TestConfig_ExtraHosts(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	validHCL := `
+		config {
+		image = "docker://redis"
+		extra_hosts = ["myhost:127.0.0.2", "example.com:10.0.0.1"]
+	}
+	`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, []string{"myhost:127.0.0.2", "example.com:10.0.0.1"}, tc.ExtraHosts)
+}

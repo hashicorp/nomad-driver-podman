@@ -618,7 +618,33 @@ func TestPodmanDriver_Hostname(t *testing.T) {
 	// check if the hostname was visible in the container
 	tasklog := readStdoutLog(t, task)
 	must.StrContains(t, tasklog, shouldHaveHostname)
+}
 
+func TestPodmanDriver_setExtraHosts(t *testing.T) {
+	ci.Parallel(t)
+
+	cases := []struct {
+		hosts []string
+		exp   error
+	}{{
+		hosts: nil,
+		exp:   nil,
+	}, {
+		hosts: []string{"example.com"},
+		exp:   errors.New("cannot use \"example.com\" as extra_hosts (must be host:ip)"),
+	}, {
+		hosts: []string{"example.com:10.0.0.1"},
+		exp:   nil,
+	}, {
+		hosts: []string{"ip6.example.com:[4321::1234]"},
+		exp:   nil,
+	}}
+
+	for _, tc := range cases {
+		opts := new(api.SpecGenerator)
+		err := setExtraHosts(tc.hosts, opts)
+		must.Eq(t, tc.exp, err)
+	}
 }
 
 // check port_map feature
