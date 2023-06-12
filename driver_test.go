@@ -2123,6 +2123,28 @@ func createInspectImage(t *testing.T, image, reference string) {
 	must.Eq(t, idRef, idTest)
 }
 
+func Test_setTaskCpuset(t *testing.T) {
+	ci.Parallel(t)
+
+	t.Run("empty", func(t *testing.T) {
+		sysResources := &drivers.LinuxResources{CpusetCpus: ""}
+		taskCPU := new(spec.LinuxCPU)
+		cfg := TaskConfig{}
+		err := setCPUResources(cfg, sysResources, taskCPU)
+		must.NoError(t, err)
+		must.Eq(t, "", taskCPU.Cpus)
+	})
+
+	t.Run("non-empty", func(t *testing.T) {
+		sysResources := &drivers.LinuxResources{CpusetCpus: "2,5-8"}
+		taskCPU := new(spec.LinuxCPU)
+		cfg := TaskConfig{}
+		err := setCPUResources(cfg, sysResources, taskCPU)
+		must.NoError(t, err)
+		must.Eq(t, "2,5-8", taskCPU.Cpus)
+	})
+}
+
 func Test_cpuLimits(t *testing.T) {
 	ci.Parallel(t)
 

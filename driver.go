@@ -525,7 +525,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	// Set the nomad slice as cgroup parent
-	d.setupCgroup(createOpts)
+	d.setupCgroup(&createOpts)
 
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
@@ -769,7 +769,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 }
 
 // setupCgroup customizes where the cgroup lives (v2 only)
-func (d *Driver) setupCgroup(opts api.SpecGenerator) {
+func (d *Driver) setupCgroup(opts *api.SpecGenerator) {
 	if d.cgroupV2 {
 		opts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
 	}
@@ -804,6 +804,11 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 }
 
 func setCPUResources(cfg TaskConfig, systemResources *drivers.LinuxResources, taskCPU *spec.LinuxCPU) error {
+	// always assign cpuset
+	taskCPU.Cpus = systemResources.CpusetCpus
+
+	// only set bandwidth if hard limit is enabled
+	// currently only docker and podman drivers provide this ability
 	if !cfg.CPUHardLimit {
 		return nil
 	}

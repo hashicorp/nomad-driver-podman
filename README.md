@@ -18,6 +18,7 @@ this plugin to Nomad!
 * Monitor the memory consumption
 * Monitor CPU usage
 * Task config cpu value is used to populate podman CpuShares
+* Task config cores value is used to populate podman Cpuset
 * Container log is forwarded to [Nomad logger](https://www.nomadproject.io/docs/commands/alloc/logs.html)
 * Utilize podmans --init feature
 * Set username or UID used for the specified command within the container (podman --user option).
