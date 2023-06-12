@@ -11,7 +11,7 @@ require (
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/nomad v1.5.3
 	github.com/hashicorp/nomad/api v0.0.0-20230412133617-a1ebd075c4e9
-	github.com/opencontainers/runtime-spec v1.1.0-rc.1
+	github.com/opencontainers/runtime-spec v1.1.0-rc.3
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v0.6.6
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
