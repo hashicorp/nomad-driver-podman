@@ -46,7 +46,7 @@ var (
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
-	// a task within a job. It is returned in the TaskConfigSchema RPC
+	// a task within a job. It is returned in the TaskConfigSchema RPC.
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
 		"apparmor_profile": hclspec.NewAttr("apparmor_profile", "string", false),
 		"args":             hclspec.NewAttr("args", "list(string)", false),
@@ -61,13 +61,10 @@ var (
 		"cpu_hard_limit": hclspec.NewAttr("cpu_hard_limit", "bool", false),
 		"cpu_cfs_period": hclspec.NewAttr("cpu_cfs_period", "number", false),
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
-
-		// Use `any` to maintain backwards compatibility.
-		// Expected type is `list(string)` but may be `string` for old tasks.
-		"entrypoint":  hclspec.NewAttr("entrypoint", "any", false),
-		"working_dir": hclspec.NewAttr("working_dir", "string", false),
-		"hostname":    hclspec.NewAttr("hostname", "string", false),
-		"image":       hclspec.NewAttr("image", "string", true),
+		"entrypoint":     hclspec.NewAttr("entrypoint", "any", false), // any for compat
+		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
+		"hostname":       hclspec.NewAttr("hostname", "string", false),
+		"image":          hclspec.NewAttr("image", "string", true),
 		"image_pull_timeout": hclspec.NewDefault(
 			hclspec.NewAttr("image_pull_timeout", "string", false),
 			hclspec.NewLiteral(`"5m"`),
@@ -83,6 +80,7 @@ var (
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
+		"extra_hosts":        hclspec.NewAttr("extra_hosts", "list(string)", false),
 		"pids_limit":         hclspec.NewAttr("pids_limit", "number", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
@@ -134,21 +132,18 @@ type PluginConfig struct {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	ApparmorProfile string     `codec:"apparmor_profile"`
-	Args            []string   `codec:"args"`
-	Auth            AuthConfig `codec:"auth"`
-	Ports           []string   `codec:"ports"`
-	Tmpfs           []string   `codec:"tmpfs"`
-	Volumes         []string   `codec:"volumes"`
-	CapAdd          []string   `codec:"cap_add"`
-	CapDrop         []string   `codec:"cap_drop"`
-	SelinuxOpts     []string   `codec:"selinux_opts"`
-	Command         string     `codec:"command"`
-	Devices         []string   `codec:"devices"`
-
-	// Use `any` to maintain backwards compatibility.
-	// Expected type is `[]string` but may be `string` for old tasks.
-	Entrypoint        any                `codec:"entrypoint"`
+	ApparmorProfile   string             `codec:"apparmor_profile"`
+	Args              []string           `codec:"args"`
+	Auth              AuthConfig         `codec:"auth"`
+	Ports             []string           `codec:"ports"`
+	Tmpfs             []string           `codec:"tmpfs"`
+	Volumes           []string           `codec:"volumes"`
+	CapAdd            []string           `codec:"cap_add"`
+	CapDrop           []string           `codec:"cap_drop"`
+	SelinuxOpts       []string           `codec:"selinux_opts"`
+	Command           string             `codec:"command"`
+	Devices           []string           `codec:"devices"`
+	Entrypoint        any                `codec:"entrypoint"` // any for compat
 	WorkingDir        string             `codec:"working_dir"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
@@ -159,6 +154,7 @@ type TaskConfig struct {
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
+	ExtraHosts        []string           `codec:"extra_hosts"`
 	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PidsLimit         int64              `codec:"pids_limit"`

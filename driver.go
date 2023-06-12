@@ -34,6 +34,7 @@ import (
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/ryanuber/go-glob"
+	"golang.org/x/exp/slices"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -652,6 +653,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
+	// carefully add extra hosts (--add-host)
+	if extraHostsErr := setExtraHosts(driverConfig.ExtraHosts, &createOpts); extraHostsErr != nil {
+		return nil, nil, extraHostsErr
+	}
+
 	portMappings, err := d.portMappings(cfg, driverConfig)
 	if err != nil {
 		return nil, nil, err
@@ -702,8 +708,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
-		if err = d.podman.ContainerDelete(d.ctx, containerID, true, true); err != nil {
-			d.logger.Error("failed to clean up from an error in Start", "error", err)
+		if cleanupErr := d.podman.ContainerDelete(d.ctx, containerID, true, true); cleanupErr != nil {
+			d.logger.Error("failed to clean up from an error in Start", "error", cleanupErr)
 		}
 	}
 	h := &TaskHandle{
@@ -726,9 +732,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		if err = d.podman.ContainerStart(d.ctx, containerID); err != nil {
+		if startErr := d.podman.ContainerStart(d.ctx, containerID); startErr != nil {
 			cleanup()
-			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", err)
+			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", startErr)
 		}
 	}
 
@@ -1434,4 +1440,17 @@ func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mod
 func isParentPath(parent, path string) bool {
 	rel, err := filepath.Rel(parent, path)
 	return err == nil && !strings.HasPrefix(rel, "..")
+}
+
+func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
+	for _, host := range hosts {
+		// confirm this is a valid address:port, otherwise podman replies with
+		// an indecipherable slice index out of bounds panic
+		tokens := strings.SplitN(host, ":", 2)
+		if len(tokens) != 2 || tokens[0] == "" || tokens[1] == "" {
+			return fmt.Errorf("cannot use %q as extra_hosts (must be host:ip)", host)
+		}
+	}
+	createOpts.ContainerNetworkConfig.HostAdd = slices.Clone(hosts)
+	return nil
 }
