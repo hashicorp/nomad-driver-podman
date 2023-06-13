@@ -360,10 +360,25 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		// are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
 			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid)
-			if err = d.podman.ContainerStart(d.ctx, inspectData.ID); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
+
+			// todo(shoenig): we should audit all requests and make sure they have a timeout
+			ctx, cancel := context.WithTimeout(d.ctx, 10*time.Second)
+			defer cancel()
+
+			if startErr := d.podman.ContainerStart(ctx, inspectData.ID); startErr != nil {
+				d.logger.Warn("Restart of an exited container during recovery has failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", startErr)
+				// we failed to start the exited container, now lets clean it up instead
+				d.logger.Debug("Will now cleanup stopped container we failed to restart", "container", inspectData.ID)
+				ctx2, cancel2 := context.WithTimeout(d.ctx, 10*time.Second)
+				defer cancel2()
+				deleteErr := d.podman.ContainerDelete(ctx2, inspectData.ID, true, true)
+				if deleteErr != nil {
+					// not much we can do but log and move on
+					d.logger.Warn("Failed to cleanup exited container that we already failed to restart", "container", inspectData.ID, "error", deleteErr)
+				}
+				h.procState = drivers.TaskStateExited
 			} else {
-				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID)
+				d.logger.Info("Restart of an exited container during recovery", "container", inspectData.ID)
 				h.procState = drivers.TaskStateRunning
 			}
 		} else {
