@@ -4,6 +4,8 @@
 package main
 
 import (
+	// "github.com/shoenig/netlog"
+
 	"context"
 	"errors"
 	"fmt"
@@ -111,6 +113,7 @@ type Driver struct {
 
 	// logger will log to the Nomad agent
 	logger hclog.Logger
+	// logger *netlog.Log
 
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
@@ -149,6 +152,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
+		// logger: netlog.New("podman-driver"),
 	}
 }
 

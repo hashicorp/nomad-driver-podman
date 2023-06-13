@@ -33,7 +33,7 @@ var (
 		// allow TaskRecover to start a still existing, stopped, container during client/driver restart
 		"recover_stopped": hclspec.NewDefault(
 			hclspec.NewAttr("recover_stopped", "bool", false),
-			hclspec.NewLiteral("true"),
+			hclspec.NewLiteral("false"),
 		),
 		// optional extra_labels to append to all tasks for observability. Globs supported
 		"extra_labels": hclspec.NewAttr("extra_labels", "list(string)", false),
