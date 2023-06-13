@@ -4,6 +4,7 @@
 package main
 
 import (
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 )
@@ -33,7 +34,7 @@ var (
 		// allow TaskRecover to start a still existing, stopped, container during client/driver restart
 		"recover_stopped": hclspec.NewDefault(
 			hclspec.NewAttr("recover_stopped", "bool", false),
-			hclspec.NewLiteral("true"),
+			hclspec.NewLiteral("false"),
 		),
 		// optional extra_labels to append to all tasks for observability. Globs supported
 		"extra_labels": hclspec.NewAttr("extra_labels", "list(string)", false),
@@ -128,6 +129,13 @@ type PluginConfig struct {
 	SocketPath           string       `codec:"socket_path"`
 	ClientHttpTimeout    string       `codec:"client_http_timeout"`
 	ExtraLabels          []string     `codec:"extra_labels"`
+}
+
+// LogWarnings will emit logs about known problematic configurations
+func (c *PluginConfig) LogWarnings(logger hclog.Logger) {
+	if c.RecoverStopped {
+		logger.Error("WARNING - use of recover_stopped may cause Nomad agent to not start on system restarts")
+	}
 }
 
 // TaskConfig is the driver configuration of a task within a job
