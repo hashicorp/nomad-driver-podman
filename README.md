@@ -1,7 +1,6 @@
 Nomad podman Driver
 ==================
 
-
 ![](https://github.com/hashicorp/nomad-driver-podman/workflows/build/badge.svg)
 
 Many thanks to [@towe75](https://github.com/towe75) and [Pascom](https://www.pascom.net/) for contributing
@@ -81,21 +80,21 @@ It is not necessary to setup a go path at all.
 Ensure that you use go 1.17 or newer.
 
 ```shell-session
-$ git clone git@github.com:hashicorp/nomad-driver-podman
-$ cd nomad-driver-podman
-$ make dev
+git clone git@github.com:hashicorp/nomad-driver-podman
+cd nomad-driver-podman
+make dev
 ```
 
 The compiled binary will be located at `./build/nomad-driver-podman`.
 
 ## Runtime dependencies
 
-- [Nomad](https://www.nomadproject.io/downloads.html) 0.12.9+
-- Linux host with `podman` installed
-- For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
+* [Nomad](https://www.nomadproject.io/downloads.html) 0.12.9+
+* Linux host with `podman` installed
+* For rootless containers you need a system supporting cgroup V2 and a few other things, follow [this tutorial](https://github.com/containers/libpod/blob/master/docs/tutorials/rootless_tutorial.md)
 
 You need a 3.0.x podman binary and a system socket activation unit,
-see https://www.redhat.com/sysadmin/podmans-new-rest-api
+see <https://www.redhat.com/sysadmin/podmans-new-rest-api>
 
 Nomad agent, nomad-driver-podman and podman will reside on the same host, so you
 do not have to worry about the ssh aspects of the podman api.
@@ -122,7 +121,7 @@ plugin "nomad-driver-podman" {
 
 * gc stanza:
 
-    * container - Defaults to true. This option can be used to disable Nomad from removing a container when the task exits.
+  * container - Defaults to true. This option can be used to disable Nomad from removing a container when the task exits.
 
 ```hcl
 plugin "nomad-driver-podman" {
@@ -134,21 +133,22 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* recover_stopped (bool) Defaults to true. Allows the driver to start and reuse a previously stopped container after
+* recover_stopped (bool) Defaults to false. Allows the driver to start and reuse a previously stopped container after
   a Nomad client restart.
   Consider a simple single node system and a complete reboot. All previously managed containers
   will be reused instead of disposed and recreated.
 
+  WARNING - use of recover_stopped may cause Nomad agent to not start on system restarts. This setting has been left in place for compatibility.
+
 ```hcl
 plugin "nomad-driver-podman" {
   config {
-    recover_stopped = false
+    recover_stopped = true
   }
 }
 ```
 
 * socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems
-
 
 ```hcl
 plugin "nomad-driver-podman" {
@@ -159,7 +159,6 @@ plugin "nomad-driver-podman" {
 ```
 
 * disable_log_collection (string) Defaults to `false`. Setting this to `true` will disable Nomad logs collection of Podman tasks. If you don't rely on nomad log capabilities and exclusively use host based log aggregation, you may consider this option to disable nomad log collection overhead. Beware to you also loose automatic log rotation.
-
 
 ```hcl
 plugin "nomad-driver-podman" {
@@ -190,6 +189,7 @@ plugin "nomad-driver-podman" {
 ```
 
 * client_http_timeout (string) Defaults to `60s` default timeout used by http.Client requests
+
 ```hcl
 plugin "nomad-driver-podman" {
   config {
@@ -238,7 +238,7 @@ config {
 }
 ```
 
-* **args** - (Optional) A list of arguments to the optional command. If no *command* is specified, the arguments are passed directly to the container.
+* **args** - (Optional) A list of arguments to the optional command. If no _command_ is specified, the arguments are passed directly to the container.
 
 ```hcl
 config {
@@ -350,7 +350,6 @@ config {
 }
 ```
 
-
 * **memory_reservation** - Memory soft limit (nit = b (bytes), k (kilobytes), m (megabytes), or g (gigabytes))
 
 After setting memory reservation, when the system detects memory contention or low memory, containers are forced to restrict their consumption to their reservation. So you should always set the value below --memory, otherwise the hard limit will take precedence. By default, memory reservation will be the same as memory limit.
@@ -383,16 +382,16 @@ config {
 
 By default the task uses the network stack defined in the task group, see [network Stanza](https://www.nomadproject.io/docs/job-specification/network). If the groups network behavior is also undefined, it will fallback to `bridge` in rootful mode or `slirp4netns` for rootless containers.
 
-- `bridge`: create a network stack on the default podman bridge.
-- `none`: no networking
-- `host`: use the Podman host network stack. Note: the host mode gives the
+* `bridge`: create a network stack on the default podman bridge.
+* `none`: no networking
+* `host`: use the Podman host network stack. Note: the host mode gives the
   container full access to local system services such as D-bus and is therefore
   considered insecure
-- `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
+* `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
   default for rootless containers. Podman currently does not support it for root
   containers [issue](https://github.com/containers/libpod/issues/6097).
-- `container:id`: reuse another podman containers network stack
-- `task:name-of-other-task`: join the network of another task in the same allocation.
+* `container:id`: reuse another podman containers network stack
+* `task:name-of-other-task`: join the network of another task in the same allocation.
 
 ```hcl
 config {
@@ -439,6 +438,7 @@ config {
   }
 }
 ```
+
 * **privileged** - (Optional)  true or false (default). A privileged container turns off the security features that isolate the container from the host. Dropped Capabilities, limited devices, read-only mount points, Apparmor/SELinux separation, and Seccomp filters are all disabled.
 
 * **tty** - (Optional)  true or false (default). Allocate a pseudo-TTY for the container.
@@ -478,6 +478,7 @@ config {
 ```
 
 * **ulimit** - (Optional) A key-value map of ulimit configurations to set to the containers to start.
+
 ```hcl
 config {
   ulimit {
@@ -487,6 +488,7 @@ config {
 ```
 
 * **userns** - (Optional) Set the [user namespace mode](https://docs.podman.io/en/latest/markdown/podman-run.1.html#userns-mode) for the container.
+
 ```hcl
 config {
   userns = "keep-id:uid=200,gid=210"
@@ -494,6 +496,7 @@ config {
 ```
 
 * **pids_limit** - (Optional) An integer value that specifies the pid limit for the container.
+
 ```hcl
 config {
   pids_limit = 64
@@ -501,12 +504,12 @@ config {
 ```
 
 * **image_pull_timeout** - (Optional) time duration for your pull timeout (default to 5m).
+
 ```
 config {
   image_pull_timeout = "5m"
 }
 ```
-
 
 ## Network Configuration
 
@@ -524,37 +527,37 @@ You can use `curl` to proof that the job is working correctly and that you can g
 
 See `examples/jobs/nats_simple_pod.nomad`
 
-Here, the *server* task is started as main workload and the *exporter* runs as a poststart sidecar.
+Here, the _server_ task is started as main workload and the _exporter_ runs as a poststart sidecar.
 Because of that, Nomad guarantees that the server is started first and thus the exporter can
 easily join the servers network namespace via `network_mode = "task:server"`.
 
-Note, that the *server* configuration file binds the *http_port* to localhost.
+Note, that the _server_ configuration file binds the _http_port_ to localhost.
 
-Be aware that ports must be defined in the parent network namespace, here *server*.
+Be aware that ports must be defined in the parent network namespace, here _server_.
 
 ### 3 Task setup, a pause container defines the network
 
 See `examples/jobs/nats_pod.nomad`
 
-A slightly different setup is demonstrated in this job. It reassembles more closely the idea of a *pod* by starting a
-pause task, named *pod* via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
+A slightly different setup is demonstrated in this job. It reassembles more closely the idea of a _pod_ by starting a
+pause task, named _pod_ via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
 
-Next, the main workload, *server* is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
-Finally, Nomad starts the poststart/sidecar *exporter* which also joins the network.
+Next, the main workload, _server_ is started and joins the network namespace by using the `network_mode = "task:pod"` stanza.
+Finally, Nomad starts the poststart/sidecar _exporter_ which also joins the network.
 
-Note that all ports must be defined on the *pod* level.
+Note that all ports must be defined on the _pod_ level.
 
 ### 2 Task setup, shared Nomad network namespace
 
 See `examples/jobs/nats_group.nomad`
 
-This example is very different. Both *server* and *exporter* join a network namespace which is created and managed
+This example is very different. Both _server_ and _exporter_ join a network namespace which is created and managed
 by Nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
-
 
 ## Rootless on ubuntu
 
 edit `/etc/default/grub` to enable cgroups v2
+
 ```sh
 GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.unified_cgroup_hierarchy=1"
 ```
@@ -562,6 +565,7 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory swapaccount=1 systemd.uni
 `sudo update-grub`
 
 ensure that podman socket is running
+
 ```console
 $ systemctl --user status podman.socket
 * podman.socket - Podman API Socket
@@ -584,6 +588,7 @@ spec: 1.0.0
 ```
 
 `nomad job run example.nomad`
+
 ```hcl
 job "example" {
   datacenters = ["dc1"]
@@ -629,8 +634,8 @@ CONTAINER ID  IMAGE                           COMMAND       CREATED        STATU
 
 ### Requirements
 
-  - Vagrant >= 2.2
-  - VirtualBox >= v6.0
+* Vagrant >= 2.2
+* VirtualBox >= v6.0
 
 ### Vagrant Environment Setup
 
