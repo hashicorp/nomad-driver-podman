@@ -225,6 +225,9 @@ func (d *Driver) Capabilities() (*drivers.Capabilities, error) {
 // then send periodic updates at an interval that is appropriate for the driver
 // until the context is canceled.
 func (d *Driver) Fingerprint(ctx context.Context) (<-chan *drivers.Fingerprint, error) {
+	// emit warnings about known bad configs
+	d.config.LogWarnings(d.logger)
+
 	err := shelpers.Init()
 	if err != nil {
 		d.logger.Error("Could not init stats helper", "error", err)
