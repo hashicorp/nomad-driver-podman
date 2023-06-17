@@ -18,7 +18,8 @@ func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthC
 	headers := map[string]string{}
 
 	// handle authentication
-	if auth.Username != "" && auth.Password != "" {
+	usesAuth := auth.Username != "" && auth.Password != ""
+	if usesAuth {
 		authHeader, err := NewAuthHeader(auth)
 		if err != nil {
 			return "", err
@@ -26,7 +27,10 @@ func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthC
 		headers["X-Registry-Auth"] = authHeader
 	}
 
-	res, err := c.PostWithHeaders(ctx, fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s", nameWithTag), nil, headers)
+	c.logger.Trace("image pull details", "tls_verify", auth.TLSVerify, "reference", nameWithTag, "uses_auth", usesAuth)
+
+	urlPath := fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s&tlsVerify=%t", nameWithTag, auth.TLSVerify)
+	res, err := c.PostWithHeaders(ctx, urlPath, nil, headers)
 	if err != nil {
 		return "", err
 	}

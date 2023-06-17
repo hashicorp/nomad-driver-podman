@@ -54,6 +54,10 @@ var (
 		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"username": hclspec.NewAttr("username", "string", false),
 			"password": hclspec.NewAttr("password", "string", false),
+			"tls_verify": hclspec.NewDefault(
+				hclspec.NewAttr("tls_verify", "bool", false),
+				hclspec.NewLiteral("true"),
+			),
 		})),
 		"command":        hclspec.NewAttr("command", "string", false),
 		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
@@ -99,8 +103,9 @@ var (
 
 // AuthConfig is the tasks authentication configuration
 type AuthConfig struct {
-	Username string `codec:"username"`
-	Password string `codec:"password"`
+	Username  string `codec:"username"`
+	Password  string `codec:"password"`
+	TLSVerify bool   `codec:"tls_verify"`
 }
 
 // GCConfig is the driver GarbageCollection configuration

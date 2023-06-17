@@ -952,6 +952,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 	}
 
 	d.logger.Info("Pulling image", "image", imageName)
+
 	_ = d.eventer.EmitEvent(&drivers.TaskEvent{
 		TaskID:    cfg.ID,
 		TaskName:  cfg.Name,
@@ -959,9 +960,11 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		Timestamp: time.Now(),
 		Message:   "Pulling image " + imageName,
 	})
+
 	imageAuth := api.ImageAuthConfig{
-		Username: auth.Username,
-		Password: auth.Password,
+		TLSVerify: auth.TLSVerify,
+		Username:  auth.Username,
+		Password:  auth.Password,
 	}
 
 	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
