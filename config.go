@@ -12,6 +12,11 @@ import (
 var (
 	// configSpec is the hcl specification returned by the ConfigSchema RPC
 	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
+		// image registry authentication options
+		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"config": hclspec.NewAttr("config", "string", false),
+		})),
+
 		// volume options
 		"volumes": hclspec.NewDefault(hclspec.NewBlock("volumes", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"enabled": hclspec.NewDefault(
@@ -59,6 +64,7 @@ var (
 				hclspec.NewLiteral("true"),
 			),
 		})),
+		"auth_soft_fail": hclspec.NewAttr("auth_soft_fail", "bool", false),
 		"command":        hclspec.NewAttr("command", "string", false),
 		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
@@ -102,6 +108,7 @@ var (
 )
 
 // AuthConfig is the tasks authentication configuration
+// (there is also auth_soft_fail on the top level)
 type AuthConfig struct {
 	Username  string `codec:"username"`
 	Password  string `codec:"password"`
@@ -148,6 +155,7 @@ type TaskConfig struct {
 	ApparmorProfile   string             `codec:"apparmor_profile"`
 	Args              []string           `codec:"args"`
 	Auth              AuthConfig         `codec:"auth"`
+	AuthSoftFail      bool               `codec:"auth_soft_fail"`
 	Ports             []string           `codec:"ports"`
 	Tmpfs             []string           `codec:"tmpfs"`
 	Volumes           []string           `codec:"volumes"`

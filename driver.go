@@ -22,6 +22,7 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
+	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
@@ -961,10 +962,13 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		Message:   "Pulling image " + imageName,
 	})
 
-	imageAuth := api.ImageAuthConfig{
-		TLSVerify: auth.TLSVerify,
-		Username:  auth.Username,
-		Password:  auth.Password,
+	pc := &registry.PullConfig{
+		Repository: imageName,
+		TLSVerify:  auth.TLSVerify,
+		RegistryConfig: &registry.RegistryAuthConfig{
+			Username: auth.Username,
+			Password: auth.Password,
+		},
 	}
 
 	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
@@ -972,7 +976,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.slowPodman.ImagePull(ctx, imageName, imageAuth); err != nil {
+		if imageID, err = d.slowPodman.ImagePull(ctx, pc); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil

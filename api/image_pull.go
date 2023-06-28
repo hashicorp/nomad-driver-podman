@@ -10,52 +10,55 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/hashicorp/nomad-driver-podman/registry"
 )
 
 // ImagePull pulls a image from a remote location to local storage
-func (c *API) ImagePull(ctx context.Context, nameWithTag string, auth ImageAuthConfig) (string, error) {
-	var id string
-	headers := map[string]string{}
+func (c *API) ImagePull(ctx context.Context, pullConfig *registry.PullConfig) (string, error) {
+	pullConfig.Log(c.logger)
 
-	// handle authentication
-	usesAuth := auth.Username != "" && auth.Password != ""
-	if usesAuth {
-		authHeader, err := NewAuthHeader(auth)
-		if err != nil {
-			return "", err
-		}
-		headers["X-Registry-Auth"] = authHeader
+	var (
+		headers    = make(map[string]string)
+		repository = pullConfig.Repository
+		tlsVerify  = pullConfig.TLSVerify
+	)
+
+	auth, err := registry.ResolveRegistryAuthentication(repository, pullConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine authentication for %q", repository)
 	}
+	auth.SetHeader(headers)
+	c.logger.Info("HEADERS", "headers", headers)
 
-	c.logger.Trace("image pull details", "tls_verify", auth.TLSVerify, "reference", nameWithTag, "uses_auth", usesAuth)
+	urlPath := fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s&tlsVerify=%t", repository, tlsVerify)
+	c.logger.Info("URL PATH", "urlPath", urlPath)
 
-	urlPath := fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s&tlsVerify=%t", nameWithTag, auth.TLSVerify)
 	res, err := c.PostWithHeaders(ctx, urlPath, nil, headers)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to pull image: %w", err)
 	}
-
 	defer ignoreClose(res.Body)
+
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
 		return "", fmt.Errorf("cannot pull image, status code: %d: %s", res.StatusCode, body)
 	}
 
-	dec := json.NewDecoder(res.Body)
-	var report ImagePullReport
+	var (
+		dec    = json.NewDecoder(res.Body)
+		report ImagePullReport
+		id     string
+	)
 	for {
-		decErr := dec.Decode(&report)
-		if errors.Is(decErr, io.EOF) {
+		decodeErr := dec.Decode(&report)
+		if errors.Is(decodeErr, io.EOF) {
 			break
-		} else if decErr != nil {
-			return "", fmt.Errorf("Error reading response: %w", decErr)
-		}
-
-		if report.Error != "" {
-			return "", errors.New(report.Error)
-		}
-
-		if report.ID != "" {
+		} else if decodeErr != nil {
+			return "", fmt.Errorf("failed to read image pull response: %w", decodeErr)
+		} else if report.Error != "" {
+			return "", fmt.Errorf("image pull report indicates error: %s", report.Error)
+		} else if report.ID != "" {
 			id = report.ID
 		}
 	}
