@@ -6,13 +6,16 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/shoenig/test/must"
 )
 
 func TestApi_Image_Pull(t *testing.T) {
 	api := newApi()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
 
 	testCases := []struct {
 		Image  string
@@ -25,7 +28,9 @@ func TestApi_Image_Pull(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		id, err := api.ImagePull(ctx, testCase.Image, ImageAuthConfig{})
+		id, err := api.ImagePull(ctx, &registry.PullConfig{
+			Image: testCase.Image,
+		})
 		if testCase.Exists {
 			must.NoError(t, err)
 			must.NotEq(t, "", id)

@@ -1,21 +1,23 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package registry
 
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 
 	"github.com/hashicorp/go-hclog"
 )
 
 // PullConfig represents the necessary information needed for an image pull query.
 type PullConfig struct {
-	Repository     string
-	RegistryConfig *RegistryAuthConfig
-	TLSVerify      bool
-
-	// TODO: config file
-	// TODO: creds helper
+	Image             string
+	RegistryConfig    *RegistryAuthConfig
+	TLSVerify         bool
+	CredentialsFile   string
+	CredentialsHelper string
+	AuthSoftFail      bool
 }
 
 // BasicConfig returns the Basic-Auth level of configuration.
@@ -33,16 +35,37 @@ func (pc *PullConfig) BasicConfig() *TaskAuthConfig {
 	}
 }
 
+// AuthAvailable returns true if any of the supported authentication methods are
+// set, indicating we should try to find credentials for the given image by
+// checking each of the options for looking up credentials.
+// - RegistryConfig (from task configuration)
+// - CredentialsFile (from plugin configuration)
+// - CredentialsHelper (from plugin configuration)
+func (pc *PullConfig) AuthAvailable() bool {
+	switch {
+	case !pc.RegistryConfig.Empty():
+		return true
+	case pc.CredentialsFile != "":
+		return true
+	case pc.CredentialsHelper != "":
+		return true
+	default:
+		return false
+	}
+}
+
 // Log the components of PullConfig in a safe way.
 func (pc *PullConfig) Log(logger hclog.Logger) {
 	var (
-		repository = pc.Repository
+		repository = pc.Image
 		tls        bool
-		username   = "<unset>"
-		email      = "<unset>"
-		server     = "<unset>"
+		username   string
+		email      string
+		server     string
 		password   bool
 		token      bool
+		helper     = pc.CredentialsHelper
+		file       = pc.CredentialsFile
 	)
 
 	if r := pc.RegistryConfig; r != nil {
@@ -63,6 +86,8 @@ func (pc *PullConfig) Log(logger hclog.Logger) {
 		"server", server,
 		"tls", tls,
 		"token", token,
+		"helper", helper,
+		"file", file,
 	)
 }
 
@@ -114,8 +139,10 @@ func (c *TaskAuthConfig) IsEmpty() bool {
 // - auth from auth.json file specified by plugin config
 // - auth from a credentials helper specified by plugin config
 func ResolveRegistryAuthentication(repository string, pullConfig *PullConfig) (*RegistryAuthConfig, error) {
-	return firstValidAuth(repository, []AuthBackend{
+	return firstValidAuth(repository, pullConfig.AuthSoftFail, []AuthBackend{
 		authFromTaskConfig(pullConfig.BasicConfig()),
+		authFromFileConfig(pullConfig.CredentialsFile),
+		authFromCredsHelper(pullConfig.CredentialsHelper),
 	})
 }
 
@@ -124,11 +151,20 @@ func ResolveRegistryAuthentication(repository string, pullConfig *PullConfig) (*
 // returned and should be skipped.
 type AuthBackend func(string) (*RegistryAuthConfig, error)
 
-func firstValidAuth(repository string, authBackends []AuthBackend) (*RegistryAuthConfig, error) {
+// firstValidAuth returns the first RegistryAuthConfig associated with repository.
+//
+// If softFail is set, ignore error return values from an authBackend and pretend
+// like they simply do not recognize repository, and continue searching.
+func firstValidAuth(repository string, softFail bool, authBackends []AuthBackend) (*RegistryAuthConfig, error) {
 	for _, backend := range authBackends {
 		auth, err := backend(repository)
-		if auth != nil || err != nil {
-			return auth, err
+		switch {
+		case auth != nil:
+			return auth, nil
+		case err != nil && softFail:
+			continue
+		case err != nil:
+			return nil, err
 		}
 	}
 	return nil, nil
@@ -146,12 +182,4 @@ func authFromTaskConfig(taskAuthConfig *TaskAuthConfig) AuthBackend {
 			ServerAddress: taskAuthConfig.ServerAddress,
 		}, nil
 	}
-}
-
-func authFromFileConfig(filename string) (*RegistryAuthConfig, error) {
-	return nil, fmt.Errorf("not implemented yet")
-}
-
-func authFromCredsHelper(helper string) (*RegistryAuthConfig, error) {
-	return nil, fmt.Errorf("not implemented yet")
 }

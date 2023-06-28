@@ -694,7 +694,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", parseErr)
 		}
 
-		imageID, createErr := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
+		imageID, createErr := d.createImage(
+			createOpts.Image,
+			&driverConfig.Auth,
+			driverConfig.AuthSoftFail,
+			driverConfig.ForcePull,
+			imagePullTimeout,
+			cfg,
+		)
 		if createErr != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, createErr)
 		}
@@ -907,7 +914,14 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, imagePullTimeout time.Duration, cfg *drivers.TaskConfig) (string, error) {
+func (d *Driver) createImage(
+	image string,
+	auth *TaskAuthConfig,
+	authSoftFail bool,
+	forcePull bool,
+	imagePullTimeout time.Duration,
+	cfg *drivers.TaskConfig,
+) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -963,12 +977,15 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 	})
 
 	pc := &registry.PullConfig{
-		Repository: imageName,
-		TLSVerify:  auth.TLSVerify,
+		Image:     imageName,
+		TLSVerify: auth.TLSVerify,
 		RegistryConfig: &registry.RegistryAuthConfig{
 			Username: auth.Username,
 			Password: auth.Password,
 		},
+		CredentialsFile:   d.config.Auth.FileConfig,
+		CredentialsHelper: d.config.Auth.Helper,
+		AuthSoftFail:      authSoftFail,
 	}
 
 	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {

@@ -20,19 +20,22 @@ func (c *API) ImagePull(ctx context.Context, pullConfig *registry.PullConfig) (s
 
 	var (
 		headers    = make(map[string]string)
-		repository = pullConfig.Repository
+		repository = pullConfig.Image
 		tlsVerify  = pullConfig.TLSVerify
 	)
 
-	auth, err := registry.ResolveRegistryAuthentication(repository, pullConfig)
-	if err != nil {
-		return "", fmt.Errorf("failed to determine authentication for %q", repository)
+	// if the task or driver are configured with an auth block, attempt to find
+	// credentials that are compatible with the given image, and set the appropriate
+	// header if found
+	if pullConfig.AuthAvailable() {
+		auth, err := registry.ResolveRegistryAuthentication(repository, pullConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to determine authentication for %q: %w", repository, err)
+		}
+		auth.SetHeader(headers)
 	}
-	auth.SetHeader(headers)
-	c.logger.Info("HEADERS", "headers", headers)
 
 	urlPath := fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s&tlsVerify=%t", repository, tlsVerify)
-	c.logger.Info("URL PATH", "urlPath", urlPath)
 
 	res, err := c.PostWithHeaders(ctx, urlPath, nil, headers)
 	if err != nil {
@@ -50,17 +53,18 @@ func (c *API) ImagePull(ctx context.Context, pullConfig *registry.PullConfig) (s
 		report ImagePullReport
 		id     string
 	)
+
 	for {
 		decodeErr := dec.Decode(&report)
-		if errors.Is(decodeErr, io.EOF) {
-			break
-		} else if decodeErr != nil {
+		switch {
+		case errors.Is(decodeErr, io.EOF):
+			return id, nil
+		case decodeErr != nil:
 			return "", fmt.Errorf("failed to read image pull response: %w", decodeErr)
-		} else if report.Error != "" {
+		case report.Error != "":
 			return "", fmt.Errorf("image pull report indicates error: %s", report.Error)
-		} else if report.ID != "" {
+		case report.ID != "":
 			id = report.ID
 		}
 	}
-	return id, nil
 }
