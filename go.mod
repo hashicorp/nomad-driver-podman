@@ -15,7 +15,7 @@ require (
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v0.6.6
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
-	golang.org/x/sync v0.2.0
+	golang.org/x/sync v0.3.0
 )
 
 require (
