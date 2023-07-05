@@ -31,8 +31,9 @@ type ClientConfig struct {
 }
 
 type ImageAuthConfig struct {
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	TLSVerify bool
+	Username  string
+	Password  string
 }
 
 func DefaultClientConfig() ClientConfig {

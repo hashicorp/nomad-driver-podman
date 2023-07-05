@@ -207,14 +207,15 @@ config {
 }
 ```
 
-* **auth** - (Optional) Authenticate to the image registry using a static credential.
+* **auth** - (Optional) Authenticate to the image registry using a static credential. `tls_verify` can be disabled for insecure registries.
 
 ```hcl
 config {
   image = "your.registry.tld/some/image"
   auth {
-    username = "someuser"
-    password = "sup3rs3creT"
+    username   = "someuser"
+    password   = "sup3rs3creT"
+    tls_verify = true
   }
 }
 ```
