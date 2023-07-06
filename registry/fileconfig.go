@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-// [Glossery]
+// [Glossary]
 // registry: The service that serves container images.
 // domain: The DNS domain name of a registry.
 // repository: The domain + complete path of an image (no tag).

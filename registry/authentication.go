@@ -77,7 +77,6 @@ func (pc *PullConfig) Log(logger hclog.Logger) {
 		token = r.IdentityToken != ""
 	}
 
-	// todo: trace
 	logger.Info("pull config",
 		"repository", repository,
 		"username", username,
