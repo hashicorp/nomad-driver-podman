@@ -5,8 +5,6 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -28,12 +26,6 @@ type API struct {
 type ClientConfig struct {
 	SocketPath  string
 	HttpTimeout time.Duration
-}
-
-type ImageAuthConfig struct {
-	TLSVerify bool
-	Username  string
-	Password  string
 }
 
 func DefaultClientConfig() ClientConfig {
@@ -122,16 +114,6 @@ func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
 		return nil, err
 	}
 	return c.Do(req)
-}
-
-// NewAuthHeader encodes auth configuration to a docker X-Registry-Auth header payload.
-func NewAuthHeader(auth ImageAuthConfig) (string, error) {
-	jsonBytes, err := json.Marshal(auth)
-	if err != nil {
-		return "", err
-	}
-	header := base64.StdEncoding.EncodeToString(jsonBytes)
-	return header, nil
 }
 
 func ignoreClose(c io.Closer) {

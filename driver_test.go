@@ -1983,7 +1983,7 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	imageID, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
+	imageID, err := getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, false, 5*time.Minute, task)
 	must.NoError(t, err)
 	must.Eq(t, imageID, inspectData.Image)
 }
@@ -2063,7 +2063,7 @@ insecure = true`
 	go func() {
 		// Pull image using our proxy.
 		image := "localhost:5000/quay/busybox:latest"
-		_, err = getPodmanDriver(t, d).createImage(image, &AuthConfig{}, true, 3*time.Second, task)
+		_, err = getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, true, 3*time.Second, task)
 		resultCh <- err
 	}()
 
@@ -2141,7 +2141,7 @@ func createInspectImage(t *testing.T, image, reference string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	idTest, err := getPodmanDriver(t, d).createImage(image, &AuthConfig{}, false, 5*time.Minute, task)
+	idTest, err := getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, false, 5*time.Minute, task)
 	must.NoError(t, err)
 
 	idRef, err := getPodmanDriver(t, d).podman.ImageInspectID(context.Background(), reference)

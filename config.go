@@ -12,6 +12,12 @@ import (
 var (
 	// configSpec is the hcl specification returned by the ConfigSchema RPC
 	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
+		// image registry authentication options
+		"auth": hclspec.NewBlock("auth", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"config": hclspec.NewAttr("config", "string", false),
+			"helper": hclspec.NewAttr("helper", "string", false),
+		})),
+
 		// volume options
 		"volumes": hclspec.NewDefault(hclspec.NewBlock("volumes", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"enabled": hclspec.NewDefault(
@@ -59,6 +65,7 @@ var (
 				hclspec.NewLiteral("true"),
 			),
 		})),
+		"auth_soft_fail": hclspec.NewAttr("auth_soft_fail", "bool", false),
 		"command":        hclspec.NewAttr("command", "string", false),
 		"cap_add":        hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop":       hclspec.NewAttr("cap_drop", "list(string)", false),
@@ -101,8 +108,9 @@ var (
 	})
 )
 
-// AuthConfig is the tasks authentication configuration
-type AuthConfig struct {
+// TaskAuthConfig is the tasks authentication configuration
+// (there is also auth_soft_fail on the top level)
+type TaskAuthConfig struct {
 	Username  string `codec:"username"`
 	Password  string `codec:"password"`
 	TLSVerify bool   `codec:"tls_verify"`
@@ -125,15 +133,21 @@ type VolumeConfig struct {
 	SelinuxLabel string `codec:"selinuxlabel"`
 }
 
+type PluginAuthConfig struct {
+	FileConfig string `codec:"config"`
+	Helper     string `codec:"helper"`
+}
+
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
-	Volumes              VolumeConfig `codec:"volumes"`
-	GC                   GCConfig     `codec:"gc"`
-	RecoverStopped       bool         `codec:"recover_stopped"`
-	DisableLogCollection bool         `codec:"disable_log_collection"`
-	SocketPath           string       `codec:"socket_path"`
-	ClientHttpTimeout    string       `codec:"client_http_timeout"`
-	ExtraLabels          []string     `codec:"extra_labels"`
+	Auth                 PluginAuthConfig `codec:"auth"`
+	Volumes              VolumeConfig     `codec:"volumes"`
+	GC                   GCConfig         `codec:"gc"`
+	RecoverStopped       bool             `codec:"recover_stopped"`
+	DisableLogCollection bool             `codec:"disable_log_collection"`
+	SocketPath           string           `codec:"socket_path"`
+	ClientHttpTimeout    string           `codec:"client_http_timeout"`
+	ExtraLabels          []string         `codec:"extra_labels"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
@@ -147,7 +161,8 @@ func (c *PluginConfig) LogWarnings(logger hclog.Logger) {
 type TaskConfig struct {
 	ApparmorProfile   string             `codec:"apparmor_profile"`
 	Args              []string           `codec:"args"`
-	Auth              AuthConfig         `codec:"auth"`
+	Auth              TaskAuthConfig     `codec:"auth"`
+	AuthSoftFail      bool               `codec:"auth_soft_fail"`
 	Ports             []string           `codec:"ports"`
 	Tmpfs             []string           `codec:"tmpfs"`
 	Volumes           []string           `codec:"volumes"`

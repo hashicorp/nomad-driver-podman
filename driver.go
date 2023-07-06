@@ -22,6 +22,7 @@ import (
 	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
+	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/hashicorp/nomad-driver-podman/version"
 	"github.com/hashicorp/nomad/client/stats"
 	"github.com/hashicorp/nomad/client/taskenv"
@@ -693,7 +694,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", parseErr)
 		}
 
-		imageID, createErr := d.createImage(createOpts.Image, &driverConfig.Auth, driverConfig.ForcePull, imagePullTimeout, cfg)
+		imageID, createErr := d.createImage(
+			createOpts.Image,
+			&driverConfig.Auth,
+			driverConfig.AuthSoftFail,
+			driverConfig.ForcePull,
+			imagePullTimeout,
+			cfg,
+		)
 		if createErr != nil {
 			return nil, nil, fmt.Errorf("failed to create image: %s: %w", createOpts.Image, createErr)
 		}
@@ -906,7 +914,14 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
-func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, imagePullTimeout time.Duration, cfg *drivers.TaskConfig) (string, error) {
+func (d *Driver) createImage(
+	image string,
+	auth *TaskAuthConfig,
+	authSoftFail bool,
+	forcePull bool,
+	imagePullTimeout time.Duration,
+	cfg *drivers.TaskConfig,
+) (string, error) {
 	var imageID string
 	imageName := image
 	// If it is a shortname, we should not have to worry
@@ -961,10 +976,16 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		Message:   "Pulling image " + imageName,
 	})
 
-	imageAuth := api.ImageAuthConfig{
+	pc := &registry.PullConfig{
+		Image:     imageName,
 		TLSVerify: auth.TLSVerify,
-		Username:  auth.Username,
-		Password:  auth.Password,
+		RegistryConfig: &registry.RegistryAuthConfig{
+			Username: auth.Username,
+			Password: auth.Password,
+		},
+		CredentialsFile:   d.config.Auth.FileConfig,
+		CredentialsHelper: d.config.Auth.Helper,
+		AuthSoftFail:      authSoftFail,
 	}
 
 	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
@@ -972,7 +993,7 @@ func (d *Driver) createImage(image string, auth *AuthConfig, forcePull bool, ima
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.slowPodman.ImagePull(ctx, imageName, imageAuth); err != nil {
+		if imageID, err = d.slowPodman.ImagePull(ctx, pc); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil
