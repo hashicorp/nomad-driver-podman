@@ -50,6 +50,10 @@ func authFromFileConfig(filename string) AuthBackend {
 }
 
 func loadCredentialsFile(path string) (*CredentialsFile, error) {
+	if path == "" {
+		return nil, nil
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
