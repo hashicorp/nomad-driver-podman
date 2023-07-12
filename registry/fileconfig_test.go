@@ -49,3 +49,42 @@ func Test_authFromConfigFile(t *testing.T) {
 		})
 	}
 }
+
+func Test_loadCredentialsFile(t *testing.T) {
+	cases := []struct {
+		name     string
+		path     string
+		expCreds *CredentialsFile
+	}{
+		{
+			name:     "not set",
+			path:     "",
+			expCreds: nil,
+		},
+		{
+			name: "normal",
+			path: "tests/auth.json",
+			expCreds: &CredentialsFile{
+				Auths: map[string]EncAuth{
+					"one.example.com/library/bash": {
+						Auth: "dXNlcjE6cGFzczE=",
+					},
+					"two.example.com/library": {
+						Auth: "dXNlcjI6cGFzczI=",
+					},
+					"three.example.com": {
+						Auth: "dXNlcjM6cGFzczM=",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cf, err := loadCredentialsFile(tc.path)
+			must.NoError(t, err)
+			must.Eq(t, tc.expCreds, cf)
+		})
+	}
+}
