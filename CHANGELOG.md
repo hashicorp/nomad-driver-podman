@@ -1,4 +1,16 @@
-## UNRELEASED
+## 0.5.0 (July 19, 2023)
+
+IMPROVEMENTS:
+
+* config: Add support for auth helper or config file in plugin configuration [[GH-265](https://github.com/hashicorp/nomad-driver-podman/pull/265)]
+* config: Add support for setting tlsVerify in task configuration [[GH-262](https://github.com/hashicorp/nomad-driver-podman/pull/262)]
+* config: Add support for setting extra_hosts in task configuration [[GH-255](https://github.com/hashicorp/nomad-driver-podman/pull/255)]
+
+BUG FIXES:
+
+* config: Set recover_stopped to false by default since Client may hang if enabled [[GH-260](https://github.com/hashicorp/nomad-driver-podman/pull/260)]
+* runtime: Correctly configure cpuset on system using cgroups v2 [[GH-252](https://github.com/hashicorp/nomad-driver-podman/pull/252)]
+* runtime: Fixed a bug where driver would panic on systems without a nobody user in /etc/passwd [[GH-266](https://github.com/hashicorp/nomad-driver-podman/pull/266)]
 
 ## 0.4.2 (March 24, 2023)
 
