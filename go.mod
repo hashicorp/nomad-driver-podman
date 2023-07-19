@@ -2,14 +2,11 @@ module github.com/hashicorp/nomad-driver-podman
 
 go 1.20
 
-// temporary until nomad 1.6 exists
-replace github.com/hashicorp/nomad => github.com/hashicorp/nomad v1.6.0-beta.1
-
 require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
 	github.com/containers/image/v5 v5.26.1
 	github.com/hashicorp/go-hclog v1.5.0
-	github.com/hashicorp/nomad v1.5.3
+	github.com/hashicorp/nomad v1.6.0
 	github.com/hashicorp/nomad/api v0.0.0-20230412133617-a1ebd075c4e9
 	github.com/opencontainers/runtime-spec v1.1.0-rc.3
 	github.com/ryanuber/go-glob v1.0.0
@@ -61,7 +58,7 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/hashicorp/consul/api v1.20.0 // indirect
-	github.com/hashicorp/cronexpr v1.1.1 // indirect
+	github.com/hashicorp/cronexpr v1.1.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-bexpr v0.1.12 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
