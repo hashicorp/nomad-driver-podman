@@ -1543,3 +1543,9 @@ type Version struct {
 	Built      int64
 	OsArch     string
 }
+
+type Error struct {
+	Cause    string `json:"cause"`
+	Message  string `json:"message"`
+	Response int    `json:"response"`
+}
