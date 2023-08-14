@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+## 0.5.1 (August 14, 2023)
+
+* api: Address a backwards incompatible change in Podman 4.6.0 preventing jobs from restarting [[GH-278](https://github.com/hashicorp/nomad-driver-podman/pull/278)]
+
 ## 0.5.0 (July 19, 2023)
 
 IMPROVEMENTS:
