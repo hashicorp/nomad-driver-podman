@@ -47,6 +47,12 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 		return stats, ContainerNotFound
 	}
 
+	// Since podman 4.6.0, a 200 response with `container is stopped` is returned for stopped containers.
+	var errResponse Error
+	if _ = json.Unmarshal(body, &errResponse); errResponse.Cause == "container is stopped" {
+		return stats, ContainerNotFound
+	}
+
 	err = json.Unmarshal(body, &stats)
 	if err != nil {
 		return stats, err
