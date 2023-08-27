@@ -124,6 +124,8 @@ type Driver struct {
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
 	cgroupV2 bool
+	// Queried from systemInfo: name of the cgroup manager
+	cgroupMgr string
 
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
@@ -290,6 +292,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		// it is used to toggle cgroup v1/v2, rootless/rootful behavior
 		d.systemInfo = info
 		d.cgroupV2 = info.Host.CGroupsVersion == "v2"
+		d.cgroupMgr = info.Host.CgroupManager
 	}
 
 	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
@@ -787,7 +790,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 // setupCgroup customizes where the cgroup lives (v2 only)
 func (d *Driver) setupCgroup(opts *api.SpecGenerator) {
-	if d.cgroupV2 {
+	if d.cgroupV2 && d.cgroupMgr == "systemd" {
 		opts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
 	}
 }
