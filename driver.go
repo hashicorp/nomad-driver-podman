@@ -497,20 +497,34 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
 
 	// Logging
-	switch driverConfig.Logging.Driver {
-	case "", LOG_DRIVER_NOMAD:
-		// Only modify container logging path if LogCollection is not disabled
-		if !d.config.DisableLogCollection {
-			createOpts.LogConfiguration.Driver = "k8s-file"
-
-			createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+	if driverConfig.Logging.Driver != "" {
+		switch driverConfig.Logging.Driver {
+		case LOG_DRIVER_NOMAD:
+			if !d.config.DisableLogCollection {
+				createOpts.LogConfiguration.Driver = "k8s-file"
+				createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+			}
+		case LOG_DRIVER_JOURNALD:
+			createOpts.LogConfiguration.Driver = "journald"
+		default:
+			return nil, nil, fmt.Errorf("Invalid task logging.driver option")
 		}
-	case LOG_DRIVER_JOURNALD:
-		createOpts.LogConfiguration.Driver = "journald"
-	default:
-		return nil, nil, fmt.Errorf("Invalid logging.driver option")
+		createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
+	} else {
+		d.logger.Trace("no podman log driver provided, defaulting to plugin config")
+		switch d.config.Logging.Driver {
+		case LOG_DRIVER_NOMAD:
+			if !d.config.DisableLogCollection {
+				createOpts.LogConfiguration.Driver = "k8s-file"
+				createOpts.ContainerBasicConfig.LogConfiguration.Path = cfg.StdoutPath
+			}
+		case LOG_DRIVER_JOURNALD:
+			createOpts.LogConfiguration.Driver = "journald"
+		default:
+			return nil, nil, fmt.Errorf("Invalid plugin logging.driver option")
+		}
+		createOpts.ContainerBasicConfig.LogConfiguration.Options = d.config.Logging.Options
 	}
-	createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
 
 	// Storage config options
 	createOpts.ContainerStorageConfig.Init = driverConfig.Init

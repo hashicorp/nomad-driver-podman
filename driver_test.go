@@ -516,6 +516,55 @@ func TestPodmanDriver_logNomad(t *testing.T) {
 	must.StrContains(t, stdoutLog, stderrMagic)
 }
 
+// Check default plugin logger
+// TODO: Can we make this nicer?
+func TestPodmanDriver_logNomadDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	stdoutMagic := uuid.Generate()
+	stderrMagic := uuid.Generate()
+
+	taskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
+	})
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "logNomad",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	must.NoError(t, err)
+
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
+
+	// Attempt to wait
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	must.NoError(t, err)
+
+	select {
+	case <-waitCh:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// log_driver=nomad combines both streams into stdout, so we will find both
+	// magic values in the same stream
+	stdoutLog := readStdoutLog(t, task)
+	must.StrContains(t, stdoutLog, stdoutMagic)
+	must.StrContains(t, stdoutLog, stderrMagic)
+}
+
 // check if extra labels make it into logs
 func TestPodmanDriver_ExtraLabels(t *testing.T) {
 	ci.Parallel(t)

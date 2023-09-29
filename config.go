@@ -44,6 +44,16 @@ var (
 		),
 		// optional extra_labels to append to all tasks for observability. Globs supported
 		"extra_labels": hclspec.NewAttr("extra_labels", "list(string)", false),
+
+		// logging options
+		"logging": hclspec.NewDefault(hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"driver":  hclspec.NewAttr("driver", "string", false),
+			"options": hclspec.NewBlockAttrs("options", "string", false),
+		})), hclspec.NewLiteral(`{
+			driver = "nomad"
+			options = {}
+		}`)),
+
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
 		// disable_log_collection indicates whether nomad should collect logs of podman
@@ -124,8 +134,8 @@ type GCConfig struct {
 
 // LoggingConfig is the tasks logging configuration
 type LoggingConfig struct {
-	Driver  string             `codec:"driver"`
-	Options hclutils.MapStrStr `codec:"options"`
+	Driver  string            `codec:"driver"`
+	Options map[string]string `codec:"options"`
 }
 
 // VolumeConfig is the drivers volume specific configuration
@@ -150,6 +160,7 @@ type PluginConfig struct {
 	ClientHttpTimeout    string           `codec:"client_http_timeout"`
 	ExtraLabels          []string         `codec:"extra_labels"`
 	DNSServers           []string         `codec:"dns_servers"`
+	Logging              LoggingConfig    `codec:"logging"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
