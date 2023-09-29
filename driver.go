@@ -689,6 +689,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
 			}
 		}
+	} else if !errors.Is(err, api.ContainerNotFound) {
+		return nil, nil, fmt.Errorf("failed to inspect container: %s: %w", containerName, err)
 	}
 
 	if !recoverRunningContainer {
