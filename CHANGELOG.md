@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
+ * build: Updated to Go 1.21.5 [[GH-303](https://github.com/hashicorp/nomad-driver-podman/pull/303)] 
+
 ## 0.5.1 (August 14, 2023)
 
 * api: Address a backwards incompatible change in Podman 4.6.0 preventing jobs from restarting [[GH-278](https://github.com/hashicorp/nomad-driver-podman/pull/278)]
