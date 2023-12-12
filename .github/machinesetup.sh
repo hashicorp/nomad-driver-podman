@@ -7,15 +7,11 @@ set -euo pipefail
 
 echo "====== Install tools from apt"
 apt-get update
-apt-get install -y ca-certificates podman curl build-essential
+apt-get install -qq -y ca-certificates podman curl build-essential
 
 echo "====== Install catatonit"
-curl -v -L -o /usr/local/bin/catatonit https://github.com/openSUSE/catatonit/releases/download/v0.1.7/catatonit.x86_64
+curl -s -S -L -o /usr/local/bin/catatonit https://github.com/openSUSE/catatonit/releases/download/v0.1.7/catatonit.x86_64
 chmod +x /usr/local/bin/catatonit
-
-echo "====== Podman info"
-podman version
-podman info
 
 echo "====== Setup archives"
 podman pull alpine:3
@@ -30,3 +26,10 @@ unqualified-search-registries = ["docker.io", "quay.io"]
 location = "localhost:5000"
 insecure = true
 EOF
+
+echo "====== Podman info"
+systemctl start podman
+systemctl status podman
+podman version
+podman info
+
