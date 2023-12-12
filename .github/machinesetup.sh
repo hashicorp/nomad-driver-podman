@@ -32,4 +32,8 @@ insecure = true
 EOF
 
 echo "===== Show /run/podman"
+whoami
 tree /run/podman
+
+echo "==== Show /run"
+tree /run
