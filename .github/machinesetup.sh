@@ -10,7 +10,7 @@ apt-get update
 apt-get install -y ca-certificates podman curl build-essential
 
 echo "====== Install catatonit"
-curl -v -L -o /usr/local/bin/catatonit https://github.com/openSUSE/catatonit/releases/download/v0.1.7/catatonit.x86_64
+curl -s -S -L -o /usr/local/bin/catatonit https://github.com/openSUSE/catatonit/releases/download/v0.1.7/catatonit.x86_64
 chmod +x /usr/local/bin/catatonit
 
 echo "====== Podman info"
