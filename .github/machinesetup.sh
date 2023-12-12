@@ -28,7 +28,7 @@ insecure = true
 EOF
 
 echo "====== Podman info"
-systemctl start podman
+systemctl start podman || (echo "unable to start podman"; journalctl -xe)
 systemctl status podman
 podman version
 podman info
