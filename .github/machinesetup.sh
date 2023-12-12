@@ -30,3 +30,6 @@ unqualified-search-registries = ["docker.io", "quay.io"]
 location = "localhost:5000"
 insecure = true
 EOF
+
+echo "===== Show /run/podman"
+tree /run/podman
