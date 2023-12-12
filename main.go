@@ -9,6 +9,8 @@ import (
 	"github.com/hashicorp/nomad/plugins"
 )
 
+// trigger build
+
 func main() {
 	// Serve the plugin
 	plugins.Serve(factory)
