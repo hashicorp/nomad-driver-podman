@@ -36,5 +36,6 @@ jobs:
       run: |
         set +x
         whoami
+        systemctl start podman
         systemctl status podman
         sudo -E env "PATH=$PATH" make test-ci
