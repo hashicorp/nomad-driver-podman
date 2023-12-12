@@ -10,6 +10,7 @@ import (
 	"net"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +36,6 @@ import (
 	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/ryanuber/go-glob"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sync/singleflight"
 )
 
