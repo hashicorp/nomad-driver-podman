@@ -36,6 +36,6 @@ jobs:
       run: |
         set +x
         whoami
-        systemctl start podman
+        systemctl start podman || echo "sadface start podman failed"
         systemctl status podman
         sudo -E env "PATH=$PATH" make test-ci
