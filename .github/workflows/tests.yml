@@ -33,4 +33,8 @@ jobs:
         make check
         make dev
     - name: Make test
-      run: sudo -E env "PATH=$PATH" make test-ci
+      run: |
+        set +x
+        whoami
+        systemctl status podman
+        sudo -E env "PATH=$PATH" make test-ci
