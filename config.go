@@ -149,7 +149,7 @@ type PluginConfig struct {
 	SocketPath           string           `codec:"socket_path"`
 	ClientHttpTimeout    string           `codec:"client_http_timeout"`
 	ExtraLabels          []string         `codec:"extra_labels"`
-	DNSServers           []string     `codec:"dns_servers"`
+	DNSServers           []string         `codec:"dns_servers"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
