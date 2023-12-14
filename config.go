@@ -50,6 +50,7 @@ var (
 		// task containers.  If true, logs are not forwarded to nomad.
 		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
 		"client_http_timeout":    hclspec.NewAttr("client_http_timeout", "string", false),
+		"dns_servers":            hclspec.NewAttr("dns_servers", "list(string)", false),
 	})
 
 	// taskConfigSpec is the hcl specification for the driver config section of
@@ -148,6 +149,7 @@ type PluginConfig struct {
 	SocketPath           string           `codec:"socket_path"`
 	ClientHttpTimeout    string           `codec:"client_http_timeout"`
 	ExtraLabels          []string         `codec:"extra_labels"`
+	DNSServers           []string         `codec:"dns_servers"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
