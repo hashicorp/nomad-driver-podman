@@ -14,7 +14,7 @@ import (
 
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-driver-podman/api"
-	"github.com/hashicorp/nomad/client/stats"
+	"github.com/hashicorp/nomad/client/lib/cpustats"
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
@@ -29,9 +29,9 @@ type TaskHandle struct {
 	logger      hclog.Logger
 	driver      *Driver
 
-	totalCPUStats  *stats.CpuStats
-	userCPUStats   *stats.CpuStats
-	systemCPUStats *stats.CpuStats
+	totalCPUStats  *cpustats.Tracker
+	userCPUStats   *cpustats.Tracker
+	systemCPUStats *cpustats.Tracker
 
 	collectionInterval time.Duration
 
