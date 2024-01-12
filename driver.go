@@ -513,6 +513,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	} else {
 		d.logger.Trace("no podman log driver provided, defaulting to plugin config")
 		switch d.config.Logging.Driver {
+		case "": // The default is nomad
+			fallthrough
 		case LOG_DRIVER_NOMAD:
 			if !d.config.DisableLogCollection {
 				createOpts.LogConfiguration.Driver = "k8s-file"
