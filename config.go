@@ -132,10 +132,18 @@ type GCConfig struct {
 	Container bool `codec:"container"`
 }
 
-// LoggingConfig is the tasks logging configuration
+// LoggingConfig is the driver logging configuration
+// keep in sync with `TaskLoggingConfig`
 type LoggingConfig struct {
 	Driver  string            `codec:"driver"`
 	Options map[string]string `codec:"options"`
+}
+
+// LoggingConfig is the tasks logging configuration
+// keep in sync with `LoggingConfig`
+type TaskLoggingConfig struct {
+	Driver  string             `codec:"driver"`
+	Options hclutils.MapStrStr `codec:"options"`
 }
 
 // VolumeConfig is the drivers volume specific configuration
@@ -190,7 +198,7 @@ type TaskConfig struct {
 	Image             string             `codec:"image"`
 	ImagePullTimeout  string             `codec:"image_pull_timeout"`
 	InitPath          string             `codec:"init_path"`
-	Logging           LoggingConfig      `codec:"logging"`
+	Logging           TaskLoggingConfig  `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
