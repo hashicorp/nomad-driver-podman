@@ -1,8 +1,12 @@
 ## UNRELEASED
 
+SECURITY:
+
+ * deps: Updated runc to 1.1.12 to address CVE-2024-21626313 [[GH-313](https://github.com/hashicorp/nomad-driver-podman/pull/313)]
+
 IMPROVEMENTS:
 
- * build: Updated to Go 1.21.5 [[GH-303](https://github.com/hashicorp/nomad-driver-podman/pull/303)] 
+ * build: Updated to Go 1.21.5 [[GH-303](https://github.com/hashicorp/nomad-driver-podman/pull/303)]
 
 ## 0.5.1 (August 14, 2023)
 
