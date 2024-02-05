@@ -25,10 +25,9 @@ import (
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/hashicorp/nomad-driver-podman/version"
-	"github.com/hashicorp/nomad/client/stats"
+	"github.com/hashicorp/nomad/client/lib/cpustats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
-	shelpers "github.com/hashicorp/nomad/helper/stats"
 	nstructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
@@ -98,6 +97,9 @@ type Driver struct {
 
 	// nomadConfig is the client config from nomad
 	nomadConfig *base.ClientDriverConfig
+
+	// compute contains information about the available cpu compute
+	compute cpustats.Compute
 
 	// tasks is the in memory datastore mapping taskIDs to rawExecDriverHandles
 	tasks *taskStore
@@ -195,6 +197,7 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 
 	d.podman = d.newPodmanClient(timeout)
 	d.slowPodman = d.newPodmanClient(0)
+	d.compute = cfg.AgentConfig.Compute()
 
 	return nil
 }
@@ -230,12 +233,6 @@ func (d *Driver) Capabilities() (*drivers.Capabilities, error) {
 func (d *Driver) Fingerprint(ctx context.Context) (<-chan *drivers.Fingerprint, error) {
 	// emit warnings about known bad configs
 	d.config.LogWarnings(d.logger)
-
-	err := shelpers.Init()
-	if err != nil {
-		d.logger.Error("Could not init stats helper", "error", err)
-		return nil, err
-	}
 	ch := make(chan *drivers.Fingerprint)
 	go d.handleFingerprint(ctx, ch)
 	return ch, nil
@@ -337,21 +334,19 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 
 	h := &TaskHandle{
-		containerID:        taskState.ContainerID,
-		driver:             d,
-		taskConfig:         taskState.TaskConfig,
-		procState:          drivers.TaskStateUnknown,
-		startedAt:          taskState.StartedAt,
-		exitResult:         &drivers.ExitResult{},
-		logger:             d.logger.Named("podmanHandle"),
-		logPointer:         time.Now(), // do not rewind log to the startetAt date.
-		logStreamer:        taskState.LogStreamer,
-		collectionInterval: time.Second,
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
+		containerID:           taskState.ContainerID,
+		driver:                d,
+		taskConfig:            taskState.TaskConfig,
+		procState:             drivers.TaskStateUnknown,
+		startedAt:             taskState.StartedAt,
+		exitResult:            &drivers.ExitResult{},
+		logger:                d.logger.Named("podmanHandle"),
+		logPointer:            time.Now(), // do not rewind log to the startetAt date.
+		logStreamer:           taskState.LogStreamer,
+		collectionInterval:    time.Second,
+		totalCPUStats:         cpustats.New(d.compute),
+		userCPUStats:          cpustats.New(d.compute),
+		systemCPUStats:        cpustats.New(d.compute),
 		removeContainerOnExit: d.config.GC.Container,
 	}
 
@@ -737,22 +732,21 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			d.logger.Error("failed to clean up from an error in Start", "error", cleanupErr)
 		}
 	}
+
 	h := &TaskHandle{
-		containerID:        containerID,
-		driver:             d,
-		taskConfig:         cfg,
-		procState:          drivers.TaskStateRunning,
-		exitResult:         &drivers.ExitResult{},
-		startedAt:          time.Now(),
-		logger:             d.logger.Named("podmanHandle"),
-		logStreamer:        driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
-		logPointer:         time.Now(),
-		collectionInterval: time.Second,
-
-		totalCPUStats:  stats.NewCpuStats(),
-		userCPUStats:   stats.NewCpuStats(),
-		systemCPUStats: stats.NewCpuStats(),
-
+		containerID:           containerID,
+		driver:                d,
+		taskConfig:            cfg,
+		procState:             drivers.TaskStateRunning,
+		exitResult:            &drivers.ExitResult{},
+		startedAt:             time.Now(),
+		logger:                d.logger.Named("podmanHandle"),
+		logStreamer:           driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logPointer:            time.Now(),
+		collectionInterval:    time.Second,
+		totalCPUStats:         cpustats.New(d.compute),
+		userCPUStats:          cpustats.New(d.compute),
+		systemCPUStats:        cpustats.New(d.compute),
 		removeContainerOnExit: d.config.GC.Container,
 	}
 

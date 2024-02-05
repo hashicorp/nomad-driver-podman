@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 15
     steps:
     - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
-    - uses: hashicorp/setup-golang@v1
+    - uses: hashicorp/setup-golang@v3
     - name: Machine Setup
       run: sudo .github/machinesetup.sh
     - name: Make Setup
