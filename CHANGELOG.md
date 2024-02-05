@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.5.2 (February 5, 2024)
+
 SECURITY:
 
  * deps: Updated runc to 1.1.12 to address CVE-2024-21626313 [[GH-313](https://github.com/hashicorp/nomad-driver-podman/pull/313)]
