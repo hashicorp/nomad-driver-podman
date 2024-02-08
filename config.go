@@ -146,6 +146,11 @@ type TaskLoggingConfig struct {
 	Options hclutils.MapStrStr `codec:"options"`
 }
 
+// Empty returns true if the logging configuration is not set.
+func (l *TaskLoggingConfig) Empty() bool {
+	return l.Driver == "" && len(l.Options) == 0
+}
+
 // VolumeConfig is the drivers volume specific configuration
 type VolumeConfig struct {
 	Enabled      bool   `codec:"enabled"`
