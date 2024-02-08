@@ -188,6 +188,11 @@ plugin "nomad-driver-podman" {
 }
 ```
 
+* logging stanza:
+
+  * type - Defaults to `"nomad"`. See the task configuration for details.
+  * options - Defaults to `{}`. See the task configuration for details.
+
 * client_http_timeout (string) Defaults to `60s` default timeout used by http.Client requests
 
 ```hcl
@@ -342,11 +347,9 @@ Ensure you're running Podman 3.1.0 or higher because of bugs in older versions.
 config {
   logging = {
     driver = "journald"
-    options = [
-      {
-        "tag" = "redis"
-      }
-    ]
+    options = {
+      "tag" = "redis"
+    }
   }
 }
 ```

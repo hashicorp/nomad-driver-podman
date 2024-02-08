@@ -1,0 +1,71 @@
+# Please edit the following configuration for Lima instance "podman"
+# and an empty file will abort the edit.
+
+# Example to use Podman instead of containerd & nerdctl
+# $ limactl start ./podman.yaml
+# $ limactl shell podman podman run -it -v $HOME:$HOME --rm docker.io/library/alpine
+
+# To run `podman` on the host (assumes podman-remote is installed):
+# $ export CONTAINER_HOST=$(limactl list podman --format 'unix://{{.Dir}}/sock/podman.sock')
+# $ podman --remote ...
+
+# To run `docker` on the host (assumes docker-cli is installed):
+# $ export DOCKER_HOST=$(limactl list podman --format 'unix://{{.Dir}}/sock/podman.sock')
+# $ docker ...
+
+# This example requires Lima v0.8.0 or later
+images:
+  - location: "file:///Users/laoqui/Downloads/Fedora-IoT-38.20230414.1-20230414.1.aarch64.qcow2"
+    arch: "aarch64"
+
+mounts:
+- location: "~/go/src"
+  writable: true
+- location: "/tmp/lima"
+  writable: true
+containerd:
+  system: false
+  user: false
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    curl -LO https://go.dev/dl/go1.19.5.linux-$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64).tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.19.5.linux-$( [ $(uname -m) = aarch64 ] && echo arm64 || echo amd64).tar.gz
+    dnf groupinstall -y "Development Tools" "Development Libraries"
+- mode: user
+  script: |
+    #!/bin/bash
+    echo "export GOPATH=~/go" >> ~/.bashrc
+    echo "export PATH=~/go/bin:$PATH:/usr/local/go/bin" >> ~/.bashrc
+    #- mode: system
+    #  script: |
+    #    #!/bin/bash
+    #    set -eux -o pipefail
+    #    command -v podman >/dev/null 2>&1 && exit 0
+    #    dnf -y install podman
+    #- mode: user
+    #  script: |
+    #    #!/bin/bash
+    #    set -eux -o pipefail
+    #    systemctl --user enable --now podman.socket
+    #probes:
+    #- script: |
+    #    #!/bin/bash
+    #    set -eux -o pipefail
+    #    if ! timeout 30s bash -c "until command -v podman >/dev/null 2>&1; do sleep 3; done"; then
+    #      echo >&2 "podman is not installed yet"
+    #      exit 1
+    #    fi
+    #  hint: See "/var/log/cloud-init-output.log" in the guest
+    #portForwards:
+    #- guestSocket: "/run/user/{{.UID}}/podman/podman.sock"
+    #  hostSocket: "{{.Dir}}/sock/podman.sock"
+    #message: |
+    #  To run `podman` on the host (assumes podman-remote is installed), run the following commands:
+    #  ------
+    #  podman system connection add lima-{{.Name}} "unix://{{.Dir}}/sock/podman.sock"
+    #  podman system connection default lima-{{.Name}}
+    #  podman{{if eq .HostOS "linux"}} --remote{{end}} run quay.io/podman/hello
+    #  ------

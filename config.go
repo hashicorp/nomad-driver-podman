@@ -44,6 +44,16 @@ var (
 		),
 		// optional extra_labels to append to all tasks for observability. Globs supported
 		"extra_labels": hclspec.NewAttr("extra_labels", "list(string)", false),
+
+		// logging options
+		"logging": hclspec.NewDefault(hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			"driver":  hclspec.NewAttr("driver", "string", false),
+			"options": hclspec.NewBlockAttrs("options", "string", false),
+		})), hclspec.NewLiteral(`{
+			driver = "nomad"
+			options = {}
+		}`)),
+
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
 		// disable_log_collection indicates whether nomad should collect logs of podman
@@ -122,10 +132,23 @@ type GCConfig struct {
 	Container bool `codec:"container"`
 }
 
-// LoggingConfig is the tasks logging configuration
+// LoggingConfig is the driver logging configuration
+// keep in sync with `TaskLoggingConfig`
 type LoggingConfig struct {
+	Driver  string            `codec:"driver"`
+	Options map[string]string `codec:"options"`
+}
+
+// LoggingConfig is the tasks logging configuration
+// keep in sync with `LoggingConfig`
+type TaskLoggingConfig struct {
 	Driver  string             `codec:"driver"`
 	Options hclutils.MapStrStr `codec:"options"`
+}
+
+// Empty returns true if the logging configuration is not set.
+func (l *TaskLoggingConfig) Empty() bool {
+	return l.Driver == "" && len(l.Options) == 0
 }
 
 // VolumeConfig is the drivers volume specific configuration
@@ -150,6 +173,7 @@ type PluginConfig struct {
 	ClientHttpTimeout    string           `codec:"client_http_timeout"`
 	ExtraLabels          []string         `codec:"extra_labels"`
 	DNSServers           []string         `codec:"dns_servers"`
+	Logging              LoggingConfig    `codec:"logging"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
@@ -179,7 +203,7 @@ type TaskConfig struct {
 	Image             string             `codec:"image"`
 	ImagePullTimeout  string             `codec:"image_pull_timeout"`
 	InitPath          string             `codec:"init_path"`
-	Logging           LoggingConfig      `codec:"logging"`
+	Logging           TaskLoggingConfig  `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
