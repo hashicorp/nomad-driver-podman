@@ -6,11 +6,14 @@ require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
 	github.com/containers/image/v5 v5.29.2
 	github.com/hashicorp/go-hclog v1.6.2
-	github.com/hashicorp/nomad v1.7.3
+	github.com/hashicorp/nomad v1.7.4
 	github.com/hashicorp/nomad/api v0.0.0-20240205090533-120c3ca3c942
 	github.com/opencontainers/runtime-spec v1.1.0
 	github.com/ryanuber/go-glob v1.0.0
+	github.com/shirou/gopsutil/v3 v3.24.1
+	github.com/shoenig/go-m1cpu v0.1.6
 	github.com/shoenig/test v1.7.0
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.6.0
 )
 
@@ -31,7 +34,6 @@ require (
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/container-storage-interface/spec v1.9.0 // indirect
-	github.com/containerd/containerd v1.7.13 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containers/libtrust v0.0.0-20230121012942-c1716e8a8d01 // indirect
 	github.com/containers/ocicrypt v1.1.9 // indirect
@@ -48,7 +50,6 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/fsouza/go-dockerclient v1.10.1 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gojuno/minimock/v3 v3.3.6 // indirect
@@ -60,7 +61,6 @@ require (
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
-	github.com/hashicorp/consul-template v0.36.0 // indirect
 	github.com/hashicorp/consul/api v1.27.0 // indirect
 	github.com/hashicorp/cronexpr v1.1.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -131,13 +131,10 @@ require (
 	github.com/prometheus/common v0.46.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
-	github.com/shirou/gopsutil/v3 v3.24.1 // indirect
-	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/stretchr/objx v0.5.1 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/tklauser/go-sysconf v0.3.13 // indirect
 	github.com/tklauser/numcpus v0.7.0 // indirect
