@@ -1308,6 +1308,14 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 	return &exitResult, nil
 }
 
+func getSElinuxVolumeLabel(vc VolumeConfig, mc *drivers.MountConfig) string {
+	if mc.SELinuxLabel != vc.SelinuxLabel && mc.SELinuxLabel != "" {
+		return mc.SELinuxLabel
+	}
+
+	return vc.SelinuxLabel
+}
+
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
 	var binds []spec.Mount
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
@@ -1369,9 +1377,6 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		if m.Readonly {
 			bind.Options = append(bind.Options, "ro")
 		}
-		if m.SELinuxLabel != "" {
-			bind.Options = append(bind.Options, m.SELinuxLabel)
-		}
 
 		switch m.PropagationMode {
 		case nstructs.VolumeMountPropagationPrivate:
@@ -1381,6 +1386,11 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		case nstructs.VolumeMountPropagationBidirectional:
 			bind.Options = append(bind.Options, "rshared")
 			// If PropagationMode is something else or unset, Podman defaults to rprivate
+		}
+
+		selinuxLabel := getSElinuxVolumeLabel(d.config.Volumes, m)
+		if selinuxLabel != "" && !driverConfig.Privileged {
+			bind.Options = append(bind.Options, selinuxLabel)
 		}
 
 		binds = append(binds, bind)
