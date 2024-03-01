@@ -179,8 +179,8 @@ github.com/gorilla/websocket v1.5.1 h1:gmztn0JnHVt9JZquRuzLw3g4wouNVzKL15iLr/zn/
 github.com/gorilla/websocket v1.5.1/go.mod h1:x3kM2JMyaluk02fnUJpQuwD2dCS5NDG2ZHL0uE0tcaY=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
-github.com/hashicorp/consul-template v0.36.0 h1:elo9xh+rERrLVKMbEKbXoRagFvSTBG1S4GOXeH9/x8o=
-github.com/hashicorp/consul-template v0.36.0/go.mod h1:bvidXKwpfXzJ1X4wDw68OXnVxy5k7HLOHhOf5gnQr3M=
+github.com/hashicorp/consul-template v0.36.1-0.20240205193627-e15d61bb21ae h1:ehZNpVWpoWtMrxFE/FKvJyfjDGY384iaBccpYu13yCw=
+github.com/hashicorp/consul-template v0.36.1-0.20240205193627-e15d61bb21ae/go.mod h1:bvidXKwpfXzJ1X4wDw68OXnVxy5k7HLOHhOf5gnQr3M=
 github.com/hashicorp/consul/api v1.27.0 h1:gmJ6DPKQog1426xsdmgk5iqDyoRiNc+ipBdJOqKQFjc=
 github.com/hashicorp/consul/api v1.27.0/go.mod h1:JkekNRSou9lANFdt+4IKx3Za7XY0JzzpQjEb4Ivo1c8=
 github.com/hashicorp/consul/sdk v0.15.1 h1:kKIGxc7CZtflcF5DLfHeq7rOQmRq3vk7kwISN9bif8Q=
@@ -257,8 +257,8 @@ github.com/hashicorp/logutils v1.0.0/go.mod h1:QIAnNjmIWmVIIkWDTG1z5v++HQmx9WQRO
 github.com/hashicorp/mdns v1.0.4/go.mod h1:mtBihi+LeNXGtG8L9dX59gAEa12BDtBQSp4v/YAJqrc=
 github.com/hashicorp/memberlist v0.5.0 h1:EtYPN8DpAURiapus508I4n9CzHs2W+8NZGbmmR/prTM=
 github.com/hashicorp/memberlist v0.5.0/go.mod h1:yvyXLpo0QaGE59Y7hDTsTzDD25JYBZ4mHgHUZ8lrOI0=
-github.com/hashicorp/nomad v1.7.3 h1:iNZFZaSi+kcnm4+Po/mrn1GKJ2spDJehgtLpvADYHlk=
-github.com/hashicorp/nomad v1.7.3/go.mod h1:SBmk/k507T3B65May9GTLJwybafDTUSdpxX+jJvumSc=
+github.com/hashicorp/nomad v1.7.5 h1:sAeSsf1/EnEXZsuhgci1DNxIVyBv1p91Czpno403dTQ=
+github.com/hashicorp/nomad v1.7.5/go.mod h1:PVPZnaNzzMnewe8wxWEE6SLn5GNE3XMs/ZLIdL2jBEM=
 github.com/hashicorp/nomad/api v0.0.0-20240205090533-120c3ca3c942 h1:dsE339MliAPB6QY5sBgSoUvWtnGPlLNND1L5EmwRmos=
 github.com/hashicorp/nomad/api v0.0.0-20240205090533-120c3ca3c942/go.mod h1:ijDwa6o1uG1jFSq6kERiX2PamKGpZzTmo0XOFNeFZgw=
 github.com/hashicorp/raft v1.2.0/go.mod h1:vPAJM8Asw6u8LxC3eJCUZmRP/E4QmUGE1R7g7k8sG/8=
