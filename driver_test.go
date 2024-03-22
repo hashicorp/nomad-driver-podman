@@ -1229,7 +1229,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	taskCfg.MemorySwap = "100m"
 	// set a swappiness of 60
 	taskCfg.MemorySwappiness = 60
-	//set shm_size of 100m
+	// set shm_size of 100m
 	taskCfg.ShmSize = "100m"
 	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 

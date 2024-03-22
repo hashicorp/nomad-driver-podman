@@ -613,6 +613,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
+	// populate shm_size if configured
 	if driverConfig.ShmSize != "" {
 		shmsize, memErr := memoryInBytes(driverConfig.ShmSize)
 		if memErr != nil {
