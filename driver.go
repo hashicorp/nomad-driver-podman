@@ -613,6 +613,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
+	// populate shm_size if configured
+	if driverConfig.ShmSize != "" {
+		shmsize, memErr := memoryInBytes(driverConfig.ShmSize)
+		if memErr != nil {
+			return nil, nil, memErr
+		}
+		createOpts.ContainerStorageConfig.ShmSize = &shmsize
+	}
+
 	// Network config options
 	if cfg.DNS != nil {
 		for _, strdns := range cfg.DNS.Servers {

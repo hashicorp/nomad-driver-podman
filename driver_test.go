@@ -1229,6 +1229,8 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	taskCfg.MemorySwap = "100m"
 	// set a swappiness of 60
 	taskCfg.MemorySwappiness = 60
+	// set shm_size of 100m
+	taskCfg.ShmSize = "100m"
 	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	containerName := BuildContainerName(task)
@@ -1261,6 +1263,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	must.Eq(t, 52428800, inspectData.HostConfig.Memory)
 	must.Eq(t, 41943040, inspectData.HostConfig.MemoryReservation)
 	must.Eq(t, 104857600, inspectData.HostConfig.MemorySwap)
+	must.Eq(t, 104857600, inspectData.HostConfig.ShmSize)
 
 	if !getPodmanDriver(t, d).cgroupV2 {
 		must.Eq(t, 60, inspectData.HostConfig.MemorySwappiness)
