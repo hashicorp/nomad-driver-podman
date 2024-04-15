@@ -581,7 +581,8 @@ type InspectContainerConfig struct {
 	// Container working directory
 	WorkingDir string `json:"WorkingDir"`
 	// Container entrypoint
-	Entrypoint string `json:"Entrypoint"`
+	// Podman 5.0 changed this to []string, ignoring.
+	// Entrypoint []string `json:"Entrypoint"`
 	// On-build arguments - presently unused. More of Buildah's domain.
 	OnBuild *string `json:"OnBuild"`
 	// Container labels
@@ -589,7 +590,8 @@ type InspectContainerConfig struct {
 	// Container annotations
 	Annotations map[string]string `json:"Annotations"`
 	// Container stop signal
-	StopSignal uint `json:"StopSignal"`
+	// Podman 5.0 changed this to string, ignoring.
+	// StopSignal string `json:"StopSignal"`
 	// Configured healthcheck for the container
 	// Healthcheck *manifest.Schema2HealthConfig `json:"Healthcheck,omitempty"`
 	// CreateCommand is the full command plus arguments of the process the
