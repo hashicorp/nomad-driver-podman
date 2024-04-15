@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
 
+ * api: Address a backwards incompatible change in Podman 5.0 [[GH-332](https://github.com/hashicorp/nomad-driver-podman/issues/332)]
  * config: Add `logging` options to the plugin configuration [[GH-285](https://github.com/hashicorp/nomad-driver-podman/pull/285)]
 
 ## 0.5.2 (February 5, 2024)
