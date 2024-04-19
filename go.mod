@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20240205090533-120c3ca3c942
 	github.com/opencontainers/runtime-spec v1.1.0
 	github.com/ryanuber/go-glob v1.0.0
-	github.com/shoenig/test v1.7.0
+	github.com/shoenig/test v1.8.0
 	golang.org/x/sync v0.6.0
 )
 
