@@ -65,6 +65,7 @@ pkg/%/nomad-driver-podman: ## Build the nomad-driver-podman plugin for GOOS_GOAR
 .PRECIOUS: pkg/%/nomad-driver-podman
 pkg/%.zip: pkg/%/nomad-driver-podman ## Build and zip the nomad-driver-podman plugin for GOOS_GOARCH, e.g. pkg/linux_amd64.zip
 	@echo "==> Packaging for $@..."
+	@cp LICENSE $(dir $<)LICENSE.txt
 	zip -j $@ $(dir $<)*
 
 .PHONY: dev
