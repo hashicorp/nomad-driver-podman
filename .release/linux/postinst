@@ -1,0 +1,4 @@
+#!/bin/sh
+
+mkdir -p /opt/nomad/plugins
+ln -s /usr/bin/nomad-driver-podman /opt/nomad/plugins/nomad-driver-podman
