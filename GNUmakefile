@@ -97,3 +97,22 @@ ifneq (,$(wildcard version/version_ent.go))
 else
 	@$(CURDIR)/scripts/version.sh version/version.go version/version.go
 endif
+
+# CRT release compilation
+dist/%/nomad-driver-exec2: GO_OUT ?= $@
+dist/%/nomad-driver-exec2:
+	@echo "==> RELEASE BUILD of $@ ..."
+	GOOS=linux GOARCH=$(lastword $(subst _, ,$*)) \
+	go build -trimpath -o $(GO_OUT)
+
+# CRT release packaging (zip only)
+.PRECIOUS: dist/%/nomad-driver-exec2
+dist/%.zip: dist/%/nomad-driver-exec2
+	@echo "==> RELEASE PACKAGING of $@ ..."
+	@cp LICENSE $(dir $<)LICENSE.txt
+	zip -j $@ $(dir $<)*
+
+# CRT version generation
+.PHONY: version
+version:
+	@$(CURDIR)/version/generate.sh version/version.go version/version.go
