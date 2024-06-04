@@ -111,8 +111,3 @@ dist/%.zip: dist/%/nomad-driver-exec2
 	@echo "==> RELEASE PACKAGING of $@ ..."
 	@cp LICENSE $(dir $<)LICENSE.txt
 	zip -j $@ $(dir $<)*
-
-# CRT version generation
-.PHONY: version
-version:
-	@$(CURDIR)/version/generate.sh version/version.go version/version.go
