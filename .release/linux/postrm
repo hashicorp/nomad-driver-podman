@@ -1,3 +1,3 @@
 #!/bin/sh
 
-rm /opt/nomad/plugins/nomad-driver-podman
+rm -f /opt/nomad/plugins/nomad-driver-podman
