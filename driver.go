@@ -1308,6 +1308,14 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 	return &exitResult, nil
 }
 
+func getSElinuxVolumeLabel(vc VolumeConfig, mc *drivers.MountConfig) string {
+	if mc.SELinuxLabel != vc.SelinuxLabel && mc.SELinuxLabel != "" {
+		return mc.SELinuxLabel
+	}
+
+	return vc.SelinuxLabel
+}
+
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
 	var binds []spec.Mount
 	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
@@ -1317,6 +1325,13 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	// TODO support volume drivers
 	// https://github.com/containers/libpod/pull/4548
 	taskLocalBindVolume := true
+
+	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
+		// Apply SELinux Label to each volume
+		for i := range binds {
+			binds[i].Options = append(binds[i].Options, selinuxLabel)
+		}
+	}
 
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
@@ -1373,14 +1388,12 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 			// If PropagationMode is something else or unset, Podman defaults to rprivate
 		}
 
-		binds = append(binds, bind)
-	}
-
-	if selinuxLabel := d.config.Volumes.SelinuxLabel; selinuxLabel != "" && !driverConfig.Privileged {
-		// Apply SELinux Label to each volume
-		for i := range binds {
-			binds[i].Options = append(binds[i].Options, selinuxLabel)
+		selinuxLabel := getSElinuxVolumeLabel(d.config.Volumes, m)
+		if selinuxLabel != "" && !driverConfig.Privileged {
+			bind.Options = append(bind.Options, selinuxLabel)
 		}
+
+		binds = append(binds, bind)
 	}
 
 	for _, dst := range driverConfig.Tmpfs {
