@@ -1,4 +1,8 @@
 #!/bin/sh
 
-mkdir -p /opt/nomad/plugins
-ln -s /usr/bin/nomad-driver-podman /opt/nomad/plugins/nomad-driver-podman
+# Ensure <data_dir>/plugins exists.
+mkdir -p /opt/nomad/data/plugins
+
+# Symlink driver in the plugins directory.
+ln -s /usr/bin/nomad-driver-podman /opt/nomad/data/plugins/nomad-driver-podman
+

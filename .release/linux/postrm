@@ -1,3 +1,4 @@
 #!/bin/sh
 
-rm -f /opt/nomad/plugins/nomad-driver-podman
+# Remove symlink from plugins directory.
+rm -f /opt/nomad/plugins/nomad-driver-exec2
