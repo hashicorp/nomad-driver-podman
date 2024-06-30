@@ -23,6 +23,7 @@ import (
 	"github.com/containers/image/v5/pkg/shortnames"
 	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
+	version2 "github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/hashicorp/nomad-driver-podman/version"
@@ -816,6 +817,81 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
+		}
+	}
+
+	// Process static IP and MAC configuration. IPv4Address and IPv6Address are
+	// provided for compatibility with Docker, but the podman API v4 exposes a
+	// list of static addresses too. Add all three options to the API call for
+	// the default network
+	if driverConfig.StaticMAC != "" || driverConfig.IPv4Address != "" || driverConfig.IPv6Address != "" || len(driverConfig.StaticIPs) > 0 {
+		apiVersion, _ := d.podman.Ping(d.ctx)
+		versionValue, _ := version2.NewVersion(apiVersion)
+		versionCheck, _ := version2.NewConstraint(">=4.0.0")
+
+		if versionCheck.Check(versionValue) {
+			// Podman API v4 uses PerNetworkOptions. For now, we'll just use the
+			// default network.
+
+			netOpts := api.PerNetworkOptions{}
+			netOpts.StaticIPs = []*net.IP{}
+
+			if driverConfig.IPv4Address != "" {
+				parsedIP := net.ParseIP(driverConfig.IPv4Address)
+				if parsedIP != nil {
+					netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIP)
+				}
+			}
+
+			if driverConfig.IPv6Address != "" {
+				parsedIPv6 := net.ParseIP(driverConfig.IPv6Address)
+				if parsedIPv6 != nil {
+					netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIPv6)
+				}
+			}
+
+			if len(driverConfig.StaticIPs) > 0 {
+				for _, ip := range driverConfig.StaticIPs {
+					parsedIP := net.ParseIP(ip)
+					if parsedIP != nil {
+						netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIP)
+					}
+				}
+			}
+
+			// Process Static MAC configuration
+			if driverConfig.StaticMAC != "" {
+				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+				if macErr == nil && parsedMAC != nil {
+					netOpts.StaticMac = &parsedMAC
+				}
+			}
+
+			createOpts.Networks = map[string]api.PerNetworkOptions{"default": netOpts}
+		} else {
+			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
+
+			if driverConfig.IPv4Address != "" {
+				parsedIP := net.ParseIP(driverConfig.IPv4Address)
+				if parsedIP != nil {
+					createOpts.ContainerNetworkConfig.StaticIP = &parsedIP
+				}
+			}
+
+			if driverConfig.IPv6Address != "" {
+				parsedIPv6 := net.ParseIP(driverConfig.IPv6Address)
+				if parsedIPv6 != nil {
+					createOpts.ContainerNetworkConfig.StaticIPv6 = &parsedIPv6
+				}
+			}
+
+			// Process Static MAC configuration
+			if driverConfig.StaticMAC != "" {
+				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+				if macErr == nil && parsedMAC != nil {
+					createOpts.ContainerNetworkConfig.StaticMAC = &parsedMAC
+				}
+			}
 		}
 	}
 
