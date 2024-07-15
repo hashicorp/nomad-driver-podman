@@ -1,5 +1,13 @@
 ## UNRELEASED
 
+## 0.6.1 (July 15, 2024)
+
+BUG FIXES:
+
+* build: Removed CGO dependency accidentally introduced in 0.6.0
+
+## 0.6.0 (July 12, 2024)
+
 IMPROVEMENTS:
 
  * api: Address a backwards incompatible change in Podman 5.0 [[GH-332](https://github.com/hashicorp/nomad-driver-podman/issues/332)]

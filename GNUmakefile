@@ -8,7 +8,6 @@ BIN := $(shell go env GOBIN)
 ifndef BIN
 BIN := $(GOPATH)/bin
 endif
-
 default: help
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
@@ -54,26 +53,13 @@ clean: ## Cleanup previous build
 	@echo "==> Cleanup previous build"
 	rm -f ./build/nomad-driver-podman
 
-pkg/%/nomad-driver-podman: GO_OUT ?= $@
-pkg/%/nomad-driver-podman: ## Build the nomad-driver-podman plugin for GOOS_GOARCH, e.g. pkg/linux_amd64/nomad-driver-podman
-	@echo "==> Building $@ with tags $(GO_TAGS)..."
-	CGO_ENABLED=0 \
-		GOOS=$(firstword $(subst _, ,$*)) \
-		GOARCH=$(lastword $(subst _, ,$*)) \
-		go build -trimpath -o $(GO_OUT)
-
-.PRECIOUS: pkg/%/nomad-driver-podman
-pkg/%.zip: pkg/%/nomad-driver-podman ## Build and zip the nomad-driver-podman plugin for GOOS_GOARCH, e.g. pkg/linux_amd64.zip
-	@echo "==> Packaging for $@..."
-	@cp LICENSE $(dir $<)LICENSE.txt
-	zip -j $@ $(dir $<)*
-
 .PHONY: dev
 dev: clean build/nomad-driver-podman ## Build the nomad-driver-podman plugin
 
 build/nomad-driver-podman:
 	@echo "==> Building driver plugin ..."
 	mkdir -p build
+	CGO_ENABLED=0 \
 	go build -o build/nomad-driver-podman .
 
 .PHONY: test
@@ -102,6 +88,7 @@ endif
 dist/%/nomad-driver-podman: GO_OUT ?= $@
 dist/%/nomad-driver-podman:
 	@echo "==> RELEASE BUILD of $@ ..."
+	CGO_ENABLED=0 \
 	GOOS=linux GOARCH=$(lastword $(subst _, ,$*)) \
 	go build -trimpath -o $(GO_OUT)
 
