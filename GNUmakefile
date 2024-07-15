@@ -102,6 +102,7 @@ endif
 dist/%/nomad-driver-podman: GO_OUT ?= $@
 dist/%/nomad-driver-podman:
 	@echo "==> RELEASE BUILD of $@ ..."
+	CGO_ENABLED=0 \
 	GOOS=linux GOARCH=$(lastword $(subst _, ,$*)) \
 	go build -trimpath -o $(GO_OUT)
 
