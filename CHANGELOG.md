@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+BUG FIXES:
+
+* build: Removed CGO dependency accidentally introduced in 0.6.0
+
 ## 0.6.0 (July 12, 2024)
 
 IMPROVEMENTS:
