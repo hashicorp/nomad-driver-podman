@@ -730,8 +730,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 			// Process Static MAC configuration
 			if driverConfig.StaticMAC != "" {
-				parsedMAC, err := net.ParseMAC(driverConfig.StaticMAC)
-				if err == nil && parsedMAC != nil {
+				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+				if macErr == nil && parsedMAC != nil {
 					netOpts.StaticMac = &parsedMAC
 				}
 			}
@@ -756,8 +756,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 			// Process Static MAC configuration
 			if driverConfig.StaticMAC != "" {
-				parsedMAC, err := net.ParseMAC(driverConfig.StaticMAC)
-				if err == nil && parsedMAC != nil {
+				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+				if macErr == nil && parsedMAC != nil {
 					createOpts.ContainerNetworkConfig.StaticMAC = &parsedMAC
 				}
 			}
