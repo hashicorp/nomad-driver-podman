@@ -147,7 +147,6 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 	}
 }
 func (h *TaskHandle) runLogStreamer(ctx context.Context) {
-
 	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
 		h.logger.Warn("Unable to open stdout fifo", "error", err)

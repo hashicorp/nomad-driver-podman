@@ -10,6 +10,14 @@ import (
 )
 
 var (
+	// socketBodySpec is the hcl specification for the sockets in the driver object
+	socketBodySpec = hclspec.NewObject(map[string]*hclspec.Spec{
+		"default": hclspec.NewAttr("default", "bool", false),
+		"name": hclspec.NewAttr("name", "string", false), // If not specified == host_user
+		"host_user": hclspec.NewAttr("host_user", "string", true),
+		"socket_path": hclspec.NewAttr("socket_path", "string", true),
+	})
+
 	// configSpec is the hcl specification returned by the ConfigSchema RPC
 	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
 		// image registry authentication options
@@ -53,6 +61,8 @@ var (
 			driver = "nomad"
 			options = {}
 		}`)),
+		// A list of sockets for the driver to manage
+		"socket": hclspec.NewBlockList("socket", socketBodySpec),
 
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
@@ -108,6 +118,11 @@ var (
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
+		"socket":             hclspec.NewAttr("socket", "string", false),
+		//"socket": hclspec.NewBlock("socket", false, hclspec.NewObject(map[string]*hclspec.Spec{
+			//"host_user": hclspec.NewAttr("host_user", "string", true),
+			//"socket_path": hclspec.NewAttr("socket_path", "string", true),
+		//})),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
@@ -163,18 +178,26 @@ type PluginAuthConfig struct {
 	Helper     string `codec:"helper"`
 }
 
+type PluginSocketConfig struct {
+	Default    bool   `codec:"default"`
+	Name       string `codec:"name"`
+	HostUser   string `codec:"host_user"`
+	SocketPath string `codec:"socket_path"`
+}
+
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
-	Auth                 PluginAuthConfig `codec:"auth"`
-	Volumes              VolumeConfig     `codec:"volumes"`
-	GC                   GCConfig         `codec:"gc"`
-	RecoverStopped       bool             `codec:"recover_stopped"`
-	DisableLogCollection bool             `codec:"disable_log_collection"`
-	SocketPath           string           `codec:"socket_path"`
-	ClientHttpTimeout    string           `codec:"client_http_timeout"`
-	ExtraLabels          []string         `codec:"extra_labels"`
-	DNSServers           []string         `codec:"dns_servers"`
-	Logging              LoggingConfig    `codec:"logging"`
+	Auth                 PluginAuthConfig     `codec:"auth"`
+	Volumes              VolumeConfig         `codec:"volumes"`
+	GC                   GCConfig             `codec:"gc"`
+	RecoverStopped       bool                 `codec:"recover_stopped"`
+	DisableLogCollection bool                 `codec:"disable_log_collection"`
+	Socket               []PluginSocketConfig `codec:"socket"`
+	SocketPath           string               `codec:"socket_path"`
+	ClientHttpTimeout    string               `codec:"client_http_timeout"`
+	ExtraLabels          []string             `codec:"extra_labels"`
+	DNSServers           []string             `codec:"dns_servers"`
+	Logging              LoggingConfig        `codec:"logging"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
@@ -214,6 +237,8 @@ type TaskConfig struct {
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PidsLimit         int64              `codec:"pids_limit"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
+	Socket            string             `codec:"socket"`
+	//Socket            TaskSocketConfig   `codec:"socket"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
 	CPUHardLimit      bool               `codec:"cpu_hard_limit"`

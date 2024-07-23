@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/armon/circbuf"
 	"github.com/containers/image/v5/docker"
@@ -116,6 +117,9 @@ type Driver struct {
 	// logger will log to the Nomad agent
 	logger hclog.Logger
 
+	// Podman clients
+	podmanClients map[string]*PodmanSocket
+
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
 
@@ -132,6 +136,12 @@ type Driver struct {
 
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
+}
+
+type PodmanSocket struct {
+	Default    bool
+	HostUser   string
+	SocketPath string
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -196,11 +206,55 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		timeout = t
 	}
 
-	d.podman = d.newPodmanClient(timeout)
-	d.slowPodman = d.newPodmanClient(0)
+	if len(d.config.Socket) > 0 && d.config.SocketPath != "" {
+		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive.")
+	} else if len(d.config.Socket) > 0 {
+		d.podmanClients = d.getPodmanClients(d.config.Socket)
+		// TODO: fill d.podman with the default podman client from the array
+	} else {
+		// TODO: Change this, it needs to fill podmanClients with one entry
+		d.podman = d.newPodmanClient(timeout)
+		// TODO: remove slowPodman and put 2 http clients in API
+		// then make the imagePull call a method to the second (slow http client)
+		// PostWithHeadersWithoutTimeout()
+		d.slowPodman = d.newPodmanClient(0)
+	}
 	d.compute = cfg.AgentConfig.Compute()
 
 	return nil
+}
+
+func (d *Driver) getPodmanClients(sockets []PluginSocketConfig) map[string]*PodmanSocket {
+	podmanSockets := make(map[string]*PodmanSocket)
+	//defaultSocketFound := false
+	//var defaultSocket PodmanSocket
+
+	for i, sock := range sockets {
+		var podmanSocket PodmanSocket
+
+		podmanSocket.Default = sock.Default
+		podmanSocket.HostUser = sock.HostUser
+		// TODO: make an API object that contains the socket path
+		// podmanSocket.API
+		podmanSocket.SocketPath = sock.SocketPath
+
+		if sock.Name == "" {
+			sock.Name = sock.HostUser
+		}
+
+		podmanSockets[sock.Name] = &podmanSocket
+
+		f, _ := os.OpenFile("/tmp/debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		defer f.Close()
+		_, _ = f.WriteString(strconv.FormatBool(sock.Default) + "\n");
+		_, _ = f.WriteString(strconv.Itoa(i) + "\n");
+		_, _ = f.WriteString(sock.HostUser + "\n");
+		_, _ = f.WriteString(sock.SocketPath + "\n");
+		_, _ = f.WriteString("---\n");
+
+	}
+	// TODO: if there's no default socket, make "root" the default one
+	return podmanSockets
 }
 
 // newPodmanClient returns Podman client configured with the provided timeout.
