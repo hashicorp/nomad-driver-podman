@@ -5,11 +5,9 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -24,22 +22,19 @@ type API struct {
 }
 
 type ClientConfig struct {
-	SocketPath  string
-	HttpTimeout time.Duration
+	SocketPath    string
+	HttpTimeout   time.Duration
+	HostUser      string
+	DefaultPodman bool
 }
 
 func DefaultClientConfig() ClientConfig {
 	cfg := ClientConfig{
 		HttpTimeout: 60 * time.Second,
 	}
-	uid := os.Getuid()
-	// are we root?
-	if uid == 0 {
-		cfg.SocketPath = "unix:///run/podman/podman.sock"
-	} else {
-		// not? then let's try the default per-user socket location
-		cfg.SocketPath = fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid)
-	}
+	cfg.SocketPath = "unix:///run/podman/podman.sock"
+	cfg.HostUser = "root"
+	cfg.DefaultPodman = true
 	return cfg
 }
 

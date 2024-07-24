@@ -118,7 +118,7 @@ type Driver struct {
 	logger hclog.Logger
 
 	// Podman clients
-	podmanClients map[string]*PodmanSocket
+	podmanClients map[string]*api.API
 
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
@@ -132,12 +132,6 @@ type Driver struct {
 
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
-}
-
-type PodmanSocket struct {
-	Default    bool
-	HostUser   string
-	SocketPath string
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -205,36 +199,33 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	if len(d.config.Socket) > 0 && d.config.SocketPath != "" {
 		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive.")
 	} else if len(d.config.Socket) > 0 {
-		d.podmanClients = d.getPodmanClients(d.config.Socket)
-		// TODO: fill d.podman with the default podman client from the array
+		d.podmanClients = d.makePodmanClients(d.config.Socket, timeout)
+	} else if d.config.SocketPath != "" {
+		d.podmanClients = make(map[string]*api.API)
+		d.podmanClients["default"] = d.newPodmanClient(timeout, d.config.SocketPath, "", true)
 	} else {
-		// TODO: Change this, it needs to fill podmanClients with one entry
-		d.podman = d.newPodmanClient(timeout)
+		d.podmanClients = make(map[string]*api.API)
+		uid := os.Getuid()
+		if uid == 0 {
+			d.podmanClients["default"] = d.newPodmanClient(timeout, "unix:///run/podman/podman.sock", "root", true)
+		} else {
+			d.podmanClients["default"] = d.newPodmanClient(timeout, fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid), "", true)
+		}
 	}
 	d.compute = cfg.AgentConfig.Compute()
 
 	return nil
 }
 
-func (d *Driver) getPodmanClients(sockets []PluginSocketConfig) map[string]*PodmanSocket {
-	podmanSockets := make(map[string]*PodmanSocket)
-	//defaultSocketFound := false
-	//var defaultSocket PodmanSocket
-
+func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Duration) map[string]*api.API {
+	podmanClients := make(map[string]*api.API)
 	for i, sock := range sockets {
-		var podmanSocket PodmanSocket
-
-		podmanSocket.Default = sock.Default
-		podmanSocket.HostUser = sock.HostUser
-		// TODO: make an API object that contains the socket path
-		// podmanSocket.API
-		podmanSocket.SocketPath = sock.SocketPath
-
+		podmanClient := d.newPodmanClient(timeout, sock.SocketPath, sock.HostUser, sock.Default)
 		if sock.Name == "" {
 			sock.Name = sock.HostUser
 		}
 
-		podmanSockets[sock.Name] = &podmanSocket
+		podmanClients[sock.Name] = podmanClient
 
 		f, _ := os.OpenFile("/tmp/debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 		defer f.Close()
@@ -245,19 +236,17 @@ func (d *Driver) getPodmanClients(sockets []PluginSocketConfig) map[string]*Podm
 		_, _ = f.WriteString("---\n");
 
 	}
-	// TODO: if there's no default socket, make "root" the default one
-	return podmanSockets
+	return podmanClients
 }
 
 // newPodmanClient returns Podman client configured with the provided timeout.
 // This method must be called after the driver configuration has been loaded.
-func (d *Driver) newPodmanClient(timeout time.Duration) *api.API {
+func (d *Driver) newPodmanClient(timeout time.Duration, socketPath string, hostUser string, defaultPodman bool) *api.API {
 	clientConfig := api.DefaultClientConfig()
 	clientConfig.HttpTimeout = timeout
-
-	if d.config.SocketPath != "" {
-		clientConfig.SocketPath = d.config.SocketPath
-	}
+	clientConfig.SocketPath = socketPath
+	clientConfig.HostUser = hostUser
+	clientConfig.DefaultPodman = defaultPodman
 
 	return api.NewClient(d.logger, clientConfig)
 }
