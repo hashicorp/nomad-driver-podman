@@ -119,10 +119,6 @@ var (
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
 		"socket":             hclspec.NewAttr("socket", "string", false),
-		//"socket": hclspec.NewBlock("socket", false, hclspec.NewObject(map[string]*hclspec.Spec{
-			//"host_user": hclspec.NewAttr("host_user", "string", true),
-			//"socket_path": hclspec.NewAttr("socket_path", "string", true),
-		//})),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),
@@ -238,7 +234,6 @@ type TaskConfig struct {
 	PidsLimit         int64              `codec:"pids_limit"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
 	Socket            string             `codec:"socket"`
-	//Socket            TaskSocketConfig   `codec:"socket"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
 	CPUHardLimit      bool               `codec:"cpu_hard_limit"`

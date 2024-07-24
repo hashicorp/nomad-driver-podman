@@ -123,9 +123,6 @@ type Driver struct {
 	// For any call where it's unspecified/unknown which podman should be used
 	defaultPodman *api.API
 
-	// podmanClient encapsulates podman remote calls
-	podman *api.API
-
 	// SystemInfo collected at first fingerprint query
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
@@ -444,7 +441,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		} else {
 			// No, let's cleanup here to prepare for a StartTask()
 			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanClientName)
-			if err = d.podman.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
+			if err = taskPodmanClient.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
 				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanClientName)
 			}
 			h.procState = drivers.TaskStateExited
