@@ -16,6 +16,8 @@ import (
 
 type API struct {
 	baseUrl          string
+	defaultPodman    bool
+	hostUser         string
 	httpClient       *http.Client
 	httpStreamClient *http.Client
 	logger           hclog.Logger
@@ -41,6 +43,8 @@ func DefaultClientConfig() ClientConfig {
 func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
 		logger: logger,
+		defaultPodman: config.DefaultPodman,
+		hostUser: config.HostUser,
 	}
 
 	baseUrl := config.SocketPath
@@ -64,6 +68,14 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	}
 
 	return ac
+}
+
+func (c *API) IsDefaultClient() bool {
+	return c.defaultPodman
+}
+
+func (c *API) SetClientAsDefault(d bool) {
+	c.defaultPodman = d
 }
 
 func (c *API) Do(req *http.Request) (*http.Response, error) {
