@@ -249,15 +249,6 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		if sock.Default {
 			d.defaultPodman = podmanClient
 		}
-
-		f, _ := os.OpenFile("/tmp/debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		defer f.Close()
-		_, _ = f.WriteString(strconv.FormatBool(sock.Default) + "\n");
-		_, _ = f.WriteString(strconv.Itoa(i) + "\n");
-		_, _ = f.WriteString(sock.HostUser + "\n");
-		_, _ = f.WriteString(sock.SocketPath + "\n");
-		_, _ = f.WriteString("---\n");
-
 	}
 	// If no socket was default, the first entry becomes the default
 	if foundDefaultPodman == false {

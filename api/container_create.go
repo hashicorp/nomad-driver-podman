@@ -21,13 +21,7 @@ func (c *API) ContainerCreate(ctx context.Context, create SpecGenerator) (Contai
 	jsonString, err := json.Marshal(create)
 	if err != nil {
 		return response, err
-	} else {
-		f, _ := os.OpenFile("/tmp/debug.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		defer f.Close()
-		_, _ = f.Write([]byte(jsonString));
-		_, _ = f.WriteString("\n---\n");
 	}
-
 
 	res, err := c.Post(ctx, "/v1.0.0/libpod/containers/create", bytes.NewBuffer(jsonString))
 	if err != nil {
