@@ -123,10 +123,6 @@ type Driver struct {
 	// podmanClient encapsulates podman remote calls
 	podman *api.API
 
-	// slowPodman is a Podman client with no timeout configured that is used
-	// for slow operations that may need longer timeouts.
-	slowPodman *api.API
-
 	// SystemInfo collected at first fingerprint query
 	systemInfo api.Info
 	// Queried from systemInfo: is podman running on a cgroupv2 system?
@@ -214,10 +210,6 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	} else {
 		// TODO: Change this, it needs to fill podmanClients with one entry
 		d.podman = d.newPodmanClient(timeout)
-		// TODO: remove slowPodman and put 2 http clients in API
-		// then make the imagePull call a method to the second (slow http client)
-		// PostWithHeadersWithoutTimeout()
-		d.slowPodman = d.newPodmanClient(0)
 	}
 	d.compute = cfg.AgentConfig.Compute()
 
@@ -1079,7 +1071,7 @@ func (d *Driver) createImage(
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.slowPodman.ImagePull(ctx, pc); err != nil {
+		if imageID, err = d.podman.ImagePull(ctx, pc); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil
