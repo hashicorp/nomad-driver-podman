@@ -5,9 +5,11 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -34,7 +36,12 @@ func DefaultClientConfig() ClientConfig {
 	cfg := ClientConfig{
 		HttpTimeout: 60 * time.Second,
 	}
-	cfg.SocketPath = "unix:///run/podman/podman.sock"
+	uid := os.Getuid()
+	if uid == 0 {
+		cfg.SocketPath = "unix:///run/podman/podman.sock"
+	} else {
+		cfg.SocketPath = fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid)
+	}
 	cfg.HostUser = "root"
 	cfg.DefaultPodman = true
 	return cfg
