@@ -20,7 +20,7 @@ func (c *API) ContainerDelete(ctx context.Context, name string, force bool, dele
 
 	defer ignoreClose(res.Body)
 
-	if res.StatusCode == http.StatusNoContent {
+	if res.StatusCode == http.StatusNoContent || res.StatusCode == http.StatusOK {
 		return nil
 	}
 	return fmt.Errorf("cannot delete container, status code: %d", res.StatusCode)
