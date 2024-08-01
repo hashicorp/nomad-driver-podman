@@ -48,13 +48,10 @@ func (c *API) ContainerLogs(ctx context.Context, name string, since time.Time, s
 		switch fd {
 		case 0:
 			_, _ = stdout.Write(frame)
-			_, _ = stdout.Write([]byte("\n"))
 		case 1:
 			_, _ = stdout.Write(frame)
-			_, _ = stdout.Write([]byte("\n"))
 		case 2:
 			_, _ = stderr.Write(frame)
-			_, _ = stderr.Write([]byte("\n"))
 		case 3:
 			return fmt.Errorf("Error from log service: %s", string(frame))
 		default:
