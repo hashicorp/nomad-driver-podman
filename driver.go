@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/armon/circbuf"
 	"github.com/containers/image/v5/docker"
@@ -116,12 +117,11 @@ type Driver struct {
 	// logger will log to the Nomad agent
 	logger hclog.Logger
 
-	// podmanClient encapsulates podman remote calls
-	podman *api.API
+	// Podman clients
+	podmanClients map[string]*api.API
 
-	// slowPodman is a Podman client with no timeout configured that is used
-	// for slow operations that may need longer timeouts.
-	slowPodman *api.API
+	// For any call where it's unspecified/unknown which podman should be used
+	defaultPodman *api.API
 
 	// SystemInfo collected at first fingerprint query
 	systemInfo api.Info
@@ -196,22 +196,81 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		timeout = t
 	}
 
-	d.podman = d.newPodmanClient(timeout)
-	d.slowPodman = d.newPodmanClient(0)
+	if len(d.config.Socket) > 0 && d.config.SocketPath != "" {
+		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive.")
+	} else if len(d.config.Socket) > 0 {
+		d.podmanClients = d.makePodmanClients(d.config.Socket, timeout)
+	} else if d.config.SocketPath != "" {
+		d.podmanClients = make(map[string]*api.API)
+		d.podmanClients["default"] = d.newPodmanClient(timeout, d.config.SocketPath, "", true)
+		d.defaultPodman = d.podmanClients["default"]
+	} else {
+		d.podmanClients = make(map[string]*api.API)
+		uid := os.Getuid()
+		if uid == 0 {
+			d.podmanClients["default"] = d.newPodmanClient(timeout, "unix:///run/podman/podman.sock", "root", true)
+		} else {
+			d.podmanClients["default"] = d.newPodmanClient(timeout, fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid), "", true)
+		}
+		d.defaultPodman = d.podmanClients["default"]
+	}
 	d.compute = cfg.AgentConfig.Compute()
 
 	return nil
 }
 
+func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Duration) map[string]*api.API {
+	podmanClients := make(map[string]*api.API)
+	var firstEntry *api.API
+	foundDefaultPodman := false
+	for i, sock := range sockets {
+		// Assign defaultPodman
+		if sock.Default && foundDefaultPodman {
+			// Throw warning, you can only have one default entry
+			// Behaviour if there are multiple is that the first "default" remains.
+			d.logger.Warn("There can only be one default socket in the driver.")
+			sock.Default = false
+		} else if sock.Default {
+			foundDefaultPodman = true
+		}
+
+		podmanClient := d.newPodmanClient(timeout, sock.SocketPath, sock.HostUser, sock.Default)
+		if sock.Name == "" {
+			sock.Name = sock.HostUser
+		}
+
+		podmanClients[sock.Name] = podmanClient
+		if i == 0 {
+			firstEntry = podmanClient
+		}
+		if sock.Default {
+			d.defaultPodman = podmanClient
+		}
+	}
+	// If no socket was default, the first entry becomes the default
+	if foundDefaultPodman == false {
+		firstEntry.SetClientAsDefault(true)
+		d.defaultPodman = firstEntry
+	}
+	return podmanClients
+}
+
+func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
+	p, ok := d.podmanClients[clientName]
+	if ok {
+		return p, nil
+	}
+	return nil, fmt.Errorf("podman client with name %s was not found, check your podman driver config", clientName)
+}
+
 // newPodmanClient returns Podman client configured with the provided timeout.
 // This method must be called after the driver configuration has been loaded.
-func (d *Driver) newPodmanClient(timeout time.Duration) *api.API {
+func (d *Driver) newPodmanClient(timeout time.Duration, socketPath string, hostUser string, defaultPodman bool) *api.API {
 	clientConfig := api.DefaultClientConfig()
 	clientConfig.HttpTimeout = timeout
-
-	if d.config.SocketPath != "" {
-		clientConfig.SocketPath = d.config.SocketPath
-	}
+	clientConfig.SocketPath = socketPath
+	clientConfig.HostUser = hostUser
+	clientConfig.DefaultPodman = defaultPodman
 
 	return api.NewClient(d.logger, clientConfig)
 }
@@ -259,7 +318,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	attrs := map[string]*pstructs.Attribute{}
 
 	// Ping podman api
-	apiVersion, err := d.podman.Ping(d.ctx)
+	apiVersion, err := d.defaultPodman.Ping(d.ctx)
 	if err != nil || apiVersion == "" {
 		// not reachable?
 		// deactivate driver, forget podman details
@@ -276,7 +335,8 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	if d.systemInfo.Version.APIVersion != apiVersion {
 		// no? then fetch and cache it
 		// try to connect and get version info
-		info, err := d.podman.SystemInfo(d.ctx)
+		// TODO: Can we make this more correct with one or the other podman client?
+		info, err := d.defaultPodman.SystemInfo(d.ctx)
 		if err != nil {
 			d.logger.Error("Could not get podman info", "error", err)
 			return &drivers.Fingerprint{
@@ -293,6 +353,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		d.cgroupMgr = info.Host.CgroupManager
 	}
 
+	// TODO: Can we make this more correct with one or the other podman client?
 	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 	attrs["driver.podman.version"] = pstructs.NewStringAttribute(apiVersion)
 	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
@@ -325,23 +386,35 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
-	inspectData, err := d.podman.ContainerInspect(d.ctx, taskState.ContainerID)
-	if errors.Is(err, api.ContainerNotFound) {
-		d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
-		return nil
-	} else if err != nil {
-		d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
-		return nil
+	// TODO: It can be created by any podman client, so we need to iterate over all podman clients and find that container back...
+	var podmanClientName string
+	var taskPodmanClient *api.API
+	var inspectData api.InspectContainerData
+	var err error
+	for name, podmanClient := range d.podmanClients {
+		inspectData, err = podmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
+		if err == nil {
+			podmanClientName = name
+			taskPodmanClient = podmanClient
+			break
+		} else if errors.Is(err, api.ContainerNotFound) {
+			d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "with podman client", name, "error", err)
+		} else if err != nil {
+			d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "with podman client", name, "error", err)
+			// TODO: Maybe not return here?
+			return nil
+		}
 	}
 
 	h := &TaskHandle{
 		containerID:           taskState.ContainerID,
 		driver:                d,
+		podmanClient:          taskPodmanClient,
 		taskConfig:            taskState.TaskConfig,
 		procState:             drivers.TaskStateUnknown,
 		startedAt:             taskState.StartedAt,
 		exitResult:            &drivers.ExitResult{},
-		logger:                d.logger.Named("podmanHandle"),
+		logger:                d.logger.Named("podmanHandle"), // TODO: does this need to be podmanClient aware?
 		logPointer:            time.Now(), // do not rewind log to the startetAt date.
 		logStreamer:           taskState.LogStreamer,
 		collectionInterval:    time.Second,
@@ -356,32 +429,32 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		d.logger.Info("Recovered a still running container", "container", inspectData.State.Pid)
 		h.procState = drivers.TaskStateRunning
 	case inspectData.State.Status == "exited":
-		// are we allowed to restart a stopped container?
+		// Are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
-			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid)
-			if err = d.podman.ContainerStart(d.ctx, inspectData.ID); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
+			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid, "podman client", podmanClientName)
+			if err = taskPodmanClient.ContainerStart(d.ctx, inspectData.ID); err != nil {
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "podman client", podmanClientName, "error", err)
 			} else {
-				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID)
+				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID, "podman client", podmanClientName)
 				h.procState = drivers.TaskStateRunning
 			}
 		} else {
-			// no, let's cleanup here to prepare for a StartTask()
-			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID)
-			if err = d.podman.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
-				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID)
+			// No, let's cleanup here to prepare for a StartTask()
+			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanClientName)
+			if err = taskPodmanClient.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
+				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanClientName)
 			}
 			h.procState = drivers.TaskStateExited
 		}
 	default:
-		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID)
+		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID, "podman client", podmanClientName)
 		h.procState = drivers.TaskStateUnknown
 	}
 
 	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
-	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID)
+	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanClientName)
 
 	return nil
 }
@@ -414,6 +487,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	if driverConfig.Image == "" {
 		return nil, nil, fmt.Errorf("image name required")
+	}
+
+	var podmanClient *api.API
+	if driverConfig.Socket == "" {
+		podmanClient = d.defaultPodman
+	} else {
+		var err error
+		podmanClient, err = d.getPodmanClient(driverConfig.Socket)
+		if err != nil {
+			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", driverConfig.Socket)
+		}
 	}
 
 	createOpts := api.SpecGenerator{}
@@ -702,7 +786,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	containerID := ""
 	recoverRunningContainer := false
 	// check if there is a container with same name
-	otherContainerInspect, err := d.podman.ContainerInspect(d.ctx, containerName)
+	otherContainerInspect, err := podmanClient.ContainerInspect(d.ctx, containerName)
 	if err == nil {
 		// ok, seems we found a container with similar name
 		if otherContainerInspect.State.Running {
@@ -713,7 +797,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else {
 			// let's remove the old, dead container
 			d.logger.Info("Detect stopped container with same name, removing it", "task", cfg.ID, "container", otherContainerInspect.ID)
-			if err = d.podman.ContainerDelete(d.ctx, otherContainerInspect.ID, true, true); err != nil {
+			if err = podmanClient.ContainerDelete(d.ctx, otherContainerInspect.ID, true, true); err != nil {
 				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
 			}
 		}
@@ -732,6 +816,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			&driverConfig.Auth,
 			driverConfig.AuthSoftFail,
 			driverConfig.ForcePull,
+			podmanClient,
 			imagePullTimeout,
 			cfg,
 		)
@@ -740,7 +825,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 		createOpts.Image = imageID
 
-		createResponse, createErr := d.podman.ContainerCreate(d.ctx, createOpts)
+		createResponse, createErr := podmanClient.ContainerCreate(d.ctx, createOpts)
 		for _, w := range createResponse.Warnings {
 			d.logger.Warn("Create Warning", "warning", w)
 		}
@@ -752,7 +837,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	cleanup := func() {
 		d.logger.Debug("Cleaning up", "container", containerID)
-		if cleanupErr := d.podman.ContainerDelete(d.ctx, containerID, true, true); cleanupErr != nil {
+		if cleanupErr := podmanClient.ContainerDelete(d.ctx, containerID, true, true); cleanupErr != nil {
 			d.logger.Error("failed to clean up from an error in Start", "error", cleanupErr)
 		}
 	}
@@ -760,6 +845,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	h := &TaskHandle{
 		containerID:           containerID,
 		driver:                d,
+		podmanClient:          podmanClient,
 		taskConfig:            cfg,
 		procState:             drivers.TaskStateRunning,
 		exitResult:            &drivers.ExitResult{},
@@ -775,13 +861,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		if startErr := d.podman.ContainerStart(d.ctx, containerID); startErr != nil {
+		if startErr := podmanClient.ContainerStart(d.ctx, containerID); startErr != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", startErr)
 		}
 	}
 
-	inspectData, err := d.podman.ContainerInspect(d.ctx, containerID)
+	inspectData, err := podmanClient.ContainerInspect(d.ctx, containerID)
 	if err != nil {
 		d.logger.Error("failed to inspect container", "error", err)
 		cleanup()
@@ -951,6 +1037,7 @@ func (d *Driver) createImage(
 	auth *TaskAuthConfig,
 	authSoftFail bool,
 	forcePull bool,
+	podmanClient *api.API,
 	imagePullTimeout time.Duration,
 	cfg *drivers.TaskConfig,
 ) (string, error) {
@@ -980,14 +1067,14 @@ func (d *Driver) createImage(
 				Timestamp: time.Now(),
 				Message:   "Loading image " + path,
 			})
-			imageName, err = d.podman.ImageLoad(d.ctx, path)
+			imageName, err = podmanClient.ImageLoad(d.ctx, path)
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
 			}
 		}
 	}
 
-	imageID, err := d.podman.ImageInspectID(d.ctx, imageName)
+	imageID, err := podmanClient.ImageInspectID(d.ctx, imageName)
 	if err != nil && !errors.Is(err, api.ImageNotFound) {
 		// If ImageInspectID errors, continue the operation and try
 		// to pull the image instead
@@ -1025,7 +1112,7 @@ func (d *Driver) createImage(
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
 
-		if imageID, err = d.slowPodman.ImagePull(ctx, pc); err != nil {
+		if imageID, err = podmanClient.ImagePull(ctx, pc); err != nil {
 			return imageID, fmt.Errorf("failed to start task, unable to pull image %s : %w", imageName, err)
 		}
 		return imageID, nil
@@ -1101,7 +1188,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	}
 
 	// fixme send proper signal to container
-	err := d.podman.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
+	err := handle.podmanClient.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
 	switch {
 	case err == nil:
 		return nil
@@ -1129,7 +1216,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	if handle.isRunning() {
 		d.logger.Debug("Have to destroyTask but container is still running", "containerID", handle.containerID)
 		// we can not do anything, so catching the error is useless
-		err := d.podman.ContainerStop(d.ctx, handle.containerID, 60, true)
+		err := handle.podmanClient.ContainerStop(d.ctx, handle.containerID, 60, true)
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
 		}
@@ -1146,7 +1233,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 	}
 
 	if handle.removeContainerOnExit {
-		err := d.podman.ContainerDelete(d.ctx, handle.containerID, true, true)
+		err := handle.podmanClient.ContainerDelete(d.ctx, handle.containerID, true, true)
 		if err != nil {
 			d.logger.Warn("Could not remove container", "container", handle.containerID, "error", err)
 		}
@@ -1194,7 +1281,7 @@ func (d *Driver) SignalTask(taskID string, signal string) error {
 		return drivers.ErrTaskNotFound
 	}
 
-	return d.podman.ContainerKill(d.ctx, handle.containerID, signal)
+	return handle.podmanClient.ContainerKill(d.ctx, handle.containerID, signal)
 }
 
 // ExecTask function is used by the Nomad client to execute scripted health checks inside the task execution context.
@@ -1212,7 +1299,7 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 	}
 	ctx, cancel := context.WithTimeout(d.ctx, timeout)
 	defer cancel()
-	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
+	sessionId, err := handle.podmanClient.ExecCreate(ctx, handle.containerID, createRequest)
 	if err != nil {
 		d.logger.Error("Unable to create ExecTask session", "error", err)
 		return nil, err
@@ -1235,13 +1322,13 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 		AttachError:  true,
 		Stderr:       stderr,
 	}
-	err = d.podman.ExecStart(ctx, sessionId, startRequest)
+	err = handle.podmanClient.ExecStart(ctx, sessionId, startRequest)
 	if err != nil {
 		d.logger.Error("ExecTask session returned with error", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 
-	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
+	inspectData, err := handle.podmanClient.ExecInspect(ctx, sessionId)
 	if err != nil {
 		d.logger.Error("Unable to inspect finished ExecTask session", "sessionId", sessionId, "error", err)
 		return nil, err
@@ -1274,7 +1361,7 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 		AttachStderr: true,
 	}
 
-	sessionId, err := d.podman.ExecCreate(ctx, handle.containerID, createRequest)
+	sessionId, err := handle.podmanClient.ExecCreate(ctx, handle.containerID, createRequest)
 	if err != nil {
 		d.logger.Error("Unable to create exec session", "error", err)
 		return nil, err
@@ -1290,13 +1377,13 @@ func (d *Driver) ExecTaskStreaming(ctx context.Context, taskID string, execOptio
 		Stderr:       execOptions.Stderr,
 		ResizeCh:     execOptions.ResizeCh,
 	}
-	err = d.podman.ExecStart(ctx, sessionId, startRequest)
+	err = handle.podmanClient.ExecStart(ctx, sessionId, startRequest)
 	if err != nil {
 		d.logger.Error("Exec session returned with error", "sessionId", sessionId, "error", err)
 		return nil, err
 	}
 
-	inspectData, err := d.podman.ExecInspect(ctx, sessionId)
+	inspectData, err := handle.podmanClient.ExecInspect(ctx, sessionId)
 	if err != nil {
 		d.logger.Error("Unable to inspect finished exec session", "sessionId", sessionId, "error", err)
 		return nil, err

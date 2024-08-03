@@ -18,14 +18,18 @@ import (
 
 type API struct {
 	baseUrl          string
+	defaultPodman    bool
+	hostUser         string
 	httpClient       *http.Client
 	httpStreamClient *http.Client
 	logger           hclog.Logger
 }
 
 type ClientConfig struct {
-	SocketPath  string
-	HttpTimeout time.Duration
+	SocketPath    string
+	HttpTimeout   time.Duration
+	HostUser      string
+	DefaultPodman bool
 }
 
 func DefaultClientConfig() ClientConfig {
@@ -33,19 +37,21 @@ func DefaultClientConfig() ClientConfig {
 		HttpTimeout: 60 * time.Second,
 	}
 	uid := os.Getuid()
-	// are we root?
 	if uid == 0 {
 		cfg.SocketPath = "unix:///run/podman/podman.sock"
 	} else {
-		// not? then let's try the default per-user socket location
 		cfg.SocketPath = fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid)
 	}
+	cfg.HostUser = "root"
+	cfg.DefaultPodman = true
 	return cfg
 }
 
 func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
 		logger: logger,
+		defaultPodman: config.DefaultPodman,
+		hostUser: config.HostUser,
 	}
 
 	baseUrl := config.SocketPath
@@ -69,6 +75,14 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	}
 
 	return ac
+}
+
+func (c *API) IsDefaultClient() bool {
+	return c.defaultPodman
+}
+
+func (c *API) SetClientAsDefault(d bool) {
+	c.defaultPodman = d
 }
 
 func (c *API) Do(req *http.Request) (*http.Response, error) {
