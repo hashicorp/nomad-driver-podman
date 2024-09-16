@@ -602,6 +602,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
 
+	// add security_opt if configured
+	if securiyOptsErr := parseSecurityOpt(driverConfig.SecurityOpt, &createOpts); securiyOptsErr != nil {
+		return nil, nil, fmt.Errorf("failed to parse security_opt configuration: %v", securiyOptsErr)
+	}
+
 	// Populate --userns mode only if configured
 	if driverConfig.UserNS != "" {
 		userns := strings.SplitN(driverConfig.UserNS, ":", 2)
@@ -1524,5 +1529,60 @@ func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
 		}
 	}
 	createOpts.ContainerNetworkConfig.HostAdd = slices.Clone(hosts)
+	return nil
+}
+
+func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error {
+	labelMap := make(map[string]string)
+	for _, opt := range securityOpt {
+		con := strings.SplitN(opt, "=", 2)
+		if len(con) == 1 && con[0] != "no-new-privileges" {
+			if strings.Contains(opt, ":") {
+				con = strings.SplitN(opt, ":", 2)
+			} else {
+				return fmt.Errorf("invalid security_opt: %q", opt)
+			}
+		}
+
+		switch con[0] {
+		case "no-new-privileges":
+			createOpts.ContainerSecurityConfig.NoNewPrivileges = true
+			continue
+		case "label":
+			if con[1] == "nested" {
+				createOpts.ContainerBasicConfig.LabelsNested = true
+				continue
+			}
+			labelValue := strings.SplitN(con[1], ":", 2)
+			if len(labelValue) == 2 {
+				labelMap[labelValue[0]] = labelValue[1]
+				createOpts.ContainerBasicConfig.Labels = labelMap
+			}
+		case "apparmor":
+			createOpts.ContainerSecurityConfig.ApparmorProfile = con[1]
+		case "seccomp":
+			if con[1] != "empty" && con[1] != "default" && con[1] != "image" {
+				createOpts.ContainerSecurityConfig.SeccompProfilePath = con[1]
+				continue
+			}
+			// For empty, default, image profile
+			createOpts.ContainerSecurityConfig.SeccompPolicy = con[1]
+		case "proc-opts":
+			procOptsList := strings.Split(con[1], ",")
+			createOpts.ContainerSecurityConfig.ProcOpts = procOptsList
+		case "mask":
+			maskList := strings.Split(con[1], ":")
+			createOpts.ContainerSecurityConfig.Mask = maskList
+		case "unmask":
+			if con[1] == "ALL" {
+				createOpts.ContainerSecurityConfig.Unmask = []string{con[1]}
+				continue
+			}
+			unmaskList := strings.Split(con[1], ":")
+			createOpts.ContainerSecurityConfig.Unmask = unmaskList
+		default:
+			return fmt.Errorf("invalid security_opt: %q", opt)
+		}
+	}
 	return nil
 }

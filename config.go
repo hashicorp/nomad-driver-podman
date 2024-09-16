@@ -117,6 +117,7 @@ var (
 		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
 		"userns":             hclspec.NewAttr("userns", "string", false),
 		"shm_size":           hclspec.NewAttr("shm_size", "string", false),
+		"security_opt":       hclspec.NewAttr("security_opt", "list(string)", false),
 	})
 )
 
@@ -224,4 +225,5 @@ type TaskConfig struct {
 	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
 	UserNS            string             `codec:"userns"`
 	ShmSize           string             `codec:"shm_size"`
+	SecurityOpt       []string           `codec:"security_opt"`
 }

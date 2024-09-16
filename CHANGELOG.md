@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
+* config: Allow setting `security_opt` option. 
+
 ## 0.6.1 (July 15, 2024)
 
 BUG FIXES:

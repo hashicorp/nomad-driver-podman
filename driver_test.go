@@ -1484,6 +1484,16 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	}
 }
 
+// check security_opt option
+func TestPodmanDriver_SecurityOpt(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// add a security_opt
+	taskCfg.SecurityOpt = []string{"no-new-privileges"}
+	inspectData := startDestroyInspect(t, taskCfg, "securityopt")
+	// and compare it
+	must.SliceContains(t, inspectData.HostConfig.SecurityOpt, "no-new-privileges")
+}
+
 // check enabled tty option
 func TestPodmanDriver_Tty(t *testing.T) {
 	ci.Parallel(t)
