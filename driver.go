@@ -386,24 +386,25 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	}
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
-	// TODO: It can be created by any podman client, so we need to iterate over all podman clients and find that container back...
-	var podmanClientName string
-	var taskPodmanClient *api.API
 	var inspectData api.InspectContainerData
-	var err error
-	for name, podmanClient := range d.podmanClients {
-		inspectData, err = podmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
-		if err == nil {
-			podmanClientName = name
-			taskPodmanClient = podmanClient
-			break
-		} else if errors.Is(err, api.ContainerNotFound) {
-			d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "with podman client", name, "error", err)
+	// We need to parse the task config for our driver to be able to find the Socket field (*drivers.TaskConfig itself is a generic task struct from the nomad repo)
+	var podmanTaskConfig TaskConfig
+	if err := taskState.TaskConfig.DecodeDriverConfig(&podmanTaskConfig); err != nil {
+		return fmt.Errorf("error: cannot decode task config")
+	}
+	taskPodmanClient, err := d.getPodmanClient(podmanTaskConfig.Socket)
+	if err == nil {
+		inspectData, err = taskPodmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
+		if errors.Is(err, api.ContainerNotFound) {
+			d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
+			return nil
 		} else if err != nil {
-			d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "with podman client", name, "error", err)
-			// TODO: Maybe not return here?
+			d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
 			return nil
 		}
+	} else {
+		d.logger.Warn("Did not find podman client for this task", "task", handle.Config.ID, "container", taskState.ContainerID, "podmanClient", podmanTaskConfig.Socket, "error", err)
+		return nil
 	}
 
 	h := &TaskHandle{
@@ -431,30 +432,30 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	case inspectData.State.Status == "exited":
 		// Are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
-			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid, "podman client", podmanClientName)
+			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid, "podman client", podmanTaskConfig.Socket)
 			if err = taskPodmanClient.ContainerStart(d.ctx, inspectData.ID); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "podman client", podmanClientName, "error", err)
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket, "error", err)
 			} else {
-				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID, "podman client", podmanClientName)
+				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
 				h.procState = drivers.TaskStateRunning
 			}
 		} else {
 			// No, let's cleanup here to prepare for a StartTask()
-			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanClientName)
+			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
 			if err = taskPodmanClient.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
-				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanClientName)
+				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
 			}
 			h.procState = drivers.TaskStateExited
 		}
 	default:
-		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID, "podman client", podmanClientName)
+		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket)
 		h.procState = drivers.TaskStateUnknown
 	}
 
 	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
-	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanClientName)
+	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket)
 
 	return nil
 }
