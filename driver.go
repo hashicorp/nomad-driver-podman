@@ -123,13 +123,6 @@ type Driver struct {
 	// For any call where it's unspecified/unknown which podman should be used
 	defaultPodman *api.API
 
-	// SystemInfo collected at first fingerprint query
-	systemInfo api.Info
-	// Queried from systemInfo: is podman running on a cgroupv2 system?
-	cgroupV2 bool
-	// Queried from systemInfo: name of the cgroup manager
-	cgroupMgr string
-
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
 }
@@ -316,53 +309,71 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 
 func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	attrs := map[string]*pstructs.Attribute{}
+	allClientsAreHealthy := true
+	unhealthyClients := []string{}
+	allClientsAreUnhealthy := true
 
-	// Ping podman api
-	apiVersion, err := d.defaultPodman.Ping(d.ctx)
-	if err != nil || apiVersion == "" {
-		// not reachable?
-		// deactivate driver, forget podman details
-		d.systemInfo = api.Info{}
-		d.logger.Error("Could not get podman version", "error", err)
+	for name, podmanClient := range d.podmanClients {
+		// Ping podman api
+		apiVersion, err := podmanClient.Ping(d.ctx)
+		attrPrefix := fmt.Sprintf("driver.podman.%s", name)
+
+		if err != nil || apiVersion == "" {
+			d.logger.Error("Could not get podman version", "error", err)
+			attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("unhealthy")
+			allClientsAreHealthy = false
+			unhealthyClients = append(unhealthyClients, name)
+			continue
+		}
+
+		info, err := podmanClient.SystemInfo(d.ctx)
+		if err != nil {
+			d.logger.Error("Could not get podman info", "error", err)
+			attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("unhealthy")
+			allClientsAreHealthy = false
+			unhealthyClients = append(unhealthyClients, name)
+			continue
+		}
+		allClientsAreUnhealthy = false
+
+		podmanClient.SetRootless(info.Host.Security.Rootless)
+		podmanClient.SetCgroupV2(info.Host.CGroupsVersion == "v2")
+		podmanClient.SetCgroupMgr(info.Host.CgroupManager)
+
+		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
+		attrs[fmt.Sprintf("%s.rootless", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
+		attrs[fmt.Sprintf("%s.seccompEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SECCOMPEnabled)
+		attrs[fmt.Sprintf("%s.selinuxEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SELinuxEnabled)
+		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
+		attrs[fmt.Sprintf("%s.capabilities", attrPrefix)] = pstructs.NewStringAttribute(info.Host.Security.DefaultCapabilities)
+		attrs[fmt.Sprintf("%s.socket", attrPrefix)] = pstructs.NewStringAttribute(info.Host.RemoteSocket.Path)
+		attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
+		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
+	}
+
+	if allClientsAreHealthy {
+		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+		return &drivers.Fingerprint{
+			Attributes:        attrs,
+			Health:            drivers.HealthStateHealthy,
+			HealthDescription: "ready",
+		}
+	} else if allClientsAreUnhealthy {
+		attrs["driver.podman"] = pstructs.NewBoolAttribute(false)
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateUndetected,
-			HealthDescription: "disabled",
+			HealthDescription: "Cannot connect to any Podman socket.",
 		}
-	}
-
-	// do we already know details about podman or is the version different?
-	if d.systemInfo.Version.APIVersion != apiVersion {
-		// no? then fetch and cache it
-		// try to connect and get version info
-		// TODO: Can we make this more correct with one or the other podman client?
-		info, err := d.defaultPodman.SystemInfo(d.ctx)
-		if err != nil {
-			d.logger.Error("Could not get podman info", "error", err)
-			return &drivers.Fingerprint{
-				Attributes:        attrs,
-				Health:            drivers.HealthStateUndetected,
-				HealthDescription: "disabled",
-			}
+	} else {
+		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+		return &drivers.Fingerprint{
+			Attributes:        attrs,
+			Health:            drivers.HealthStateUnhealthy,
+			HealthDescription: fmt.Sprintf("Cannot fingerprint certain podman sockets: %s", strings.Join(unhealthyClients[:], ", ")),
 		}
 
-		// keep first received systemInfo in driver struct
-		// it is used to toggle cgroup v1/v2, rootless/rootful behavior
-		d.systemInfo = info
-		d.cgroupV2 = info.Host.CGroupsVersion == "v2"
-		d.cgroupMgr = info.Host.CgroupManager
-	}
 
-	// TODO: Can we make this more correct with one or the other podman client?
-	attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
-	attrs["driver.podman.version"] = pstructs.NewStringAttribute(apiVersion)
-	attrs["driver.podman.rootless"] = pstructs.NewBoolAttribute(d.systemInfo.Host.Security.Rootless)
-	attrs["driver.podman.cgroupVersion"] = pstructs.NewStringAttribute(d.systemInfo.Host.CGroupsVersion)
-
-	return &drivers.Fingerprint{
-		Attributes:        attrs,
-		Health:            drivers.HealthStateHealthy,
-		HealthDescription: "ready",
 	}
 }
 
@@ -472,8 +483,6 @@ func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string 
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
 func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
-	rootless := d.systemInfo.Host.Security.Rootless
-
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
@@ -500,6 +509,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", driverConfig.Socket)
 		}
 	}
+	rootless := podmanClient.IsRootless()
 
 	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
@@ -628,7 +638,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	// Set the nomad slice as cgroup parent
-	d.setupCgroup(&createOpts)
+	if podmanClient.IsCgroupV2() && podmanClient.GetCgroupMgr() == "systemd" {
+		createOpts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
+	}
 
 	// Resources config options
 	createOpts.ContainerResourceConfig.ResourceLimits = &spec.LinuxResources{
@@ -661,7 +673,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
 	}
-	if !d.cgroupV2 {
+	if !podmanClient.IsCgroupV2() {
 		swappiness := uint64(driverConfig.MemorySwappiness)
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 	}
@@ -902,13 +914,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
 
 	return handle, driverNet, nil
-}
-
-// setupCgroup customizes where the cgroup lives (v2 only)
-func (d *Driver) setupCgroup(opts *api.SpecGenerator) {
-	if d.cgroupV2 && d.cgroupMgr == "systemd" {
-		opts.ContainerCgroupConfig.CgroupParent = "nomad.slice"
-	}
 }
 
 func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {

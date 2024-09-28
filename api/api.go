@@ -20,6 +20,9 @@ type API struct {
 	baseUrl          string
 	defaultPodman    bool
 	hostUser         string
+	cgroupV2         bool
+	cgroupMgr        string
+	rootless         bool
 	httpClient       *http.Client
 	httpStreamClient *http.Client
 	logger           hclog.Logger
@@ -83,6 +86,30 @@ func (c *API) IsDefaultClient() bool {
 
 func (c *API) SetClientAsDefault(d bool) {
 	c.defaultPodman = d
+}
+
+func (c *API) SetCgroupV2(isV2 bool) {
+	c.cgroupV2 = isV2
+}
+
+func (c *API) IsCgroupV2() bool {
+	return c.cgroupV2
+}
+
+func (c *API) SetCgroupMgr(mgr string) {
+	c.cgroupMgr = mgr
+}
+
+func (c *API) GetCgroupMgr() string {
+	return c.cgroupMgr
+}
+
+func (c *API) SetRootless(isRootless bool) {
+	c.rootless = isRootless
+}
+
+func (c *API) IsRootless() bool {
+	return c.rootless
 }
 
 func (c *API) Do(req *http.Request) (*http.Response, error) {
