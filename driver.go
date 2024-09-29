@@ -221,6 +221,7 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		if sock.Name == "" {
 			sock.Name = "default"
 		}
+		sock.Name = cleanUpSocketName(sock.Name)
 		if sock.Name == "default" && !foundDefaultPodman {
 			foundDefaultPodman = true
 			podmanClient = d.newPodmanClient(timeout, sock.SocketPath, true)
@@ -231,7 +232,7 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		// Case when there are two socket blocks with the same name or
 		// if there's one with name="default" and one without name.
 		if _, ok := podmanClients[sock.Name]; ok {
-			d.logger.Warn("There is already a socket with this name. Ignoring...")
+			d.logger.Error(fmt.Sprintf("There is already a socket with the name: %s ", sock.Name))
 		} else {
 			podmanClients[sock.Name] = podmanClient
 		}
@@ -247,6 +248,20 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		d.defaultPodman = firstEntry
 	}
 	return podmanClients
+}
+
+// We need to make a "clean" name that can be used safely in logging, journald, attributes in the UI, ...
+func cleanUpSocketName(name string) string {
+	var result strings.Builder
+    for i := 0; i < len(name); i++ {
+        b := name[i]
+        if ! (('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')) {
+			result.WriteByte('_')
+		} else {
+            result.WriteByte(b)
+        }
+    }
+    return result.String()
 }
 
 func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
@@ -340,15 +355,16 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		podmanClient.SetCgroupV2(info.Host.CGroupsVersion == "v2")
 		podmanClient.SetCgroupMgr(info.Host.CgroupManager)
 
-		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
+		attrs[fmt.Sprintf("%s.capabilities", attrPrefix)] = pstructs.NewStringAttribute(info.Host.Security.DefaultCapabilities)
+		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
+		attrs[fmt.Sprintf("%s.defaultPodman", attrPrefix)] = pstructs.NewBoolAttribute(podmanClient.IsDefaultClient())
+		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
+		attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
 		attrs[fmt.Sprintf("%s.rootless", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
 		attrs[fmt.Sprintf("%s.seccompEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SECCOMPEnabled)
 		attrs[fmt.Sprintf("%s.selinuxEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SELinuxEnabled)
-		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
-		attrs[fmt.Sprintf("%s.capabilities", attrPrefix)] = pstructs.NewStringAttribute(info.Host.Security.DefaultCapabilities)
 		attrs[fmt.Sprintf("%s.socket", attrPrefix)] = pstructs.NewStringAttribute(info.Host.RemoteSocket.Path)
-		attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
-		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
+		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
 	}
 
 	if allClientsAreHealthy {
@@ -367,6 +383,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		}
 	} else {
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
+		slices.Sort(unhealthyClients) // If not sorted, we generate a new fingerprint log entry every time the order changes
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateUnhealthy,
@@ -408,14 +425,14 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		inspectData, err = taskPodmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
 		if errors.Is(err, api.ContainerNotFound) {
 			d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
-			return nil
+			return err
 		} else if err != nil {
 			d.logger.Warn("Recovery lookup failed", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
-			return nil
+			return err
 		}
 	} else {
 		d.logger.Warn("Did not find podman client for this task", "task", handle.Config.ID, "container", taskState.ContainerID, "podmanClient", podmanTaskConfig.Socket, "error", err)
-		return nil
+		return fmt.Errorf("error: cannot find the podman socket for this task. Socket might have been removed from driver config but still referenced in Task. podmanClient=%s", podmanTaskConfig.Socket)
 	}
 
 	h := &TaskHandle{
@@ -426,7 +443,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		procState:             drivers.TaskStateUnknown,
 		startedAt:             taskState.StartedAt,
 		exitResult:            &drivers.ExitResult{},
-		logger:                d.logger.Named("podmanHandle"), // TODO: does this need to be podmanClient aware?
+		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskConfig.Socket)),
 		logPointer:            time.Now(), // do not rewind log to the startetAt date.
 		logStreamer:           taskState.LogStreamer,
 		collectionInterval:    time.Second,
@@ -487,26 +504,26 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
 
-	var driverConfig TaskConfig
-	if err := cfg.DecodeDriverConfig(&driverConfig); err != nil {
+	var podmanTaskConfig TaskConfig
+	if err := cfg.DecodeDriverConfig(&podmanTaskConfig); err != nil {
 		return nil, nil, fmt.Errorf("failed to decode driver config: %w", err)
 	}
 
 	handle := drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
-	if driverConfig.Image == "" {
+	if podmanTaskConfig.Image == "" {
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
 	var podmanClient *api.API
-	if driverConfig.Socket == "" {
+	if podmanTaskConfig.Socket == "" {
 		podmanClient = d.defaultPodman
 	} else {
 		var err error
-		podmanClient, err = d.getPodmanClient(driverConfig.Socket)
+		podmanClient, err = d.getPodmanClient(podmanTaskConfig.Socket)
 		if err != nil {
-			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", driverConfig.Socket)
+			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", podmanTaskConfig.Socket)
 		}
 	}
 	rootless := podmanClient.IsRootless()
@@ -514,13 +531,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
 	var allArgs []string
-	if driverConfig.Command != "" {
-		allArgs = append(allArgs, driverConfig.Command)
+	if podmanTaskConfig.Command != "" {
+		allArgs = append(allArgs, podmanTaskConfig.Command)
 	}
-	allArgs = append(allArgs, driverConfig.Args...)
+	allArgs = append(allArgs, podmanTaskConfig.Args...)
 
 	// Parse entrypoint.
-	switch v := driverConfig.Entrypoint.(type) {
+	switch v := podmanTaskConfig.Entrypoint.(type) {
 	case string:
 		// Check for a string type to maintain backwards compatibility.
 		d.logger.Warn("Defining the entrypoint as a string has been deprecated, use a list of strings instead.")
@@ -533,20 +550,20 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerBasicConfig.Entrypoint = entrypoint
 	case nil:
 	default:
-		return nil, nil, fmt.Errorf("invalid entrypoint type %T", driverConfig.Entrypoint)
+		return nil, nil, fmt.Errorf("invalid entrypoint type %T", podmanTaskConfig.Entrypoint)
 	}
 
 	containerName := BuildContainerName(cfg)
 
 	// ensure to include port_map into tasks environment map
-	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, driverConfig.PortMap)
+	cfg.Env = taskenv.SetPortMapEnvs(cfg.Env, podmanTaskConfig.PortMap)
 
-	if len(driverConfig.Labels) > 0 {
-		createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
+	if len(podmanTaskConfig.Labels) > 0 {
+		createOpts.ContainerBasicConfig.Labels = podmanTaskConfig.Labels
 	}
 
-	labels := make(map[string]string, len(driverConfig.Labels)+1)
-	for k, v := range driverConfig.Labels {
+	labels := make(map[string]string, len(podmanTaskConfig.Labels)+1)
+	for k, v := range podmanTaskConfig.Labels {
 		labels[k] = v
 	}
 
@@ -580,21 +597,21 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 
-	driverConfig.Labels = labels
-	d.logger.Debug("applied labels on the container", "labels", driverConfig.Labels)
+	podmanTaskConfig.Labels = labels
+	d.logger.Debug("applied labels on the container", "labels", podmanTaskConfig.Labels)
 
 	// Basic config options
 	createOpts.ContainerBasicConfig.Name = containerName
 	createOpts.ContainerBasicConfig.Command = allArgs
 	createOpts.ContainerBasicConfig.Env = cfg.Env
-	createOpts.ContainerBasicConfig.Hostname = driverConfig.Hostname
-	createOpts.ContainerBasicConfig.Sysctl = driverConfig.Sysctl
-	createOpts.ContainerBasicConfig.Terminal = driverConfig.Tty
-	createOpts.ContainerBasicConfig.Labels = driverConfig.Labels
+	createOpts.ContainerBasicConfig.Hostname = podmanTaskConfig.Hostname
+	createOpts.ContainerBasicConfig.Sysctl = podmanTaskConfig.Sysctl
+	createOpts.ContainerBasicConfig.Terminal = podmanTaskConfig.Tty
+	createOpts.ContainerBasicConfig.Labels = podmanTaskConfig.Labels
 
 	// Logging
-	if !driverConfig.Logging.Empty() {
-		switch driverConfig.Logging.Driver {
+	if !podmanTaskConfig.Logging.Empty() {
+		switch podmanTaskConfig.Logging.Driver {
 		case "", LOG_DRIVER_NOMAD:
 			if !d.config.DisableLogCollection {
 				createOpts.LogConfiguration.Driver = "k8s-file"
@@ -605,7 +622,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		default:
 			return nil, nil, fmt.Errorf("Invalid task logging.driver option")
 		}
-		createOpts.ContainerBasicConfig.LogConfiguration.Options = driverConfig.Logging.Options
+		createOpts.ContainerBasicConfig.LogConfiguration.Options = podmanTaskConfig.Logging.Options
 	} else {
 		d.logger.Trace("no podman log driver provided, defaulting to plugin config")
 		switch d.config.Logging.Driver {
@@ -623,17 +640,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	// Storage config options
-	createOpts.ContainerStorageConfig.Init = driverConfig.Init
-	createOpts.ContainerStorageConfig.Image = driverConfig.Image
-	createOpts.ContainerStorageConfig.InitPath = driverConfig.InitPath
-	createOpts.ContainerStorageConfig.WorkDir = driverConfig.WorkingDir
-	allMounts, err := d.containerMounts(cfg, &driverConfig)
+	createOpts.ContainerStorageConfig.Init = podmanTaskConfig.Init
+	createOpts.ContainerStorageConfig.Image = podmanTaskConfig.Image
+	createOpts.ContainerStorageConfig.InitPath = podmanTaskConfig.InitPath
+	createOpts.ContainerStorageConfig.WorkDir = podmanTaskConfig.WorkingDir
+	allMounts, err := d.containerMounts(cfg, &podmanTaskConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 	createOpts.ContainerStorageConfig.Mounts = allMounts
-	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(driverConfig.Devices))
-	for idx, device := range driverConfig.Devices {
+	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(podmanTaskConfig.Devices))
+	for idx, device := range podmanTaskConfig.Devices {
 		createOpts.ContainerStorageConfig.Devices[idx] = spec.LinuxDevice{Path: device}
 	}
 
@@ -648,33 +665,33 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		CPU:    &spec.LinuxCPU{},
 	}
 
-	err = setCPUResources(driverConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
+	err = setCPUResources(podmanTaskConfig, cfg.Resources.LinuxResources, createOpts.ContainerResourceConfig.ResourceLimits.CPU)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, driverConfig.MemoryReservation)
+	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, podmanTaskConfig.MemoryReservation)
 	if err != nil {
 		return nil, nil, err
 	}
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
 	// set PidsLimit only if configured.
-	if driverConfig.PidsLimit > 0 {
+	if podmanTaskConfig.PidsLimit > 0 {
 		createOpts.ContainerResourceConfig.ResourceLimits.Pids = &spec.LinuxPids{
-			Limit: driverConfig.PidsLimit,
+			Limit: podmanTaskConfig.PidsLimit,
 		}
 	}
 
-	if driverConfig.MemorySwap != "" {
-		swap, memErr := memoryInBytes(driverConfig.MemorySwap)
+	if podmanTaskConfig.MemorySwap != "" {
+		swap, memErr := memoryInBytes(podmanTaskConfig.MemorySwap)
 		if memErr != nil {
 			return nil, nil, memErr
 		}
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swap = &swap
 	}
 	if !podmanClient.IsCgroupV2() {
-		swappiness := uint64(driverConfig.MemorySwappiness)
+		swappiness := uint64(podmanTaskConfig.MemorySwappiness)
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 	}
 	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
@@ -684,24 +701,24 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
 	}
 
-	ulimits, ulimitErr := sliceMergeUlimit(driverConfig.Ulimit)
+	ulimits, ulimitErr := sliceMergeUlimit(podmanTaskConfig.Ulimit)
 	if ulimitErr != nil {
 		return nil, nil, fmt.Errorf("failed to parse ulimit configuration: %w", ulimitErr)
 	}
 	createOpts.ContainerResourceConfig.Rlimits = ulimits
 
 	// Security config options
-	createOpts.ContainerSecurityConfig.CapAdd = driverConfig.CapAdd
-	createOpts.ContainerSecurityConfig.CapDrop = driverConfig.CapDrop
-	createOpts.ContainerSecurityConfig.SelinuxOpts = driverConfig.SelinuxOpts
+	createOpts.ContainerSecurityConfig.CapAdd = podmanTaskConfig.CapAdd
+	createOpts.ContainerSecurityConfig.CapDrop = podmanTaskConfig.CapDrop
+	createOpts.ContainerSecurityConfig.SelinuxOpts = podmanTaskConfig.SelinuxOpts
 	createOpts.ContainerSecurityConfig.User = cfg.User
-	createOpts.ContainerSecurityConfig.Privileged = driverConfig.Privileged
-	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = driverConfig.ReadOnlyRootfs
-	createOpts.ContainerSecurityConfig.ApparmorProfile = driverConfig.ApparmorProfile
+	createOpts.ContainerSecurityConfig.Privileged = podmanTaskConfig.Privileged
+	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = podmanTaskConfig.ReadOnlyRootfs
+	createOpts.ContainerSecurityConfig.ApparmorProfile = podmanTaskConfig.ApparmorProfile
 
 	// Populate --userns mode only if configured
-	if driverConfig.UserNS != "" {
-		userns := strings.SplitN(driverConfig.UserNS, ":", 2)
+	if podmanTaskConfig.UserNS != "" {
+		userns := strings.SplitN(podmanTaskConfig.UserNS, ":", 2)
 		mode := api.NamespaceMode(userns[0])
 		// Populate value only if specified
 		if len(userns) > 1 {
@@ -712,8 +729,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	// populate shm_size if configured
-	if driverConfig.ShmSize != "" {
-		shmsize, memErr := memoryInBytes(driverConfig.ShmSize)
+	if podmanTaskConfig.ShmSize != "" {
+		shmsize, memErr := memoryInBytes(podmanTaskConfig.ShmSize)
 		if memErr != nil {
 			return nil, nil, memErr
 		}
@@ -747,7 +764,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
 	} else {
 		switch {
-		case driverConfig.NetworkMode == "":
+		case podmanTaskConfig.NetworkMode == "":
 			if !rootless {
 				// should we join the group shared network namespace?
 				if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Mode == drivers.NetIsolationModeGroup {
@@ -762,35 +779,35 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				// slirp4netns is default for rootless podman
 				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
 			}
-		case driverConfig.NetworkMode == "bridge":
+		case podmanTaskConfig.NetworkMode == "bridge":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
-		case driverConfig.NetworkMode == "host":
+		case podmanTaskConfig.NetworkMode == "host":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Host
-		case driverConfig.NetworkMode == "none":
+		case podmanTaskConfig.NetworkMode == "none":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NoNetwork
-		case driverConfig.NetworkMode == "slirp4netns":
+		case podmanTaskConfig.NetworkMode == "slirp4netns":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
-		case strings.HasPrefix(driverConfig.NetworkMode, "container:"):
+		case strings.HasPrefix(podmanTaskConfig.NetworkMode, "container:"):
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
-			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "container:")
-		case strings.HasPrefix(driverConfig.NetworkMode, "ns:"):
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(podmanTaskConfig.NetworkMode, "container:")
+		case strings.HasPrefix(podmanTaskConfig.NetworkMode, "ns:"):
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
-			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(driverConfig.NetworkMode, "ns:")
-		case strings.HasPrefix(driverConfig.NetworkMode, "task:"):
-			otherTaskName := strings.TrimPrefix(driverConfig.NetworkMode, "task:")
+			createOpts.ContainerNetworkConfig.NetNS.Value = strings.TrimPrefix(podmanTaskConfig.NetworkMode, "ns:")
+		case strings.HasPrefix(podmanTaskConfig.NetworkMode, "task:"):
+			otherTaskName := strings.TrimPrefix(podmanTaskConfig.NetworkMode, "task:")
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
-			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", driverConfig.NetworkMode)
+			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
 		}
 	}
 
 	// carefully add extra hosts (--add-host)
-	if extraHostsErr := setExtraHosts(driverConfig.ExtraHosts, &createOpts); extraHostsErr != nil {
+	if extraHostsErr := setExtraHosts(podmanTaskConfig.ExtraHosts, &createOpts); extraHostsErr != nil {
 		return nil, nil, extraHostsErr
 	}
 
-	portMappings, err := d.portMappings(cfg, driverConfig)
+	portMappings, err := d.portMappings(cfg, podmanTaskConfig)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -819,16 +836,16 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
-		imagePullTimeout, parseErr := time.ParseDuration(driverConfig.ImagePullTimeout)
+		imagePullTimeout, parseErr := time.ParseDuration(podmanTaskConfig.ImagePullTimeout)
 		if parseErr != nil {
 			return nil, nil, fmt.Errorf("failed to parse image_pull_timeout: %w", parseErr)
 		}
 
 		imageID, createErr := d.createImage(
 			createOpts.Image,
-			&driverConfig.Auth,
-			driverConfig.AuthSoftFail,
-			driverConfig.ForcePull,
+			&podmanTaskConfig.Auth,
+			podmanTaskConfig.AuthSoftFail,
+			podmanTaskConfig.ForcePull,
 			podmanClient,
 			imagePullTimeout,
 			cfg,
@@ -863,8 +880,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		procState:             drivers.TaskStateRunning,
 		exitResult:            &drivers.ExitResult{},
 		startedAt:             time.Now(),
-		logger:                d.logger.Named("podmanHandle"),
-		logStreamer:           driverConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskConfig.Socket)),
+		logStreamer:           podmanTaskConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
 		logPointer:            time.Now(),
 		collectionInterval:    time.Second,
 		totalCPUStats:         cpustats.New(d.compute),
@@ -888,7 +905,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	driverNet := &drivers.DriverNetwork{
-		PortMap:       driverConfig.PortMap,
+		PortMap:       podmanTaskConfig.PortMap,
 		IP:            inspectData.NetworkSettings.IPAddress,
 		AutoAdvertise: true,
 	}

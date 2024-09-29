@@ -1046,7 +1046,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 		t.Fatalf("Container did not exit in time")
 	}
 
-	// podman maps init process to /dev/init, so we should see this
+	// podman maps init process to /run/podman-init, so we should see this
 	tasklog := readStdoutLog(t, task)
 	must.StrContains(t, tasklog, "/run/podman-init")
 
@@ -1961,7 +1961,7 @@ func TestPodmanDriver_Sysctl(t *testing.T) {
 	ci.Parallel(t)
 
 	// Test fails if not root
-	if os.Getuid() != 0 {
+	if os.Geteuid() != 0 {
 		t.Skip("Skipping Sysctl test")
 	}
 
@@ -2046,7 +2046,8 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	imageID, err := getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, false, getPodmanDriver(t, d).defaultPodman, 5*time.Minute, task)
+	driver := getPodmanDriver(t, d)
+	imageID, err := driver.createImage(image, &TaskAuthConfig{}, false, false, driver.defaultPodman, 5*time.Minute, task)
 	must.NoError(t, err)
 	must.Eq(t, imageID, inspectData.Image)
 }
@@ -2126,7 +2127,8 @@ insecure = true`
 	go func() {
 		// Pull image using our proxy.
 		image := "localhost:5000/quay/busybox:latest"
-		_, err = getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, true, getPodmanDriver(t, d).defaultPodman, 3*time.Second, task)
+		driver := getPodmanDriver(t, d)
+		_, err = driver.createImage(image, &TaskAuthConfig{}, false, true, driver.defaultPodman, 3*time.Second, task)
 		resultCh <- err
 	}()
 
@@ -2204,10 +2206,11 @@ func createInspectImage(t *testing.T, image, reference string) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	idTest, err := getPodmanDriver(t, d).createImage(image, &TaskAuthConfig{}, false, false, getPodmanDriver(t, d).defaultPodman, 5*time.Minute, task)
+	driver := getPodmanDriver(t, d)
+	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, driver.defaultPodman, 5*time.Minute, task)
 	must.NoError(t, err)
 
-	idRef, err := getPodmanDriver(t, d).defaultPodman.ImageInspectID(context.Background(), reference)
+	idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), reference)
 	must.NoError(t, err)
 	must.Eq(t, idRef, idTest)
 }
@@ -2504,7 +2507,8 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 		t.Fatalf("wait channel should not have received an exit result")
 	case <-time.After(20 * time.Second):
 	}
-	inspectData, err := getPodmanDriver(t, d).defaultPodman.ContainerInspect(context.Background(), containerName)
+	driver := getPodmanDriver(t, d)
+	inspectData, err := driver.defaultPodman.ContainerInspect(context.Background(), containerName)
 	must.NoError(t, err)
 
 	return inspectData
