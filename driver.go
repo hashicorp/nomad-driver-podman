@@ -420,7 +420,11 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	if err := taskState.TaskConfig.DecodeDriverConfig(&podmanTaskConfig); err != nil {
 		return fmt.Errorf("error: cannot decode task config")
 	}
-	taskPodmanClient, err := d.getPodmanClient(podmanTaskConfig.Socket)
+	podmanTaskSocketName := podmanTaskConfig.Socket
+	if podmanTaskConfig.Socket == "" {
+		podmanTaskSocketName = "default"
+	}
+	taskPodmanClient, err := d.getPodmanClient(podmanTaskSocketName)
 	if err == nil {
 		inspectData, err = taskPodmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
 		if errors.Is(err, api.ContainerNotFound) {
@@ -431,8 +435,8 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 			return err
 		}
 	} else {
-		d.logger.Warn("Did not find podman client for this task", "task", handle.Config.ID, "container", taskState.ContainerID, "podmanClient", podmanTaskConfig.Socket, "error", err)
-		return fmt.Errorf("error: cannot find the podman socket for this task. Socket might have been removed from driver config but still referenced in Task. podmanClient=%s", podmanTaskConfig.Socket)
+		d.logger.Warn("Did not find podman client for this task", "task", handle.Config.ID, "container", taskState.ContainerID, "podmanClient", podmanTaskSocketName, "error", err)
+		return fmt.Errorf("error: cannot find the podman socket for this task. Socket might have been removed from driver config but still referenced in Task. podmanClient=%s", podmanTaskSocketName)
 	}
 
 	h := &TaskHandle{
@@ -443,7 +447,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		procState:             drivers.TaskStateUnknown,
 		startedAt:             taskState.StartedAt,
 		exitResult:            &drivers.ExitResult{},
-		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskConfig.Socket)),
+		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskSocketName)),
 		logPointer:            time.Now(), // do not rewind log to the startetAt date.
 		logStreamer:           taskState.LogStreamer,
 		collectionInterval:    time.Second,
@@ -460,30 +464,30 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	case inspectData.State.Status == "exited":
 		// Are we allowed to restart a stopped container?
 		if d.config.RecoverStopped {
-			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid, "podman client", podmanTaskConfig.Socket)
+			d.logger.Debug("Found a stopped container, try to start it", "container", inspectData.State.Pid, "podman client", podmanTaskSocketName)
 			if err = taskPodmanClient.ContainerStart(d.ctx, inspectData.ID); err != nil {
-				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket, "error", err)
+				d.logger.Warn("Recovery restart failed", "task", handle.Config.ID, "container", taskState.ContainerID, "podman client", podmanTaskSocketName, "error", err)
 			} else {
-				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
+				d.logger.Info("Restarted a container during recovery", "container", inspectData.ID, "podman client", podmanTaskSocketName)
 				h.procState = drivers.TaskStateRunning
 			}
 		} else {
 			// No, let's cleanup here to prepare for a StartTask()
-			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
+			d.logger.Debug("Found a stopped container, removing it", "container", inspectData.ID, "podman client", podmanTaskSocketName)
 			if err = taskPodmanClient.ContainerDelete(d.ctx, inspectData.ID, true, true); err != nil {
-				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanTaskConfig.Socket)
+				d.logger.Warn("Recovery cleanup failed", "task", handle.Config.ID, "container", inspectData.ID, "podman client", podmanTaskSocketName)
 			}
 			h.procState = drivers.TaskStateExited
 		}
 	default:
-		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket)
+		d.logger.Warn("Recovery restart failed, unknown container state", "state", inspectData.State.Status, "container", taskState.ContainerID, "podman client", podmanTaskSocketName)
 		h.procState = drivers.TaskStateUnknown
 	}
 
 	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
-	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanTaskConfig.Socket)
+	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanTaskSocketName)
 
 	return nil
 }
@@ -517,13 +521,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	var podmanClient *api.API
+	podmanTaskSocketName := podmanTaskConfig.Socket
 	if podmanTaskConfig.Socket == "" {
+		podmanTaskSocketName = "default"
 		podmanClient = d.defaultPodman
 	} else {
 		var err error
-		podmanClient, err = d.getPodmanClient(podmanTaskConfig.Socket)
+		podmanClient, err = d.getPodmanClient(podmanTaskSocketName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", podmanTaskConfig.Socket)
+			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", podmanTaskSocketName)
 		}
 	}
 	rootless := podmanClient.IsRootless()
@@ -880,7 +886,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		procState:             drivers.TaskStateRunning,
 		exitResult:            &drivers.ExitResult{},
 		startedAt:             time.Now(),
-		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskConfig.Socket)),
+		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskSocketName)),
 		logStreamer:           podmanTaskConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
 		logPointer:            time.Now(),
 		collectionInterval:    time.Second,
