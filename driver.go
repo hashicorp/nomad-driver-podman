@@ -354,7 +354,9 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		podmanClient.SetRootless(info.Host.Security.Rootless)
 		podmanClient.SetCgroupV2(info.Host.CGroupsVersion == "v2")
 		podmanClient.SetCgroupMgr(info.Host.CgroupManager)
+		podmanClient.SetAppArmor(info.Host.Security.AppArmorEnabled)
 
+		attrs[fmt.Sprintf("%s.appArmor", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.AppArmorEnabled)
 		attrs[fmt.Sprintf("%s.capabilities", attrPrefix)] = pstructs.NewStringAttribute(info.Host.Security.DefaultCapabilities)
 		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
 		attrs[fmt.Sprintf("%s.defaultPodman", attrPrefix)] = pstructs.NewBoolAttribute(podmanClient.IsDefaultClient())

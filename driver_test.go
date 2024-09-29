@@ -1270,7 +1270,7 @@ func TestPodmanDriver_Swap(t *testing.T) {
 	must.Eq(t, 104857600, inspectData.HostConfig.MemorySwap)
 	must.Eq(t, 104857600, inspectData.HostConfig.ShmSize)
 
-	if !getPodmanDriver(t, d).cgroupV2 {
+	if !getPodmanDriver(t, d).defaultPodman.IsCgroupV2() {
 		must.Eq(t, 60, inspectData.HostConfig.MemorySwappiness)
 	}
 }
@@ -1527,7 +1527,7 @@ func TestPodmanDriver_AppArmorDefault(t *testing.T) {
 	d := podmanDriverHarness(t, nil)
 
 	// Skip test if apparmor is not available
-	if !getPodmanDriver(t, d).systemInfo.Host.Security.AppArmorEnabled {
+	if !getPodmanDriver(t, d).defaultPodman.IsAppArmorEnabled() {
 		t.Skip("Skipping AppArmor test ")
 	}
 
@@ -1543,7 +1543,7 @@ func TestPodmanDriver_AppArmorUnconfined(t *testing.T) {
 	d := podmanDriverHarness(t, nil)
 
 	// Skip test if apparmor is not available
-	if !getPodmanDriver(t, d).systemInfo.Host.Security.AppArmorEnabled {
+	if !getPodmanDriver(t, d).defaultPodman.IsAppArmorEnabled() {
 		t.Skip("Skipping AppArmor test ")
 	}
 

@@ -19,6 +19,7 @@ import (
 type API struct {
 	baseUrl          string
 	defaultPodman    bool
+	appArmor         bool
 	cgroupV2         bool
 	cgroupMgr        string
 	rootless         bool
@@ -106,6 +107,14 @@ func (c *API) SetRootless(isRootless bool) {
 
 func (c *API) IsRootless() bool {
 	return c.rootless
+}
+
+func (c *API) SetAppArmor(appArmorEnabled bool) {
+	c.appArmor = appArmorEnabled
+}
+
+func (c *API) IsAppArmorEnabled() bool {
+	return c.appArmor
 }
 
 func (c *API) Do(req *http.Request) (*http.Response, error) {
