@@ -195,15 +195,15 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		d.podmanClients = d.makePodmanClients(d.config.Socket, timeout)
 	} else if d.config.SocketPath != "" {
 		d.podmanClients = make(map[string]*api.API)
-		d.podmanClients["default"] = d.newPodmanClient(timeout, d.config.SocketPath, "", true)
+		d.podmanClients["default"] = d.newPodmanClient(timeout, d.config.SocketPath, true)
 		d.defaultPodman = d.podmanClients["default"]
 	} else {
 		d.podmanClients = make(map[string]*api.API)
 		uid := os.Getuid()
 		if uid == 0 {
-			d.podmanClients["default"] = d.newPodmanClient(timeout, "unix:///run/podman/podman.sock", "root", true)
+			d.podmanClients["default"] = d.newPodmanClient(timeout, "unix:///run/podman/podman.sock", true)
 		} else {
-			d.podmanClients["default"] = d.newPodmanClient(timeout, fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid), "", true)
+			d.podmanClients["default"] = d.newPodmanClient(timeout, fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid), true)
 		}
 		d.defaultPodman = d.podmanClients["default"]
 	}
@@ -217,29 +217,30 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 	var firstEntry *api.API
 	foundDefaultPodman := false
 	for i, sock := range sockets {
-		// Assign defaultPodman
-		if sock.Default && foundDefaultPodman {
-			// Throw warning, you can only have one default entry
-			// Behaviour if there are multiple is that the first "default" remains.
-			d.logger.Warn("There can only be one default socket in the driver.")
-			sock.Default = false
-		} else if sock.Default {
-			foundDefaultPodman = true
-		}
-
-		podmanClient := d.newPodmanClient(timeout, sock.SocketPath, sock.HostUser, sock.Default)
+		var podmanClient *api.API
 		if sock.Name == "" {
-			sock.Name = sock.HostUser
+			sock.Name = "default"
+		}
+		if sock.Name == "default" && !foundDefaultPodman {
+			foundDefaultPodman = true
+			podmanClient = d.newPodmanClient(timeout, sock.SocketPath, true)
+			d.defaultPodman = podmanClient
+		} else {
+			podmanClient = d.newPodmanClient(timeout, sock.SocketPath, false)
+		}
+		// Case when there are two socket blocks with the same name or
+		// if there's one with name="default" and one without name.
+		if _, ok := podmanClients[sock.Name]; ok {
+			d.logger.Warn("There is already a socket with this name. Ignoring...")
+		} else {
+			podmanClients[sock.Name] = podmanClient
 		}
 
-		podmanClients[sock.Name] = podmanClient
 		if i == 0 {
 			firstEntry = podmanClient
 		}
-		if sock.Default {
-			d.defaultPodman = podmanClient
-		}
 	}
+
 	// If no socket was default, the first entry becomes the default
 	if foundDefaultPodman == false {
 		firstEntry.SetClientAsDefault(true)
@@ -258,11 +259,10 @@ func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
 
 // newPodmanClient returns Podman client configured with the provided timeout.
 // This method must be called after the driver configuration has been loaded.
-func (d *Driver) newPodmanClient(timeout time.Duration, socketPath string, hostUser string, defaultPodman bool) *api.API {
+func (d *Driver) newPodmanClient(timeout time.Duration, socketPath string, defaultPodman bool) *api.API {
 	clientConfig := api.DefaultClientConfig()
 	clientConfig.HttpTimeout = timeout
 	clientConfig.SocketPath = socketPath
-	clientConfig.HostUser = hostUser
 	clientConfig.DefaultPodman = defaultPodman
 
 	return api.NewClient(d.logger, clientConfig)
@@ -356,7 +356,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateHealthy,
-			HealthDescription: "ready",
+			HealthDescription: "All Podman sockets are responding.",
 		}
 	} else if allClientsAreUnhealthy {
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(false)

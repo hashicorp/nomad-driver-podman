@@ -12,9 +12,7 @@ import (
 var (
 	// socketBodySpec is the hcl specification for the sockets in the driver object
 	socketBodySpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"default": hclspec.NewAttr("default", "bool", false),
 		"name": hclspec.NewAttr("name", "string", false), // If not specified == host_user
-		"host_user": hclspec.NewAttr("host_user", "string", true),
 		"socket_path": hclspec.NewAttr("socket_path", "string", true),
 	})
 
@@ -175,9 +173,7 @@ type PluginAuthConfig struct {
 }
 
 type PluginSocketConfig struct {
-	Default    bool   `codec:"default"`
 	Name       string `codec:"name"`
-	HostUser   string `codec:"host_user"`
 	SocketPath string `codec:"socket_path"`
 }
 

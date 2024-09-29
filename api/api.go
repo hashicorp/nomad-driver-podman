@@ -19,7 +19,6 @@ import (
 type API struct {
 	baseUrl          string
 	defaultPodman    bool
-	hostUser         string
 	cgroupV2         bool
 	cgroupMgr        string
 	rootless         bool
@@ -31,7 +30,6 @@ type API struct {
 type ClientConfig struct {
 	SocketPath    string
 	HttpTimeout   time.Duration
-	HostUser      string
 	DefaultPodman bool
 }
 
@@ -45,7 +43,6 @@ func DefaultClientConfig() ClientConfig {
 	} else {
 		cfg.SocketPath = fmt.Sprintf("unix:///run/user/%d/podman/podman.sock", uid)
 	}
-	cfg.HostUser = "root"
 	cfg.DefaultPodman = true
 	return cfg
 }
@@ -54,7 +51,6 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
 		logger: logger,
 		defaultPodman: config.DefaultPodman,
-		hostUser: config.HostUser,
 	}
 
 	baseUrl := config.SocketPath
