@@ -22,7 +22,7 @@ this plugin to Nomad!
 * Utilize podmans --init feature
 * Set username or UID used for the specified command within the container (podman --user option).
 * Fine tune memory usage: standard [Nomad memory resource](https://www.nomadproject.io/docs/job-specification/resources.html#memory) plus additional driver specific swap, swappiness and reservation parameters, OOM handling
-* Supports rootless containers with cgroup V2
+* Supports both rootful and rootless podman sockets with cgroup V2
 * Set DNS servers, searchlist and options via [Nomad dns parameters](https://www.nomadproject.io/docs/job-specification/network#dns-parameters)
 * Support for nomad shared network namespaces and consul connect
 * Quite flexible [network configuration](#network-configuration), allows to simply build pod-like structures within a nomad group
@@ -148,12 +148,32 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems
+* socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems. Mutually exclusive with socket_path option.
 
 ```hcl
 plugin "nomad-driver-podman" {
   config {
     socket_path = "unix:///run/podman/podman.sock"
+  }
+}
+```
+
+* socket stanza: If you require to use multiple podman sockets (rootful/rootless), you can define a list of them. Mutually exclusive with socket_path option.
+
+  * name: Defaults to "default". If tasks don't mention a socket, the default socket is used.
+  * socket_path: Path to the socket.
+
+```hcl
+plugin "nomad-driver-podman" {
+  config {
+    socket {
+      name = "default"
+      socket_path = "unix://run/user/1000/podman/podman.sock"
+    }
+    socket {
+      name = "app1"
+      socket_path = "unix://run/user/1337/podman/podman.sock"
+    }
   }
 }
 ```
@@ -400,6 +420,14 @@ By default the task uses the network stack defined in the task group, see [netwo
 ```hcl
 config {
   network_mode = "bridge"
+}
+```
+
+* **socket** - (Optional) The name of the socket as defined in the socket stanza in `client.hcl`. Defaults to "default" as socket.
+
+```hcl
+config {
+  socket = "app1"
 }
 ```
 
