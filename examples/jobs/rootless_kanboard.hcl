@@ -6,20 +6,20 @@ job "kanboard" {
       mode = "host"
       port "kanboard" {
         static = 8000
-        to = 80
+        to     = 80
       }
     }
 
     task "deploy_kanboard" {
       driver = "podman"
       env {
-        ENABLE_URL_REWRITE="false"
+        ENABLE_URL_REWRITE = "false"
       }
       config {
-        image = "docker.io/kanboard/kanboard:v1.2.39"
-        ports = ["kanboard"]
+        image      = "docker.io/kanboard/kanboard:v1.2.39"
+        ports      = ["kanboard"]
         privileged = false
-        socket = "app1" # Will use the rootless socket defined in client.hcl called "app1"
+        socket     = "app1" # Will use the rootless socket defined in client.hcl called "app1"
         logging = {
           driver = "journald"
         }
