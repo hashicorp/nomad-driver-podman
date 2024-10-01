@@ -148,7 +148,7 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems. Mutually exclusive with socket_path option.
+* socket_path (string) Defaults to `"unix:///run/podman/podman.sock"` when running as root or a cgroup V1 system, and `"unix:///run/user/<USER_ID>/podman/podman.sock"` for rootless cgroup V2 systems. Mutually exclusive with `socket` block.
 
 ```hcl
 plugin "nomad-driver-podman" {
@@ -158,7 +158,7 @@ plugin "nomad-driver-podman" {
 }
 ```
 
-* socket stanza: If you require to use multiple podman sockets (rootful/rootless), you can define a list of them. Mutually exclusive with socket_path option.
+* socket block: Configures a single podman socket. You can define multiple `socket` blocks if you need to use multiple podman sockets (for example, rootless vs rootful sockets). Mutually exclusive with the top-level `plugin.config.socket_path` option.
 
   * name: Defaults to "default". If tasks don't mention a socket, the default socket is used.
   * socket_path: Path to the socket.
@@ -423,7 +423,7 @@ config {
 }
 ```
 
-* **socket** - (Optional) The name of the socket as defined in the socket stanza in `client.hcl`. Defaults to "default" as socket.
+* **socket** - (Optional) The name of the socket as defined in the socket block in the client agent's plugin configuration. Defaults to the socket named "default".
 
 ```hcl
 config {
