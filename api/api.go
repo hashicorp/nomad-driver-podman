@@ -50,7 +50,7 @@ func DefaultClientConfig() ClientConfig {
 
 func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
-		logger: logger,
+		logger:        logger,
 		defaultPodman: config.DefaultPodman,
 	}
 
