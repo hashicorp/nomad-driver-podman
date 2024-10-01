@@ -12,7 +12,7 @@ import (
 var (
 	// socketBodySpec is the hcl specification for the sockets in the driver object
 	socketBodySpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"name": hclspec.NewAttr("name", "string", false), // If not specified == host_user
+		"name":        hclspec.NewAttr("name", "string", false), // If not specified == host_user
 		"socket_path": hclspec.NewAttr("socket_path", "string", true),
 	})
 
@@ -59,11 +59,12 @@ var (
 			driver = "nomad"
 			options = {}
 		}`)),
+
 		// A list of sockets for the driver to manage
 		"socket": hclspec.NewBlockList("socket", socketBodySpec),
-
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
+
 		// disable_log_collection indicates whether nomad should collect logs of podman
 		// task containers.  If true, logs are not forwarded to nomad.
 		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
@@ -116,7 +117,10 @@ var (
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
-		"socket":             hclspec.NewAttr("socket", "string", false),
+		"socket":             hclspec.NewDefault(
+			hclspec.NewAttr("socket", "string", false),
+			hclspec.NewLiteral(`"default"`),
+		),
 		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
 		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
 		"tty":                hclspec.NewAttr("tty", "bool", false),

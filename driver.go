@@ -8,13 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	"github.com/armon/circbuf"
 	"github.com/containers/image/v5/docker"
@@ -189,15 +189,16 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 		timeout = t
 	}
 
-	if len(d.config.Socket) > 0 && d.config.SocketPath != "" {
+	switch {
+	case len(d.config.Socket) > 0 && d.config.SocketPath != "":
 		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive.")
-	} else if len(d.config.Socket) > 0 {
+	case len(d.config.Socket) > 0:
 		d.podmanClients = d.makePodmanClients(d.config.Socket, timeout)
-	} else if d.config.SocketPath != "" {
+	case d.config.SocketPath != "":
 		d.podmanClients = make(map[string]*api.API)
 		d.podmanClients["default"] = d.newPodmanClient(timeout, d.config.SocketPath, true)
 		d.defaultPodman = d.podmanClients["default"]
-	} else {
+	default:
 		d.podmanClients = make(map[string]*api.API)
 		uid := os.Getuid()
 		if uid == 0 {
@@ -243,7 +244,7 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 	}
 
 	// If no socket was default, the first entry becomes the default
-	if foundDefaultPodman == false {
+	if !foundDefaultPodman {
 		firstEntry.SetClientAsDefault(true)
 		d.defaultPodman = firstEntry
 	}
@@ -253,15 +254,15 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 // We need to make a "clean" name that can be used safely in logging, journald, attributes in the UI, ...
 func cleanUpSocketName(name string) string {
 	var result strings.Builder
-    for i := 0; i < len(name); i++ {
-        b := name[i]
-        if ! (('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')) {
+	for i := 0; i < len(name); i++ {
+		b := name[i]
+		if !(('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')) {
 			result.WriteByte('_')
 		} else {
-            result.WriteByte(b)
-        }
-    }
-    return result.String()
+			result.WriteByte(b)
+		}
+	}
+	return result.String()
 }
 
 func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
@@ -332,6 +333,9 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		// Ping podman api
 		apiVersion, err := podmanClient.Ping(d.ctx)
 		attrPrefix := fmt.Sprintf("driver.podman.%s", name)
+		if name == "default" {
+			attrPrefix = "driver.podman"
+		}
 
 		if err != nil || apiVersion == "" {
 			d.logger.Error("Could not get podman version", "error", err)
@@ -369,30 +373,29 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
 	}
 
-	if allClientsAreHealthy {
+	switch {
+	case allClientsAreHealthy:
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateHealthy,
 			HealthDescription: "All Podman sockets are responding.",
 		}
-	} else if allClientsAreUnhealthy {
+	case allClientsAreUnhealthy:
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(false)
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateUndetected,
 			HealthDescription: "Cannot connect to any Podman socket.",
 		}
-	} else {
+	default:
 		attrs["driver.podman"] = pstructs.NewBoolAttribute(true)
 		slices.Sort(unhealthyClients) // If not sorted, we generate a new fingerprint log entry every time the order changes
 		return &drivers.Fingerprint{
 			Attributes:        attrs,
 			Health:            drivers.HealthStateUnhealthy,
-			HealthDescription: fmt.Sprintf("Cannot fingerprint certain podman sockets: %s", strings.Join(unhealthyClients[:], ", ")),
+			HealthDescription: fmt.Sprintf("Cannot fingerprint certain podman sockets: %s", strings.Join(unhealthyClients, ", ")),
 		}
-
-
 	}
 }
 
