@@ -117,19 +117,19 @@ var (
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
-		"socket":             hclspec.NewDefault(
+		"socket": hclspec.NewDefault(
 			hclspec.NewAttr("socket", "string", false),
 			hclspec.NewLiteral(`"default"`),
 		),
-		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
-		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
-		"tty":                hclspec.NewAttr("tty", "bool", false),
-		"ulimit":             hclspec.NewAttr("ulimit", "list(map(string))", false),
-		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
-		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
-		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
-		"userns":             hclspec.NewAttr("userns", "string", false),
-		"shm_size":           hclspec.NewAttr("shm_size", "string", false),
+		"sysctl":          hclspec.NewAttr("sysctl", "list(map(string))", false),
+		"tmpfs":           hclspec.NewAttr("tmpfs", "list(string)", false),
+		"tty":             hclspec.NewAttr("tty", "bool", false),
+		"ulimit":          hclspec.NewAttr("ulimit", "list(map(string))", false),
+		"volumes":         hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":      hclspec.NewAttr("force_pull", "bool", false),
+		"readonly_rootfs": hclspec.NewAttr("readonly_rootfs", "bool", false),
+		"userns":          hclspec.NewAttr("userns", "string", false),
+		"shm_size":        hclspec.NewAttr("shm_size", "string", false),
 	})
 )
 

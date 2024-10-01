@@ -448,7 +448,6 @@ func TestPodmanDriver_logJournald(t *testing.T) {
 	_, _, err := d.StartTask(task)
 	must.NoError(t, err)
 
-
 	defer func() {
 		_ = d.DestroyTask(task.ID, true)
 	}()
