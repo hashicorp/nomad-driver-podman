@@ -355,6 +355,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		}
 		allClientsAreUnhealthy = false
 
+		podmanClient.SetAPIVersion(apiVersion)
 		podmanClient.SetRootless(info.Host.Security.Rootless)
 		podmanClient.SetCgroupV2(info.Host.CGroupsVersion == "v2")
 		podmanClient.SetCgroupMgr(info.Host.CgroupManager)

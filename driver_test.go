@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/ci"
 	"github.com/hashicorp/nomad/client/taskenv"
@@ -1045,9 +1046,21 @@ func TestPodmanDriver_Init(t *testing.T) {
 		t.Fatalf("Container did not exit in time")
 	}
 
-	// podman maps init process to /run/podman-init, so we should see this
+	apiVersion := getPodmanDriver(t, d).defaultPodman.GetAPIVersion()
+
 	tasklog := readStdoutLog(t, task)
-	must.StrContains(t, tasklog, "/run/podman-init")
+	// podman maps init process to /run/podman-init >= 4.2 and /dev/init < 4.2
+	versionChange, _ := version.NewVersion("4.2")
+	parsedApiVersion, err := version.NewVersion(getPodmanDriver(t, d).defaultPodman.GetAPIVersion())
+	if err != nil {
+		t.Fatalf(fmt.Sprintf("Not a valid version: %s", apiVersion))
+	}
+
+	if parsedApiVersion.LessThan(versionChange) {
+		must.StrContains(t, tasklog, "/dev/init")
+	} else {
+		must.StrContains(t, tasklog, "/run/podman-init")
+	}
 
 }
 

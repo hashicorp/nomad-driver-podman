@@ -17,6 +17,7 @@ import (
 )
 
 type API struct {
+	apiVersion       string
 	baseUrl          string
 	defaultPodman    bool
 	appArmor         bool
@@ -75,6 +76,14 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	}
 
 	return ac
+}
+
+func (c *API) SetAPIVersion(v string) {
+	c.apiVersion = v
+}
+
+func (c *API) GetAPIVersion() string {
+	return c.apiVersion
 }
 
 func (c *API) IsDefaultClient() bool {
