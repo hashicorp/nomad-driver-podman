@@ -1051,7 +1051,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 	tasklog := readStdoutLog(t, task)
 	// podman maps init process to /run/podman-init >= 4.2 and /dev/init < 4.2
 	versionChange, _ := version.NewVersion("4.2")
-	parsedApiVersion, err := version.NewVersion(getPodmanDriver(t, d).defaultPodman.GetAPIVersion())
+	parsedApiVersion, err := version.NewVersion(apiVersion)
 	if err != nil {
 		t.Fatalf(fmt.Sprintf("Not a valid version: %s", apiVersion))
 	}
