@@ -27,6 +27,7 @@ type API struct {
 	httpClient       *http.Client
 	httpStreamClient *http.Client
 	logger           hclog.Logger
+	defaultTimeout   time.Duration
 }
 
 type ClientConfig struct {
@@ -55,24 +56,14 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 		defaultPodman: config.DefaultPodman,
 	}
 
-	baseUrl := config.SocketPath
-	ac.logger.Debug("http baseurl", "url", baseUrl)
-	ac.httpClient = &http.Client{
-		Timeout: config.HttpTimeout,
-	}
-	// we do not want a timeout for streaming requests.
-	ac.httpStreamClient = &http.Client{}
-	if strings.HasPrefix(baseUrl, "unix:") {
+	ac.logger.Debug("http baseurl", "url", config.SocketPath)
+	ac.defaultTimeout = config.HttpTimeout
+	ac.httpClient = ac.CreateHttpClient(config.HttpTimeout, config.SocketPath, false)
+	ac.httpStreamClient = ac.CreateHttpClient(config.HttpTimeout, config.SocketPath, true)
+	if strings.HasPrefix(config.SocketPath, "unix:") {
 		ac.baseUrl = "http://u"
-		path := strings.TrimPrefix(baseUrl, "unix:")
-		ac.httpClient.Transport = &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", path)
-			},
-		}
-		ac.httpStreamClient.Transport = ac.httpClient.Transport
 	} else {
-		ac.baseUrl = baseUrl
+		ac.baseUrl = config.SocketPath
 	}
 
 	return ac
@@ -126,9 +117,12 @@ func (c *API) IsAppArmorEnabled() bool {
 	return c.appArmor
 }
 
-func (c *API) Do(req *http.Request) (*http.Response, error) {
-	res, err := c.httpClient.Do(req)
-	return res, err
+func (c *API) Do(req *http.Request, streaming bool) (*http.Response, error) {
+	if !streaming {
+		return c.httpClient.Do(req)
+	} else {
+		return c.httpStreamClient.Do(req)
+	}
 }
 
 func (c *API) Get(ctx context.Context, path string) (*http.Response, error) {
@@ -136,7 +130,7 @@ func (c *API) Get(ctx context.Context, path string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.Do(req)
+	return c.Do(req, false)
 }
 
 func (c *API) GetStream(ctx context.Context, path string) (*http.Response, error) {
@@ -160,7 +154,15 @@ func (c *API) PostWithHeaders(ctx context.Context, path string, body io.Reader, 
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	return c.Do(req)
+	// If a context was passed with a Deadline longer than our HTTP client timeout,
+	// the deadline will ignored. So use the streaming HTTP client (with no timeout)
+	// so that the deadline is respected.
+	deadline, _ := ctx.Deadline()
+	if time.Until(deadline) > c.defaultTimeout {
+		return c.Do(req, true)
+	} else {
+		return c.Do(req, false)
+	}
 }
 
 func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
@@ -168,9 +170,29 @@ func (c *API) Delete(ctx context.Context, path string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.Do(req)
+	return c.Do(req, false)
 }
 
 func ignoreClose(c io.Closer) {
 	_ = c.Close()
+}
+
+func (c *API) CreateHttpClient(timeout time.Duration, baseUrl string, streaming bool) *http.Client {
+	var httpClient *http.Client
+	if !streaming {
+		httpClient = &http.Client{Timeout: timeout}
+	} else { // Streaming doesn't have a timeout
+		httpClient = &http.Client{}
+	}
+
+	if strings.HasPrefix(baseUrl, "unix:") {
+		path := strings.TrimPrefix(baseUrl, "unix:")
+		httpClient.Transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", path)
+			},
+		}
+	}
+
+	return httpClient
 }
