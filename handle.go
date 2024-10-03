@@ -25,9 +25,10 @@ var (
 
 // TaskHandle is the podman specific handle for exactly one container
 type TaskHandle struct {
-	containerID string
-	logger      hclog.Logger
-	driver      *Driver
+	containerID  string
+	logger       hclog.Logger
+	driver       *Driver
+	podmanClient *api.API
 
 	totalCPUStats  *cpustats.Tracker
 	userCPUStats   *cpustats.Tracker
@@ -147,7 +148,6 @@ func (h *TaskHandle) runStatsEmitter(ctx context.Context, statsChannel chan *dri
 	}
 }
 func (h *TaskHandle) runLogStreamer(ctx context.Context) {
-
 	stdout, err := os.OpenFile(h.taskConfig.StdoutPath, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
 		h.logger.Warn("Unable to open stdout fifo", "error", err)
@@ -172,7 +172,7 @@ func (h *TaskHandle) runLogStreamer(ctx context.Context) {
 				// throttle logger reconciliation
 				time.Sleep(2 * time.Second)
 			}
-			err = h.driver.podman.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
+			err = h.podmanClient.ContainerLogs(ctx, h.containerID, since, stdout, stderr)
 			if err != nil {
 				h.logger.Warn("Log stream was interrupted", "error", err)
 				init = false
@@ -204,7 +204,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			timer.Reset(h.collectionInterval)
 		}
 
-		containerStats, statsErr := h.driver.podman.ContainerStats(h.driver.ctx, h.containerID)
+		containerStats, statsErr := h.podmanClient.ContainerStats(h.driver.ctx, h.containerID)
 		if statsErr != nil {
 			gone := false
 			if errors.Is(statsErr, api.ContainerNotFound) {
@@ -215,7 +215,7 @@ func (h *TaskHandle) runContainerMonitor() {
 			if gone {
 				h.logger.Debug("Container is not running anymore", "container", h.containerID, "error", statsErr)
 				// container was stopped, get exit code and other post mortem infos
-				inspectData, err := h.driver.podman.ContainerInspect(h.driver.ctx, h.containerID)
+				inspectData, err := h.podmanClient.ContainerInspect(h.driver.ctx, h.containerID)
 				h.stateLock.Lock()
 				h.completedAt = time.Now()
 				if err != nil {

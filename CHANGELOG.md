@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
+  * config: Add `socket` stanza to allow multiple Podman sockets to be used. [[GH-371](https://github.com/hashicorp/nomad-driver-podman/pull/371)]
+
 ## 0.6.1 (July 15, 2024)
 
 BUG FIXES:

@@ -10,6 +10,12 @@ import (
 )
 
 var (
+	// socketBodySpec is the hcl specification for the sockets in the driver object
+	socketBodySpec = hclspec.NewObject(map[string]*hclspec.Spec{
+		"name":        hclspec.NewAttr("name", "string", false), // If not specified == host_user
+		"socket_path": hclspec.NewAttr("socket_path", "string", true),
+	})
+
 	// configSpec is the hcl specification returned by the ConfigSchema RPC
 	configSpec = hclspec.NewObject(map[string]*hclspec.Spec{
 		// image registry authentication options
@@ -54,8 +60,11 @@ var (
 			options = {}
 		}`)),
 
+		// A list of sockets for the driver to manage
+		"socket": hclspec.NewBlockList("socket", socketBodySpec),
 		// the path to the podman api socket
 		"socket_path": hclspec.NewAttr("socket_path", "string", false),
+
 		// disable_log_collection indicates whether nomad should collect logs of podman
 		// task containers.  If true, logs are not forwarded to nomad.
 		"disable_log_collection": hclspec.NewAttr("disable_log_collection", "bool", false),
@@ -108,15 +117,19 @@ var (
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
-		"sysctl":             hclspec.NewAttr("sysctl", "list(map(string))", false),
-		"tmpfs":              hclspec.NewAttr("tmpfs", "list(string)", false),
-		"tty":                hclspec.NewAttr("tty", "bool", false),
-		"ulimit":             hclspec.NewAttr("ulimit", "list(map(string))", false),
-		"volumes":            hclspec.NewAttr("volumes", "list(string)", false),
-		"force_pull":         hclspec.NewAttr("force_pull", "bool", false),
-		"readonly_rootfs":    hclspec.NewAttr("readonly_rootfs", "bool", false),
-		"userns":             hclspec.NewAttr("userns", "string", false),
-		"shm_size":           hclspec.NewAttr("shm_size", "string", false),
+		"socket": hclspec.NewDefault(
+			hclspec.NewAttr("socket", "string", false),
+			hclspec.NewLiteral(`"default"`),
+		),
+		"sysctl":          hclspec.NewAttr("sysctl", "list(map(string))", false),
+		"tmpfs":           hclspec.NewAttr("tmpfs", "list(string)", false),
+		"tty":             hclspec.NewAttr("tty", "bool", false),
+		"ulimit":          hclspec.NewAttr("ulimit", "list(map(string))", false),
+		"volumes":         hclspec.NewAttr("volumes", "list(string)", false),
+		"force_pull":      hclspec.NewAttr("force_pull", "bool", false),
+		"readonly_rootfs": hclspec.NewAttr("readonly_rootfs", "bool", false),
+		"userns":          hclspec.NewAttr("userns", "string", false),
+		"shm_size":        hclspec.NewAttr("shm_size", "string", false),
 	})
 )
 
@@ -163,18 +176,24 @@ type PluginAuthConfig struct {
 	Helper     string `codec:"helper"`
 }
 
+type PluginSocketConfig struct {
+	Name       string `codec:"name"`
+	SocketPath string `codec:"socket_path"`
+}
+
 // PluginConfig is the driver configuration set by the SetConfig RPC call
 type PluginConfig struct {
-	Auth                 PluginAuthConfig `codec:"auth"`
-	Volumes              VolumeConfig     `codec:"volumes"`
-	GC                   GCConfig         `codec:"gc"`
-	RecoverStopped       bool             `codec:"recover_stopped"`
-	DisableLogCollection bool             `codec:"disable_log_collection"`
-	SocketPath           string           `codec:"socket_path"`
-	ClientHttpTimeout    string           `codec:"client_http_timeout"`
-	ExtraLabels          []string         `codec:"extra_labels"`
-	DNSServers           []string         `codec:"dns_servers"`
-	Logging              LoggingConfig    `codec:"logging"`
+	Auth                 PluginAuthConfig     `codec:"auth"`
+	Volumes              VolumeConfig         `codec:"volumes"`
+	GC                   GCConfig             `codec:"gc"`
+	RecoverStopped       bool                 `codec:"recover_stopped"`
+	DisableLogCollection bool                 `codec:"disable_log_collection"`
+	Socket               []PluginSocketConfig `codec:"socket"`
+	SocketPath           string               `codec:"socket_path"`
+	ClientHttpTimeout    string               `codec:"client_http_timeout"`
+	ExtraLabels          []string             `codec:"extra_labels"`
+	DNSServers           []string             `codec:"dns_servers"`
+	Logging              LoggingConfig        `codec:"logging"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
@@ -214,6 +233,7 @@ type TaskConfig struct {
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PidsLimit         int64              `codec:"pids_limit"`
 	PortMap           hclutils.MapStrInt `codec:"port_map"`
+	Socket            string             `codec:"socket"`
 	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
 	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
 	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
