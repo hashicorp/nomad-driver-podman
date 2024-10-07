@@ -222,7 +222,7 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		if sock.Name == "" {
 			sock.Name = "default"
 		}
-		sock.Name = cleanUpSocketName(sock.Name)
+		sock.Name = sock.Name
 		if sock.Name == "default" && !foundDefaultPodman {
 			foundDefaultPodman = true
 			podmanClient = d.newPodmanClient(timeout, sock.SocketPath, true)
@@ -270,7 +270,7 @@ func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
 	if ok {
 		return p, nil
 	}
-	return nil, fmt.Errorf("podman client with name %s was not found, check your podman driver config", clientName)
+	return nil, fmt.Errorf("podman client with name '%s' was not found, check your podman driver config", clientName)
 }
 
 // newPodmanClient returns Podman client configured with the provided timeout.
@@ -332,8 +332,8 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 	for name, podmanClient := range d.podmanClients {
 		// Ping podman api
 		apiVersion, err := podmanClient.Ping(d.ctx)
-		attrPrefix := fmt.Sprintf("driver.podman.%s", name)
-		if name == "default" {
+		attrPrefix := fmt.Sprintf("driver.podman.%s", cleanUpSocketName(name))
+		if name == "default" || podmanClient.IsDefaultClient() {
 			attrPrefix = "driver.podman"
 		}
 
@@ -366,6 +366,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
 		attrs[fmt.Sprintf("%s.defaultPodman", attrPrefix)] = pstructs.NewBoolAttribute(podmanClient.IsDefaultClient())
 		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
+		attrs[fmt.Sprintf("%s.socketName", attrPrefix)] = pstructs.NewStringAttribute(name)
 		attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
 		attrs[fmt.Sprintf("%s.rootless", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
 		attrs[fmt.Sprintf("%s.seccompEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SECCOMPEnabled)
@@ -535,7 +536,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		var err error
 		podmanClient, err = d.getPodmanClient(podmanTaskSocketName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("podman client with name %s not found, check your podman driver config", podmanTaskSocketName)
+			return nil, nil, fmt.Errorf("podman client with name '%s' not found, check your podman driver config", podmanTaskSocketName)
 		}
 	}
 	rootless := podmanClient.IsRootless()

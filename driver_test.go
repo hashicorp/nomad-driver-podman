@@ -86,6 +86,13 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 		}
 	}
 
+	// Configure the Plugin with named socket
+	if v, ok := cfg["Socket"]; ok {
+		if sv, ok := v.([]PluginSocketConfig); ok {
+			pluginConfig.Socket = sv
+		}
+	}
+
 	if err := base.MsgPackEncode(&baseConfig.PluginConfig, &pluginConfig); err != nil {
 		t.Error("Unable to encode plugin config", err)
 	}
@@ -2449,6 +2456,55 @@ func Test_parseImage(t *testing.T) {
 		}
 
 	}
+}
+
+func Test_namedSocketIsDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	defaultSocket := PluginSocketConfig{Name: "default", SocketPath: "unix://run/podman/podman.sock"}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	// Get back our podman socket via its name
+	api, err := getPodmanDriver(t, d).getPodmanClient("default")
+	must.NoError(t, err)
+	must.True(t, api.IsDefaultClient())
+}
+
+func Test_unnamedSocketIsRenamedToDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	defaultSocket := PluginSocketConfig{Name: "", SocketPath: "unix://run/podman/podman.sock"}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	// Test that omitting a name in the Socket definition gives it the name "default"
+	_, err := getPodmanDriver(t, d).getPodmanClient("default")
+	must.NoError(t, err)
+}
+
+func Test_cleanedSocketNameIsFound(t *testing.T) {
+	ci.Parallel(t)
+
+	defaultSocket := PluginSocketConfig{Name: "a socket with spaces", SocketPath: "unix://run/podman/podman.sock"}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	// Test that omitting a name in the Socket definition gives it the name "default"
+	_, err := getPodmanDriver(t, d).getPodmanClient("a socket with spaces")
+	must.NoError(t, err)
 }
 
 // read a tasks stdout logfile into a string, fail on error
