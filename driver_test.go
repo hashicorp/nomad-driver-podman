@@ -2491,6 +2491,37 @@ func Test_unnamedSocketIsRenamedToDefault(t *testing.T) {
 	must.NoError(t, err)
 }
 
+// Test that if there's one socket, it becomes the default socket (regardless of name)
+func Test_namedSocketBecomesDefaultSocket(t *testing.T) {
+	ci.Parallel(t)
+
+	socketPath := "unix://run/podman/podman.sock"
+	if os.Geteuid() != 0 {
+		socketPath = fmt.Sprintf("unix://run/user/%d/podman/podman.sock", os.Geteuid())
+	}
+
+	defaultSocket := PluginSocketConfig{Name: "podmanSock", SocketPath: socketPath}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	api, err := getPodmanDriver(t, d).getPodmanClient("podmanSock")
+	must.NoError(t, err)
+	must.True(t, api.IsDefaultClient())
+	
+	fingerprint := getPodmanDriver(t, d).buildFingerprint()
+	must.MapContainsKey(t, fingerprint.Attributes, "driver.podman.socketName")
+
+	originalName, ok := fingerprint.Attributes["driver.podman.socketName"].GetString()
+	must.True(t, ok)
+	must.Eq(t, "podmanSock", originalName)
+	isDefaultAttr, ok := fingerprint.Attributes["driver.podman.defaultPodman"].GetBool()
+	must.True(t, isDefaultAttr)
+}
+
 // A socket with non alpha numeric ([a-zA-Z0-9_]) chars gets cleaned before being used
 // in attributes.
 func Test_socketNameIsCleanedInAttributes(t *testing.T) {
