@@ -2519,6 +2519,7 @@ func Test_namedSocketBecomesDefaultSocket(t *testing.T) {
 	must.True(t, ok)
 	must.Eq(t, "podmanSock", originalName)
 	isDefaultAttr, ok := fingerprint.Attributes["driver.podman.defaultPodman"].GetBool()
+	must.True(t, ok)
 	must.True(t, isDefaultAttr)
 }
 

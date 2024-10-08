@@ -222,7 +222,6 @@ func (d *Driver) makePodmanClients(sockets []PluginSocketConfig, timeout time.Du
 		if sock.Name == "" {
 			sock.Name = "default"
 		}
-		sock.Name = sock.Name
 		if sock.Name == "default" && !foundDefaultPodman {
 			foundDefaultPodman = true
 			podmanClient = d.newPodmanClient(timeout, sock.SocketPath, true)
