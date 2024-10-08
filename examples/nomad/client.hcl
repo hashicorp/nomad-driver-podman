@@ -23,6 +23,13 @@ plugin "nomad-driver-podman" {
       enabled      = true
       selinuxlabel = "z"
     }
+    socket { # rootful socket, also the default socket
+      socket_path = "unix://run/podman/podman.sock"
+    }
+    socket {
+      name        = "app1"
+      socket_path = "unix://run/user/1337/podman/podman.sock"
+    }
   }
 }
 

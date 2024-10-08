@@ -137,3 +137,18 @@ func TestConfig_ExtraHosts(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	must.Eq(t, []string{"myhost:127.0.0.2", "example.com:10.0.0.1"}, tc.ExtraHosts)
 }
+
+func TestConfig_PodmanSocketDefaultIfNotGiven(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	validHCL := `
+	config {
+		image = "docker://redis"
+	}
+	`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, "default", tc.Socket)
+}
