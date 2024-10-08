@@ -2475,6 +2475,7 @@ func Test_namedSocketIsDefault(t *testing.T) {
 	must.True(t, api.IsDefaultClient())
 }
 
+// Test that omitting a name in the Socket definition gives it the name "default"
 func Test_unnamedSocketIsRenamedToDefault(t *testing.T) {
 	ci.Parallel(t)
 
@@ -2486,25 +2487,37 @@ func Test_unnamedSocketIsRenamedToDefault(t *testing.T) {
 		"Socket": sockets,
 	})
 
-	// Test that omitting a name in the Socket definition gives it the name "default"
 	_, err := getPodmanDriver(t, d).getPodmanClient("default")
 	must.NoError(t, err)
 }
 
-func Test_cleanedSocketNameIsFound(t *testing.T) {
+// A socket with non alpha numeric ([a-zA-Z0-9_]) chars gets cleaned before being used
+// in attributes.
+func Test_socketNameIsCleanedInAttributes(t *testing.T) {
 	ci.Parallel(t)
 
-	defaultSocket := PluginSocketConfig{Name: "a socket with spaces", SocketPath: "unix://run/podman/podman.sock"}
-	sockets := make([]PluginSocketConfig, 1)
+	socketPath := "unix://run/podman/podman.sock"
+	if os.Geteuid() != 0 {
+		socketPath = fmt.Sprintf("unix://run/user/%d/podman/podman.sock", os.Geteuid())
+	}
+
+	// We need two sockets because the default socket will get prefix driver.podman. without the socket name.
+	defaultSocket := PluginSocketConfig{Name: "default", SocketPath: socketPath}
+	socketWithSpaces := PluginSocketConfig{Name: "a socket with spaces", SocketPath: socketPath}
+	sockets := make([]PluginSocketConfig, 2)
 	sockets[0] = defaultSocket
+	sockets[1] = socketWithSpaces
 
 	d := podmanDriverHarness(t, map[string]interface{}{
 		"Socket": sockets,
 	})
 
-	// Test that omitting a name in the Socket definition gives it the name "default"
-	_, err := getPodmanDriver(t, d).getPodmanClient("a socket with spaces")
-	must.NoError(t, err)
+	fingerprint := getPodmanDriver(t, d).buildFingerprint()
+	must.MapContainsKey(t, fingerprint.Attributes, "driver.podman.a_socket_with_spaces.socketName")
+
+	originalName, ok := fingerprint.Attributes["driver.podman.a_socket_with_spaces.socketName"].GetString()
+	must.True(t, ok)
+	must.Eq(t, "a socket with spaces", originalName)
 }
 
 // read a tasks stdout logfile into a string, fail on error
