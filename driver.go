@@ -1655,6 +1655,7 @@ func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
 }
 
 func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error {
+	createOpts.Annotations = make(map[string]string)
 	for _, opt := range securityOpt {
 		con := strings.SplitN(opt, "=", 2)
 		if len(con) == 1 && con[0] != "no-new-privileges" {
