@@ -1533,7 +1533,6 @@ func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
 }
 
 func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error {
-	labelMap := make(map[string]string)
 	for _, opt := range securityOpt {
 		con := strings.SplitN(opt, "=", 2)
 		if len(con) == 1 && con[0] != "no-new-privileges" {
@@ -1553,33 +1552,30 @@ func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error
 				createOpts.ContainerBasicConfig.LabelsNested = true
 				continue
 			}
-			labelValue := strings.SplitN(con[1], ":", 2)
-			if len(labelValue) == 2 {
-				labelMap[labelValue[0]] = labelValue[1]
-				createOpts.ContainerBasicConfig.Labels = labelMap
-			}
+			createOpts.ContainerSecurityConfig.SelinuxOpts = append(createOpts.ContainerSecurityConfig.SelinuxOpts, con[1])
+			createOpts.Annotations["io.podman.annotations.label"] = strings.Join(createOpts.ContainerSecurityConfig.SelinuxOpts, ",label=")
 		case "apparmor":
 			createOpts.ContainerSecurityConfig.ApparmorProfile = con[1]
+			createOpts.Annotations["io.podman.annotations.apparmor"] = con[1]
 		case "seccomp":
-			if con[1] != "empty" && con[1] != "default" && con[1] != "image" {
-				createOpts.ContainerSecurityConfig.SeccompProfilePath = con[1]
-				continue
-			}
-			// For empty, default, image profile
-			createOpts.ContainerSecurityConfig.SeccompPolicy = con[1]
+			createOpts.ContainerSecurityConfig.SeccompProfilePath = con[1]
+			createOpts.Annotations["io.podman.annotations.seccomp"] = con[1]
 		case "proc-opts":
-			procOptsList := strings.Split(con[1], ",")
-			createOpts.ContainerSecurityConfig.ProcOpts = procOptsList
+			createOpts.ContainerSecurityConfig.ProcOpts = strings.Split(con[1], ",")
 		case "mask":
-			maskList := strings.Split(con[1], ":")
-			createOpts.ContainerSecurityConfig.Mask = maskList
+			createOpts.ContainerSecurityConfig.Mask = append(createOpts.ContainerSecurityConfig.Mask, strings.Split(con[1], ":")...)
 		case "unmask":
 			if con[1] == "ALL" {
-				createOpts.ContainerSecurityConfig.Unmask = []string{con[1]}
+				createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, con[1])
 				continue
 			}
-			unmaskList := strings.Split(con[1], ":")
-			createOpts.ContainerSecurityConfig.Unmask = unmaskList
+			createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, strings.Split(con[1], ":")...)
+		case "systempaths":
+			if con[1] == "unconfined" {
+				createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, []string{"ALL"}...)
+			} else {
+				return fmt.Errorf("invalid systempaths option %q, only `unconfined` is supported", con[1])
+			}
 		default:
 			return fmt.Errorf("invalid security_opt: %q", opt)
 		}
