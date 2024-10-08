@@ -2511,7 +2511,7 @@ func Test_namedSocketBecomesDefaultSocket(t *testing.T) {
 	api, err := getPodmanDriver(t, d).getPodmanClient("podmanSock")
 	must.NoError(t, err)
 	must.True(t, api.IsDefaultClient())
-	
+
 	fingerprint := getPodmanDriver(t, d).buildFingerprint()
 	must.MapContainsKey(t, fingerprint.Attributes, "driver.podman.socketName")
 
