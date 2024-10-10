@@ -728,6 +728,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = podmanTaskConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = podmanTaskConfig.ApparmorProfile
 
+	// add security_opt if configured
+	if securiyOptsErr := parseSecurityOpt(podmanTaskConfig.SecurityOpt, &createOpts); securiyOptsErr != nil {
+		return nil, nil, fmt.Errorf("failed to parse security_opt configuration: %v", securiyOptsErr)
+	}
+
 	// Populate --userns mode only if configured
 	if podmanTaskConfig.UserNS != "" {
 		userns := strings.SplitN(podmanTaskConfig.UserNS, ":", 2)
@@ -1646,5 +1651,57 @@ func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
 		}
 	}
 	createOpts.ContainerNetworkConfig.HostAdd = slices.Clone(hosts)
+	return nil
+}
+
+func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error {
+	createOpts.Annotations = make(map[string]string)
+	for _, opt := range securityOpt {
+		con := strings.SplitN(opt, "=", 2)
+		if len(con) == 1 && con[0] != "no-new-privileges" {
+			if strings.Contains(opt, ":") {
+				con = strings.SplitN(opt, ":", 2)
+			} else {
+				return fmt.Errorf("invalid security_opt: %q", opt)
+			}
+		}
+
+		switch con[0] {
+		case "no-new-privileges":
+			createOpts.ContainerSecurityConfig.NoNewPrivileges = true
+			continue
+		case "label":
+			if con[1] == "nested" {
+				createOpts.ContainerBasicConfig.LabelsNested = true
+				continue
+			}
+			createOpts.ContainerSecurityConfig.SelinuxOpts = append(createOpts.ContainerSecurityConfig.SelinuxOpts, con[1])
+			createOpts.Annotations["io.podman.annotations.label"] = strings.Join(createOpts.ContainerSecurityConfig.SelinuxOpts, ",label=")
+		case "apparmor":
+			createOpts.ContainerSecurityConfig.ApparmorProfile = con[1]
+			createOpts.Annotations["io.podman.annotations.apparmor"] = con[1]
+		case "seccomp":
+			createOpts.ContainerSecurityConfig.SeccompProfilePath = con[1]
+			createOpts.Annotations["io.podman.annotations.seccomp"] = con[1]
+		case "proc-opts":
+			createOpts.ContainerSecurityConfig.ProcOpts = strings.Split(con[1], ",")
+		case "mask":
+			createOpts.ContainerSecurityConfig.Mask = append(createOpts.ContainerSecurityConfig.Mask, strings.Split(con[1], ":")...)
+		case "unmask":
+			if con[1] == "ALL" {
+				createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, con[1])
+				continue
+			}
+			createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, strings.Split(con[1], ":")...)
+		case "systempaths":
+			if con[1] == "unconfined" {
+				createOpts.ContainerSecurityConfig.Unmask = append(createOpts.ContainerSecurityConfig.Unmask, []string{"ALL"}...)
+			} else {
+				return fmt.Errorf("invalid systempaths option %q, only `unconfined` is supported", con[1])
+			}
+		default:
+			return fmt.Errorf("invalid security_opt: %q", opt)
+		}
+	}
 	return nil
 }
