@@ -269,7 +269,7 @@ func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
 	if ok {
 		return p, nil
 	}
-	return nil, fmt.Errorf("podman client with name '%s' was not found, check your podman driver config", clientName)
+	return nil, fmt.Errorf("podman client with name %q was not found, check your podman driver config", clientName)
 }
 
 // newPodmanClient returns Podman client configured with the provided timeout.
@@ -332,7 +332,7 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		// Ping podman api
 		apiVersion, err := podmanClient.Ping(d.ctx)
 		attrPrefix := fmt.Sprintf("driver.podman.%s", cleanUpSocketName(name))
-		if name == "default" || podmanClient.IsDefaultClient() {
+		if podmanClient.IsDefaultClient() {
 			attrPrefix = "driver.podman"
 		}
 
@@ -535,7 +535,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		var err error
 		podmanClient, err = d.getPodmanClient(podmanTaskSocketName)
 		if err != nil {
-			return nil, nil, fmt.Errorf("podman client with name '%s' not found, check your podman driver config", podmanTaskSocketName)
+			return nil, nil, fmt.Errorf("podman client with name %q not found, check your podman driver config", podmanTaskSocketName)
 		}
 	}
 	rootless := podmanClient.IsRootless()
