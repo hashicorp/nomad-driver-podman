@@ -86,6 +86,13 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 		}
 	}
 
+	// Configure the Plugin with named socket
+	if v, ok := cfg["Socket"]; ok {
+		if sv, ok := v.([]PluginSocketConfig); ok {
+			pluginConfig.Socket = sv
+		}
+	}
+
 	if err := base.MsgPackEncode(&baseConfig.PluginConfig, &pluginConfig); err != nil {
 		t.Error("Unable to encode plugin config", err)
 	}
@@ -2449,6 +2456,100 @@ func Test_parseImage(t *testing.T) {
 		}
 
 	}
+}
+
+func Test_namedSocketIsDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	defaultSocket := PluginSocketConfig{Name: "default", SocketPath: "unix://run/podman/podman.sock"}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	// Get back our podman socket via its name
+	api, err := getPodmanDriver(t, d).getPodmanClient("default")
+	must.NoError(t, err)
+	must.True(t, api.IsDefaultClient())
+}
+
+// Test that omitting a name in the Socket definition gives it the name "default"
+func Test_unnamedSocketIsRenamedToDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	defaultSocket := PluginSocketConfig{Name: "", SocketPath: "unix://run/podman/podman.sock"}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	_, err := getPodmanDriver(t, d).getPodmanClient("default")
+	must.NoError(t, err)
+}
+
+// Test that if there's one socket, it becomes the default socket (regardless of name)
+func Test_namedSocketBecomesDefaultSocket(t *testing.T) {
+	ci.Parallel(t)
+
+	socketPath := "unix://run/podman/podman.sock"
+	if os.Geteuid() != 0 {
+		socketPath = fmt.Sprintf("unix://run/user/%d/podman/podman.sock", os.Geteuid())
+	}
+
+	defaultSocket := PluginSocketConfig{Name: "podmanSock", SocketPath: socketPath}
+	sockets := make([]PluginSocketConfig, 1)
+	sockets[0] = defaultSocket
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	api, err := getPodmanDriver(t, d).getPodmanClient("podmanSock")
+	must.NoError(t, err)
+	must.True(t, api.IsDefaultClient())
+
+	fingerprint := getPodmanDriver(t, d).buildFingerprint()
+	must.MapContainsKey(t, fingerprint.Attributes, "driver.podman.socketName")
+
+	originalName, ok := fingerprint.Attributes["driver.podman.socketName"].GetString()
+	must.True(t, ok)
+	must.Eq(t, "podmanSock", originalName)
+	isDefaultAttr, ok := fingerprint.Attributes["driver.podman.defaultPodman"].GetBool()
+	must.True(t, ok)
+	must.True(t, isDefaultAttr)
+}
+
+// A socket with non alpha numeric ([a-zA-Z0-9_]) chars gets cleaned before being used
+// in attributes.
+func Test_socketNameIsCleanedInAttributes(t *testing.T) {
+	ci.Parallel(t)
+
+	socketPath := "unix://run/podman/podman.sock"
+	if os.Geteuid() != 0 {
+		socketPath = fmt.Sprintf("unix://run/user/%d/podman/podman.sock", os.Geteuid())
+	}
+
+	// We need two sockets because the default socket will get prefix driver.podman. without the socket name.
+	defaultSocket := PluginSocketConfig{Name: "default", SocketPath: socketPath}
+	socketWithSpaces := PluginSocketConfig{Name: "a socket with spaces", SocketPath: socketPath}
+	sockets := make([]PluginSocketConfig, 2)
+	sockets[0] = defaultSocket
+	sockets[1] = socketWithSpaces
+
+	d := podmanDriverHarness(t, map[string]interface{}{
+		"Socket": sockets,
+	})
+
+	fingerprint := getPodmanDriver(t, d).buildFingerprint()
+	must.MapContainsKey(t, fingerprint.Attributes, "driver.podman.a_socket_with_spaces.socketName")
+
+	originalName, ok := fingerprint.Attributes["driver.podman.a_socket_with_spaces.socketName"].GetString()
+	must.True(t, ok)
+	must.Eq(t, "a socket with spaces", originalName)
 }
 
 // read a tasks stdout logfile into a string, fail on error
