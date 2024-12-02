@@ -21,7 +21,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v1.11.0
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.9.0
 )
 
 require (
