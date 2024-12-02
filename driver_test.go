@@ -1060,7 +1060,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 	versionChange, _ := version.NewVersion("4.2")
 	parsedApiVersion, err := version.NewVersion(apiVersion)
 	if err != nil {
-		t.Fatalf(fmt.Sprintf("Not a valid version: %s", apiVersion))
+		t.Fatalf("Not a valid version: %s", apiVersion)
 	}
 
 	if parsedApiVersion.LessThan(versionChange) {
