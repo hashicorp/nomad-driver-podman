@@ -225,7 +225,7 @@ func (h *TaskHandle) runContainerMonitor() {
 				} else {
 					h.exitResult.ExitCode = int(inspectData.State.ExitCode)
 					if len(inspectData.State.Error) > 0 {
-						h.exitResult.Err = fmt.Errorf(inspectData.State.Error)
+						h.exitResult.Err = errors.New(inspectData.State.Error)
 						h.logger.Error("Container error", "container", h.containerID, "error", h.exitResult.Err)
 					}
 					h.completedAt = inspectData.State.FinishedAt
