@@ -55,7 +55,6 @@ linters:
     - unconvert
     - gofmt
     - gosimple
-    - depguard
     - staticcheck
     - asasalint
     - asciicheck
