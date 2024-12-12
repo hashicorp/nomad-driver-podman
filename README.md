@@ -451,6 +451,16 @@ config {
 }
 ```
 
+* **security_opt** - (Optional)  A list of security-related options that are set in the container.
+
+```hcl
+config {
+  security_opt = [
+    "no-new-privileges"
+  ]
+}
+```
+
 * **selinux_opts** - (Optional)  A list of process labels the container will use.
 
 ```

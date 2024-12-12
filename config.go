@@ -117,6 +117,7 @@ var (
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
 		"ports":              hclspec.NewAttr("ports", "list(string)", false),
 		"privileged":         hclspec.NewAttr("privileged", "bool", false),
+		"security_opt":       hclspec.NewAttr("security_opt", "list(string)", false),
 		"socket": hclspec.NewDefault(
 			hclspec.NewAttr("socket", "string", false),
 			hclspec.NewLiteral(`"default"`),
@@ -130,6 +131,7 @@ var (
 		"readonly_rootfs": hclspec.NewAttr("readonly_rootfs", "bool", false),
 		"userns":          hclspec.NewAttr("userns", "string", false),
 		"shm_size":        hclspec.NewAttr("shm_size", "string", false),
+
 	})
 )
 
@@ -244,4 +246,5 @@ type TaskConfig struct {
 	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
 	UserNS            string             `codec:"userns"`
 	ShmSize           string             `codec:"shm_size"`
+	SecurityOpt       []string           `codec:"security_opt"`
 }

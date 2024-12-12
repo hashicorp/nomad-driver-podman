@@ -57,6 +57,10 @@ type ContainerBasicConfig struct {
 	// container.
 	// Optional.
 	Env map[string]string `json:"env,omitempty"`
+	// Labels nested indicates whether or not the container is allowed
+	// to run fully nested containers including SELinux labelling.
+	// Optional.
+	LabelsNested bool `json:"labels_nested,omitempty"`
 	// Labels are key-value pairs that are used to add metadata to
 	// containers.
 	// Optional.
@@ -298,7 +302,15 @@ type ContainerSecurityConfig struct {
 	// privileges flag on create, which disables gaining additional
 	// privileges (e.g. via setuid) in the container.
 	NoNewPrivileges bool `json:"no_new_privileges,omitempty"`
-
+	// Mask is the path we want to mask in the container. This masks the paths
+	// given in addition to the default list.
+	// Optional
+	Mask []string `json:"mask,omitempty"`
+	// Unmask a path in the container. Some paths are masked by default,
+	// preventing them from being accessed within the container; this undoes that masking.
+	// If ALL is passed, all paths will be unmasked.
+	// Optional.
+	Unmask []string `json:"unmask,omitempty"`
 	// IDMappings are UID and GID mappings that will be used by user
 	// namespaces.
 	// Required if UserNS is private.
