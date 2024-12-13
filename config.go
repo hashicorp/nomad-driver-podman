@@ -131,7 +131,6 @@ var (
 		"readonly_rootfs": hclspec.NewAttr("readonly_rootfs", "bool", false),
 		"userns":          hclspec.NewAttr("userns", "string", false),
 		"shm_size":        hclspec.NewAttr("shm_size", "string", false),
-
 	})
 )
 
