@@ -730,7 +730,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// add security_opt if configured
 	if securiyOptsErr := parseSecurityOpt(podmanTaskConfig.SecurityOpt, &createOpts); securiyOptsErr != nil {
-		return nil, nil, fmt.Errorf("failed to parse security_opt configuration: %v", securiyOptsErr)
+		return nil, nil, fmt.Errorf("failed to parse security_opt configuration: %w", securiyOptsErr)
 	}
 
 	// Populate --userns mode only if configured
