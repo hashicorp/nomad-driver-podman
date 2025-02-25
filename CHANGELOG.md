@@ -1,7 +1,8 @@
 ## UNRELEASED
 
-IMPROVEMENTS:
+## 0.6.2 (December 16, 2024)
 
+IMPROVEMENTS:
 
 * config: Allow setting `security_opt` option. [[GH-382](https://github.com/hashicorp/nomad-driver-podman/pull/382)]
 * config: Add `socket` stanza to allow multiple Podman sockets to be used. [[GH-371](https://github.com/hashicorp/nomad-driver-podman/pull/371)]

@@ -898,7 +898,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		exitResult:            &drivers.ExitResult{},
 		startedAt:             time.Now(),
 		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskSocketName)),
-		logStreamer:           podmanTaskConfig.Logging.Driver == LOG_DRIVER_JOURNALD,
+		logStreamer:           createOpts.LogConfiguration.Driver == LOG_DRIVER_JOURNALD,
 		logPointer:            time.Now(),
 		collectionInterval:    time.Second,
 		totalCPUStats:         cpustats.New(d.compute),
