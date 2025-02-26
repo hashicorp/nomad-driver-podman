@@ -355,6 +355,15 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		allClientsAreUnhealthy = false
 
 		podmanClient.SetAPIVersion(apiVersion)
+		attrs[fmt.Sprintf("%s.defaultPodman", attrPrefix)] = pstructs.NewBoolAttribute(podmanClient.IsDefaultClient())
+		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
+		attrs[fmt.Sprintf("%s.socketName", attrPrefix)] = pstructs.NewStringAttribute(name)
+		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
+
+		if info.Host == nil {
+			continue
+		}
+
 		podmanClient.SetRootless(info.Host.Security.Rootless)
 		podmanClient.SetCgroupV2(info.Host.CGroupsVersion == "v2")
 		podmanClient.SetCgroupMgr(info.Host.CgroupManager)
@@ -363,15 +372,16 @@ func (d *Driver) buildFingerprint() *drivers.Fingerprint {
 		attrs[fmt.Sprintf("%s.appArmor", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.AppArmorEnabled)
 		attrs[fmt.Sprintf("%s.capabilities", attrPrefix)] = pstructs.NewStringAttribute(info.Host.Security.DefaultCapabilities)
 		attrs[fmt.Sprintf("%s.cgroupVersion", attrPrefix)] = pstructs.NewStringAttribute(info.Host.CGroupsVersion)
-		attrs[fmt.Sprintf("%s.defaultPodman", attrPrefix)] = pstructs.NewBoolAttribute(podmanClient.IsDefaultClient())
-		attrs[fmt.Sprintf("%s.health", attrPrefix)] = pstructs.NewStringAttribute("healthy")
-		attrs[fmt.Sprintf("%s.socketName", attrPrefix)] = pstructs.NewStringAttribute(name)
-		attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
 		attrs[fmt.Sprintf("%s.rootless", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.Rootless)
 		attrs[fmt.Sprintf("%s.seccompEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SECCOMPEnabled)
 		attrs[fmt.Sprintf("%s.selinuxEnabled", attrPrefix)] = pstructs.NewBoolAttribute(info.Host.Security.SELinuxEnabled)
-		attrs[fmt.Sprintf("%s.socket", attrPrefix)] = pstructs.NewStringAttribute(info.Host.RemoteSocket.Path)
-		attrs[fmt.Sprintf("%s.version", attrPrefix)] = pstructs.NewStringAttribute(apiVersion)
+
+		if info.Host.OCIRuntime != nil {
+			attrs[fmt.Sprintf("%s.ociRuntime", attrPrefix)] = pstructs.NewStringAttribute(info.Host.OCIRuntime.Path)
+		}
+		if info.Host.RemoteSocket != nil {
+			attrs[fmt.Sprintf("%s.socket", attrPrefix)] = pstructs.NewStringAttribute(info.Host.RemoteSocket.Path)
+		}
 	}
 
 	switch {
