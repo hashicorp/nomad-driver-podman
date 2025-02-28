@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+BUG FIXES:
+
+* fingerprint: check for nil pointers in SystemInfo client response. [[GH-412](https://github.com/hashicorp/nomad-driver-podman/issues/412)]
+
 ## 0.6.2 (December 16, 2024)
 
 IMPROVEMENTS:
