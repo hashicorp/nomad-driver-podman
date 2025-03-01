@@ -13,7 +13,7 @@ replace (
 
 require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
-	github.com/containers/image/v5 v5.34.0
+	github.com/containers/image/v5 v5.34.1
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/nomad v1.9.5
