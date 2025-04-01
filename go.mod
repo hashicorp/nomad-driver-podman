@@ -1,6 +1,7 @@
 module github.com/hashicorp/nomad-driver-podman
 
-go 1.23.3
+go 1.23.6
+
 toolchain go1.24.1
 
 replace (
