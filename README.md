@@ -423,6 +423,16 @@ config {
 }
 ```
 
+* **oom_score_adj** - Set the [--oom-score-adj](https://docs.podman.io/en/latest/markdown/podman-run.1.html#oom-score-adj-num) for the container
+
+Tune the host’s OOM preferences for containers (accepts values from -1000 to 1000).
+
+```hcl
+config {
+  oom_score_adj = "-1000"
+}
+```
+
 * **socket** - (Optional) The name of the socket as defined in the socket block in the client agent's plugin configuration. Defaults to the socket named "default".
 
 ```hcl
