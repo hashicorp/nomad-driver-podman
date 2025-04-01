@@ -1,6 +1,7 @@
 module github.com/hashicorp/nomad-driver-podman
 
 go 1.23.3
+toolchain go1.24.1
 
 replace (
 	// Fix error tidying due to Nomad downstream dependencies and the recent
@@ -21,7 +22,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v1.12.1
-	golang.org/x/sync v0.11.0
+	golang.org/x/sync v0.12.0
 )
 
 require (
