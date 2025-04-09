@@ -1,6 +1,6 @@
 module github.com/hashicorp/nomad-driver-podman
 
-go 1.23.3
+go 1.24.2
 
 replace (
 	// Fix error tidying due to Nomad downstream dependencies and the recent
