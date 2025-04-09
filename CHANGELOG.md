@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
+* build: Updated to Go 1.24.2 [[GH-430](https://github.com/hashicorp/nomad-driver-podman/pull/430)]
+
 BUG FIXES:
 
 * fingerprint: check for nil pointers in SystemInfo client response. [[GH-412](https://github.com/hashicorp/nomad-driver-podman/issues/412)]
