@@ -30,7 +30,7 @@ check: hclfmt ## Lint the source code
 	@echo "==> Linting source code ..."
 	@$(BIN)/golangci-lint run
 	@echo "==> vetting hc-log statements"
-	@$(BIN)/hclogvet $(CURDIR)
+	@$(BIN)/hclogvet .
 
 .PHONY: hclfmt
 hclfmt: ## Format HCL files with hclfmt
@@ -43,8 +43,8 @@ hclfmt: ## Format HCL files with hclfmt
 .PHONY: deps
 deps: ## Install build dependencies
 	@echo "==> Installing build dependencies ..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
-	go install github.com/hashicorp/go-hclog/hclogvet@v0.2.0
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+	go install github.com/hashicorp/go-hclog/hclogvet@feaf6d2ec20fd895e711195c99e3fde93a68afc5
 	go install gotest.tools/gotestsum@v1.10.0
 	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 

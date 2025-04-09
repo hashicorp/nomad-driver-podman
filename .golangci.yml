@@ -64,6 +64,5 @@ linters:
     - durationcheck
     - errchkjson
     - errorlint
-    - exportloopref    
   fast: false
 
