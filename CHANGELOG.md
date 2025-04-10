@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
 
+* build: Update Nomad verison to 1.10.0 [GH-431](https://github.com/hashicorp/nomad-driver-podman/pull/431)
 * build: Updated to Go 1.24.2 [[GH-430](https://github.com/hashicorp/nomad-driver-podman/pull/430)]
 
 BUG FIXES:
