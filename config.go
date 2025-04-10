@@ -112,6 +112,7 @@ var (
 		"memory_swap":        hclspec.NewAttr("memory_swap", "string", false),
 		"memory_swappiness":  hclspec.NewAttr("memory_swappiness", "number", false),
 		"network_mode":       hclspec.NewAttr("network_mode", "string", false),
+		"oom_score_adj":      hclspec.NewAttr("oom_score_adj", "number", false),
 		"extra_hosts":        hclspec.NewAttr("extra_hosts", "list(string)", false),
 		"pids_limit":         hclspec.NewAttr("pids_limit", "number", false),
 		"port_map":           hclspec.NewAttr("port_map", "list(map(number))", false),
@@ -229,6 +230,7 @@ type TaskConfig struct {
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
+	OOMScoreAdj       int16              `codec:"oom_score_adj"`
 	ExtraHosts        []string           `codec:"extra_hosts"`
 	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`

@@ -152,3 +152,19 @@ func TestConfig_PodmanSocketDefaultIfNotGiven(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	must.Eq(t, "default", tc.Socket)
 }
+
+func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	validHCL := `
+	config {
+		image = "docker://redis"
+		oom_score_adj = -1000
+	}
+	`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, "default", tc.Socket)
+}
