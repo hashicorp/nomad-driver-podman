@@ -716,6 +716,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		swappiness := uint64(podmanTaskConfig.MemorySwappiness)
 		createOpts.ContainerResourceConfig.ResourceLimits.Memory.Swappiness = &swappiness
 	}
+	// OOM Score Adj config options
+	oomScoreAdj := int(podmanTaskConfig.OOMScoreAdj)
+	createOpts.ContainerResourceConfig.OOMScoreAdj = &oomScoreAdj
+
 	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
 	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
 	if !rootless {
