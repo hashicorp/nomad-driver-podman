@@ -78,6 +78,12 @@ func podmanDriverHarness(t *testing.T, cfg map[string]interface{}) *dtestutil.Dr
 	baseConfig := base.Config{}
 	pluginConfig := PluginConfig{}
 
+	if v, ok := cfg["RecoverStopped"]; ok {
+		if sv, ok := v.(bool); ok {
+			pluginConfig.RecoverStopped = sv
+		}
+	}
+
 	// Set ClientHttpTimeout before calling SetConfig() because it affects the
 	// HTTP client that is created.
 	if v, ok := cfg["ClientHttpTimeout"]; ok {
@@ -329,6 +335,153 @@ func TestPodmanDriver_Start_Wait_AllocDir(t *testing.T) {
 	if !reflect.DeepEqual(act, exp) {
 		t.Fatalf("Command outputted %v; want %v", act, exp)
 	}
+}
+
+func TestPodmanDriver_RecoverTask(t *testing.T) {
+	ci.Parallel(t)
+
+	t.Run("running driver can recover running container", func(t *testing.T) {
+		taskCfg := newTaskConfig("", []string{"sleep", "5"})
+		task := &drivers.TaskConfig{
+			ID:        uuid.Generate(),
+			Name:      "recovered_container",
+			AllocID:   uuid.Generate(),
+			Resources: createBasicResources(),
+		}
+		must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+		d := podmanDriverHarness(t, nil)
+		cleanup := d.MkAllocDir(task, true)
+		defer cleanup()
+
+		handle, _, err := d.StartTask(task)
+		defer func() {
+			_ = d.DestroyTask(task.ID, true)
+		}()
+		must.NoError(t, err)
+
+		must.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
+
+		// recover the task with the same driver
+		err = d.RecoverTask(handle)
+		must.NoError(t, err)
+
+		must.NoError(t, d.DestroyTask(task.ID, true))
+
+	})
+
+	t.Run("new driver can recover running container", func(t *testing.T) {
+		taskCfg := newTaskConfig("", []string{"sleep", "5"})
+		task := &drivers.TaskConfig{
+			ID:        uuid.Generate(),
+			Name:      "recovered_container",
+			AllocID:   uuid.Generate(),
+			Resources: createBasicResources(),
+		}
+		must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+		d := podmanDriverHarness(t, nil)
+		cleanup := d.MkAllocDir(task, true)
+		defer cleanup()
+
+		handle, _, err := d.StartTask(task)
+		defer func() {
+			_ = d.DestroyTask(task.ID, true)
+		}()
+		must.NoError(t, err)
+
+		must.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
+
+		testDriver := podmanDriverHarness(t, nil)
+		defer testDriver.Kill()
+
+		// recover the task with a new driver, in the event the driver exited
+		err = testDriver.RecoverTask(handle)
+		must.NoError(t, err)
+
+		must.NoError(t, d.DestroyTask(task.ID, true))
+	})
+
+	t.Run("recovers task with stopped container", func(t *testing.T) {
+		taskCfg := newTaskConfig("", []string{"sleep", "10"})
+		name := "recovered_container"
+		task := &drivers.TaskConfig{
+			ID:        uuid.Generate(),
+			Name:      name,
+			AllocID:   uuid.Generate(),
+			Resources: createBasicResources(),
+		}
+		must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+		d := podmanDriverHarness(t, nil)
+		cleanup := d.MkAllocDir(task, true)
+		defer cleanup()
+
+		handle, _, err := d.StartTask(task)
+		must.NoError(t, err)
+
+		must.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
+
+		d.Kill()
+
+		// stop the container
+		err = getPodmanDriver(t, d).defaultPodman.ContainerStop(context.Background(), fmt.Sprintf("%s-%s", name, task.AllocID), 1, true)
+		must.NoError(t, err)
+
+		testDriver := podmanDriverHarness(t, nil)
+		defer func() {
+			_ = testDriver.DestroyTask(task.ID, true)
+		}()
+		// recover the task with a new driver, in the event the driver exited
+		err = testDriver.RecoverTask(handle)
+		must.NoError(t, err)
+
+		must.NoError(t, testDriver.DestroyTask(task.ID, true))
+	})
+
+	// It's not recommended to use "recover_stopped" but we should have a basic test for it anyway
+	t.Run("recovers task with stopped container, recover_stopped enabled", func(t *testing.T) {
+		taskCfg := newTaskConfig("", []string{"sleep", "10"})
+		name := "recovered_container"
+		task := &drivers.TaskConfig{
+			ID:        uuid.Generate(),
+			Name:      name,
+			AllocID:   uuid.Generate(),
+			Resources: createBasicResources(),
+		}
+		must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+		d := podmanDriverHarness(t, map[string]interface{}{
+			"RecoverStopped": true,
+		})
+		// d := podmanDriverHarness(t, nil)
+		cleanup := d.MkAllocDir(task, true)
+		defer cleanup()
+
+		handle, _, err := d.StartTask(task)
+		must.NoError(t, err)
+
+		must.NoError(t, d.WaitUntilStarted(task.ID, 5*time.Second))
+
+		d.Kill()
+
+		// stop the container
+		err = getPodmanDriver(t, d).defaultPodman.ContainerStop(context.Background(), fmt.Sprintf("%s-%s", name, task.AllocID), 1, true)
+		must.NoError(t, err)
+
+		testDriver := podmanDriverHarness(t, map[string]interface{}{
+			"RecoverStopped": true,
+		})
+		defer func() {
+			_ = testDriver.DestroyTask(task.ID, true)
+		}()
+
+		// recover the task with a new driver, in the event the driver exited
+		err = testDriver.RecoverTask(handle)
+		must.NoError(t, err)
+
+		must.NoError(t, testDriver.DestroyTask(task.ID, true))
+	})
 }
 
 // check if container is destroyed if gc.container=true
@@ -2589,6 +2742,7 @@ func newTaskConfig(image string, command []string) TaskConfig {
 		Command:          command[0],
 		Args:             command[1:],
 		ImagePullTimeout: "5m",
+		Socket:           "default",
 	}
 }
 
