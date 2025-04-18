@@ -131,7 +131,7 @@ type Driver struct {
 // StartTask. This information is needed to rebuild the task state and handler
 // during recovery.
 type TaskState struct {
-	TaskConfig  *drivers.TaskConfig
+	TaskConfig  *TaskConfig
 	ContainerID string
 	StartedAt   time.Time
 	Net         *drivers.DriverNetwork
@@ -431,15 +431,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	d.logger.Debug("Checking for recoverable task", "task", handle.Config.Name, "taskid", handle.Config.ID, "container", taskState.ContainerID)
 
 	var inspectData api.InspectContainerData
-	// We need to parse the task config for our driver to be able to find the Socket field (*drivers.TaskConfig itself is a generic task struct from the nomad repo)
-	var podmanTaskConfig TaskConfig
-	if err := taskState.TaskConfig.DecodeDriverConfig(&podmanTaskConfig); err != nil {
-		return fmt.Errorf("error: cannot decode task config")
-	}
-	podmanTaskSocketName := podmanTaskConfig.Socket
-	if podmanTaskConfig.Socket == "" {
-		podmanTaskSocketName = "default"
-	}
+	podmanTaskSocketName := taskState.TaskConfig.Socket
 	taskPodmanClient, err := d.getPodmanClient(podmanTaskSocketName)
 	if err == nil {
 		inspectData, err = taskPodmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
@@ -459,7 +451,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		containerID:           taskState.ContainerID,
 		driver:                d,
 		podmanClient:          taskPodmanClient,
-		taskConfig:            taskState.TaskConfig,
+		taskConfig:            handle.Config,
 		procState:             drivers.TaskStateUnknown,
 		startedAt:             taskState.StartedAt,
 		exitResult:            &drivers.ExitResult{},
@@ -536,19 +528,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("image name required")
 	}
 
-	var podmanClient *api.API
 	podmanTaskSocketName := podmanTaskConfig.Socket
-	if podmanTaskConfig.Socket == "" {
-		podmanTaskSocketName = "default"
-		podmanClient = d.defaultPodman
-	} else {
-		var err error
-		podmanClient, err = d.getPodmanClient(podmanTaskSocketName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("podman client with name %q not found, check your podman driver config", podmanTaskSocketName)
-		}
+
+	podmanClient, err := d.getPodmanClient(podmanTaskSocketName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("podman client with name %q not found, check your podman driver config", podmanTaskSocketName)
 	}
-	rootless := podmanClient.IsRootless()
 
 	createOpts := api.SpecGenerator{}
 	createOpts.ContainerBasicConfig.LogConfiguration = &api.LogConfig{}
@@ -722,6 +707,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// FIXME: can fail for nonRoot due to missing cpu limit delegation permissions,
 	//        see https://github.com/containers/podman/blob/master/troubleshooting.md
+	rootless := podmanClient.IsRootless()
 	if !rootless {
 		cpuShares := uint64(cfg.Resources.LinuxResources.CPUShares)
 		createOpts.ContainerResourceConfig.ResourceLimits.CPU.Shares = &cpuShares
@@ -943,7 +929,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	driverState := TaskState{
 		ContainerID: containerID,
-		TaskConfig:  cfg,
+		TaskConfig:  &podmanTaskConfig,
 		LogStreamer: h.logStreamer,
 		StartedAt:   h.startedAt,
 		Net:         driverNet,
