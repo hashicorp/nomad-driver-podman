@@ -41,7 +41,7 @@ jobs:
           # customfield_10001 is Team (jira default teams?)
           extraFields: '{ "customfield_10089": "${{ github.event.issue.html_url || github.event.pull_request.html_url }}",
                           "customfield_10001": "72e166fb-d26c-4a61-b0de-7a290d91708f",
-                          "components": [{ "name": "nomad-driver-prodman" }],
+                          "components": [{ "name": "nomad-driver-podman" }],
                           "labels": ["community", "GitHub"] }'
         env:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
