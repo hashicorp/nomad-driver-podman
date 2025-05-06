@@ -1524,8 +1524,10 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	}
 
 	for _, dst := range driverConfig.Tmpfs {
+		splitTmpfs := strings.Split(dst, ":")
 		bind := spec.Mount{
-			Destination: dst,
+			Destination: splitTmpfs[0],
+			Options:     strings.Split(splitTmpfs[1], ","),
 			Type:        "tmpfs",
 		}
 		binds = append(binds, bind)
