@@ -511,7 +511,7 @@ func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string 
 }
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
-func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
+func (d *Driver) StartTask(cfg *drivers.TaskConfig) (handle *drivers.TaskHandle, network *drivers.DriverNetwork, err error) {
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
@@ -521,7 +521,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to decode driver config: %w", err)
 	}
 
-	handle := drivers.NewTaskHandle(taskHandleVersion)
+	handle = drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
 	if podmanTaskConfig.Image == "" {
@@ -655,6 +655,15 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	if err != nil {
 		return nil, nil, err
 	}
+	// TODO: at this point, we need to defer some sort of error check cleanup func for the bind mount
+
+	// like this!
+	defer func() {
+		if err != nil && d.podmanClients[podmanTaskConfig.Socket].IsRootless() {
+			d.removeMount(handle.Config, &podmanTaskConfig)
+		}
+	}()
+
 	createOpts.ContainerStorageConfig.Mounts = allMounts
 	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(podmanTaskConfig.Devices))
 	for idx, device := range podmanTaskConfig.Devices {
@@ -1279,6 +1288,16 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 		}
 	}
 
+	var podmanTaskConfig TaskConfig
+	if err := handle.taskConfig.DecodeDriverConfig(&podmanTaskConfig); err != nil {
+		return fmt.Errorf("failed to decode driver config: %w", err)
+	}
+
+	// Delete rootless bind mount
+	if d.podmanClients[podmanTaskConfig.Socket].IsRootless() {
+		d.removeMount(handle.taskConfig, &podmanTaskConfig)
+	}
+
 	d.tasks.Delete(taskID)
 	return nil
 }
@@ -1444,10 +1463,35 @@ func getSElinuxVolumeLabel(vc VolumeConfig, mc *drivers.MountConfig) string {
 }
 
 func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
-	var binds []spec.Mount
-	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
-	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
-	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+	var (
+		binds    []spec.Mount
+		mountDir string
+		err      error
+	)
+
+	if d.podmanClients[driverConfig.Socket].IsRootless() {
+		mountDir, err = d.rootlessMount(task, driverConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create rootless user mount: %w", err)
+		}
+	}
+
+	// hacky implementation of rootless bind mounting
+	rootlessDir := &rootlessTaskDir{
+		mountDir: mountDir,
+		taskName: task.Name,
+	}
+
+	if mountDir != "" {
+		binds = append(binds, spec.Mount{Source: rootlessDir.sharedAllocDir(), Destination: task.Env[taskenv.AllocDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: rootlessDir.localDir(), Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: rootlessDir.secretsDir(), Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+
+	} else {
+		binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+	}
 
 	// TODO support volume drivers
 	// https://github.com/containers/libpod/pull/4548
@@ -1473,7 +1517,11 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		// Otherwise, we assume we receive a relative path binding in the format
 		// relative/to/task:/also/in/container
 		if taskLocalBindVolume {
-			src = expandPath(task.TaskDir().Dir, src)
+			if mountDir != "" {
+				src = expandPath(rootlessDir.dir(), src)
+			} else {
+				src = expandPath(task.TaskDir().Dir, src)
+			}
 		} else {
 			// Resolve dotted path segments
 			src = filepath.Clean(src)
