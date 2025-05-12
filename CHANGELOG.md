@@ -4,10 +4,14 @@ IMPROVEMENTS:
 
 * build: Update Nomad verison to 1.10.0 [GH-431](https://github.com/hashicorp/nomad-driver-podman/pull/431)
 * build: Updated to Go 1.24.2 [[GH-430](https://github.com/hashicorp/nomad-driver-podman/pull/430)]
+* config: Adds support for oom_score_adj [GH-425](https://github.com/hashicorp/nomad-driver-podman)
 
 BUG FIXES:
 
-* fingerprint: check for nil pointers in SystemInfo client response. [[GH-412](https://github.com/hashicorp/nomad-driver-podman/issues/412)]
+* fingerprint: Check for nil pointers in SystemInfo client response. [[GH-412](https://github.com/hashicorp/nomad-driver-podman/issues/412)]
+* recovery: Fixes driver failing to recover task [GH-433](https://github.com/hashicorp/nomad-driver-podman/pull/433)
+* runtime: Fixes parsing options when creating a tmpfs mount [GH-439](https://github.com/hashicorp/nomad-driver-podman/pull/439)
+* logging: Fixes bug where driver did not honor default logging configuration
 
 ## 0.6.2 (December 16, 2024)
 
