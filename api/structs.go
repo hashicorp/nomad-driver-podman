@@ -519,6 +519,13 @@ type PortMapping struct {
 	Protocol string `json:"protocol,omitempty"`
 }
 
+// IP address block
+// Needed since Podman 5.0
+type Address struct {
+	Addr      string `json:"Addr"`
+	PrefixLen int    `json:"PrefixLen"`
+}
+
 // taken from https://github.com/containers/podman/blob/master/pkg/specgen/namespaces.go
 
 type NamespaceMode string
@@ -1107,7 +1114,7 @@ type InspectBasicNetworkConfig struct {
 	IPPrefixLen int `json:"IPPrefixLen"`
 	// SecondaryIPAddresses is a list of extra IP Addresses that the
 	// container has been assigned in this network.
-	SecondaryIPAddresses []string `json:"SecondaryIPAddresses,omitempty"`
+	SecondaryIPAddresses []Address `json:"SecondaryIPAddresses"`
 	// IPv6Gateway is the IPv6 gateway this network will use.
 	IPv6Gateway string `json:"IPv6Gateway"`
 	// GlobalIPv6Address is the global-scope IPv6 Address for this network.
@@ -1116,7 +1123,7 @@ type InspectBasicNetworkConfig struct {
 	GlobalIPv6PrefixLen int `json:"GlobalIPv6PrefixLen"`
 	// SecondaryIPv6Addresses is a list of extra IPv6 Addresses that the
 	// container has been assigned in this networ.
-	SecondaryIPv6Addresses []string `json:"SecondaryIPv6Addresses,omitempty"`
+	SecondaryIPv6Addresses []Address `json:"SecondaryIPv6Addresses"`
 	// MacAddress is the MAC address for the interface in this network.
 	MacAddress string `json:"MacAddress"`
 	// AdditionalMacAddresses is a set of additional MAC Addresses beyond
