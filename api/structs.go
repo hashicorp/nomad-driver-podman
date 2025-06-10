@@ -1107,7 +1107,7 @@ type InspectBasicNetworkConfig struct {
 	IPPrefixLen int `json:"IPPrefixLen"`
 	// SecondaryIPAddresses is a list of extra IP Addresses that the
 	// container has been assigned in this network.
-	SecondaryIPAddresses []string `json:"SecondaryIPAddresses,omitempty"`
+	SecondaryIPAddresses []SecondaryIPAddresses `json:"SecondaryIPAddresses,omitempty"`
 	// IPv6Gateway is the IPv6 gateway this network will use.
 	IPv6Gateway string `json:"IPv6Gateway"`
 	// GlobalIPv6Address is the global-scope IPv6 Address for this network.
@@ -1163,6 +1163,11 @@ type InspectNetworkSettings struct {
 	// container has joined.
 	// It is a map of network name to network information.
 	Networks map[string]*InspectAdditionalNetwork `json:"Networks,omitempty"`
+}
+
+type SecondaryIPAddresses struct {
+	Addr         string `json:"Addr"`
+	PrefixLength int    `json:"PrefixLength"`
 }
 
 // InspectContainerData provides a detailed record of a container's configuration
