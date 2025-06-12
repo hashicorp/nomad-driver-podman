@@ -5,6 +5,7 @@ IMPROVEMENTS:
 * build: Update Nomad verison to 1.10.0 [[GH-431](https://github.com/hashicorp/nomad-driver-podman/pull/431)]
 * build: Updated to Go 1.24.2 [[GH-430](https://github.com/hashicorp/nomad-driver-podman/pull/430)]
 * config: Adds support for oom_score_adj [[GH-425](https://github.com/hashicorp/nomad-driver-podman)]
+* api: Address a backwards incompatible change in Podman 4.0 for secondary IP addresses [[GH-443](https://github.com/hashicorp/nomad-driver-podman/pull/443)]
 
 BUG FIXES:
 
