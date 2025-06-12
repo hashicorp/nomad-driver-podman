@@ -1459,7 +1459,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	})
 	taskCfg.Tmpfs = []string{
 		"/tmpdata1",
-		"/tmpdata2",
+		"/tmpdata2:rshared,noexec",
 	}
 
 	task := &drivers.TaskConfig{
@@ -1499,7 +1499,7 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 
 	expectedFilesystem := map[string]string{
 		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
-		"/tmpdata2": "rw,rprivate,nosuid,nodev,tmpcopyup",
+		"/tmpdata2": "rshared,noexec,rw,nosuid,nodev,tmpcopyup",
 	}
 	must.MapEq(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
 
