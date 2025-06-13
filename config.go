@@ -101,9 +101,13 @@ var (
 			hclspec.NewAttr("image_pull_timeout", "string", false),
 			hclspec.NewLiteral(`"5m"`),
 		),
-		"init":      hclspec.NewAttr("init", "bool", false),
-		"init_path": hclspec.NewAttr("init_path", "string", false),
-		"labels":    hclspec.NewAttr("labels", "list(map(string))", false),
+		"init":         hclspec.NewAttr("init", "bool", false),
+		"init_path":    hclspec.NewAttr("init_path", "string", false),
+		"ipv4_address": hclspec.NewAttr("ipv4_address", "string", false),
+		"ipv6_address": hclspec.NewAttr("ipv6_address", "string", false),
+		"static_ips":   hclspec.NewAttr("static_ips", "list(string)", false),
+		"static_macs":  hclspec.NewAttr("static_macs", "list(string)", false),
+		"labels":       hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
 			"options": hclspec.NewAttr("options", "list(map(string))", false),
@@ -224,6 +228,10 @@ type TaskConfig struct {
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	ImagePullTimeout  string             `codec:"image_pull_timeout"`
+	IPv4Address       string             `codec:"ipv4_address"`
+	IPv6Address       string             `codec:"ipv6_address"`
+	StaticIPs         []string           `codec:"static_ips"`
+	StaticMAC         string             `codec:"static_mac"`
 	InitPath          string             `codec:"init_path"`
 	Logging           TaskLoggingConfig  `codec:"logging"`
 	Labels            hclutils.MapStrStr `codec:"labels"`
