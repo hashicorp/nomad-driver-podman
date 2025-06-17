@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containers/common/libnetwork/types"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -348,7 +349,7 @@ type PerNetworkOptions struct {
 	// StaticIPs for this container. Optional.
 	StaticIPs []*net.IP `json:"static_ips,omitempty"`
 	// StaticMac for this container. Optional.
-	StaticMac *net.HardwareAddr `json:"static_mac,omitempty"`
+	StaticMac types.HardwareAddr `json:"static_mac,omitempty"`
 }
 
 // ContainerNetworkConfig contains information on a container's network
@@ -438,7 +439,7 @@ type ContainerNetworkConfig struct {
 	// for this container on the specific network. If the map is empty and the
 	// bridge network mode is set the container will be joined to the default
 	// network.
-	Networks map[string]PerNetworkOptions `json:"networks,omitempty"`
+	Networks map[string]PerNetworkOptions `json:"newNetworks,omitempty"`
 }
 
 // ContainerResourceConfig contains information on container resource limits.

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/armon/circbuf"
+	nettypes "github.com/containers/common/libnetwork/types"
 	"github.com/containers/image/v5/docker"
 	dockerArchive "github.com/containers/image/v5/docker/archive"
 	ociArchive "github.com/containers/image/v5/oci/archive"
@@ -824,8 +825,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// provided for compatibility with Docker, but the podman API v4 exposes a
 	// list of static addresses too. Add all three options to the API call for
 	// the default network
-	if driverConfig.StaticMAC != "" || driverConfig.IPv4Address != "" || driverConfig.IPv6Address != "" || len(driverConfig.StaticIPs) > 0 {
-		apiVersion, _ := d.podman.Ping(d.ctx)
+	if podmanTaskConfig.StaticMAC != "" || podmanTaskConfig.IPv4Address != "" || podmanTaskConfig.IPv6Address != "" || len(podmanTaskConfig.StaticIPs) > 0 {
+		apiVersion, _ := podmanClient.Ping(d.ctx)
 		versionValue, _ := version2.NewVersion(apiVersion)
 		versionCheck, _ := version2.NewConstraint(">=4.0.0")
 
@@ -836,22 +837,22 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			netOpts := api.PerNetworkOptions{}
 			netOpts.StaticIPs = []*net.IP{}
 
-			if driverConfig.IPv4Address != "" {
-				parsedIP := net.ParseIP(driverConfig.IPv4Address)
+			if podmanTaskConfig.IPv4Address != "" {
+				parsedIP := net.ParseIP(podmanTaskConfig.IPv4Address)
 				if parsedIP != nil {
 					netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIP)
 				}
 			}
 
-			if driverConfig.IPv6Address != "" {
-				parsedIPv6 := net.ParseIP(driverConfig.IPv6Address)
+			if podmanTaskConfig.IPv6Address != "" {
+				parsedIPv6 := net.ParseIP(podmanTaskConfig.IPv6Address)
 				if parsedIPv6 != nil {
 					netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIPv6)
 				}
 			}
 
-			if len(driverConfig.StaticIPs) > 0 {
-				for _, ip := range driverConfig.StaticIPs {
+			if len(podmanTaskConfig.StaticIPs) > 0 {
+				for _, ip := range podmanTaskConfig.StaticIPs {
 					parsedIP := net.ParseIP(ip)
 					if parsedIP != nil {
 						netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIP)
@@ -860,10 +861,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			}
 
 			// Process Static MAC configuration
-			if driverConfig.StaticMAC != "" {
-				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+			if podmanTaskConfig.StaticMAC != "" {
+				parsedMAC, macErr := net.ParseMAC(podmanTaskConfig.StaticMAC)
 				if macErr == nil && parsedMAC != nil {
-					netOpts.StaticMac = &parsedMAC
+					netOpts.StaticMac = nettypes.HardwareAddr(parsedMAC)
 				}
 			}
 
@@ -871,23 +872,23 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		} else {
 			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
 
-			if driverConfig.IPv4Address != "" {
-				parsedIP := net.ParseIP(driverConfig.IPv4Address)
+			if podmanTaskConfig.IPv4Address != "" {
+				parsedIP := net.ParseIP(podmanTaskConfig.IPv4Address)
 				if parsedIP != nil {
 					createOpts.ContainerNetworkConfig.StaticIP = &parsedIP
 				}
 			}
 
-			if driverConfig.IPv6Address != "" {
-				parsedIPv6 := net.ParseIP(driverConfig.IPv6Address)
+			if podmanTaskConfig.IPv6Address != "" {
+				parsedIPv6 := net.ParseIP(podmanTaskConfig.IPv6Address)
 				if parsedIPv6 != nil {
 					createOpts.ContainerNetworkConfig.StaticIPv6 = &parsedIPv6
 				}
 			}
 
 			// Process Static MAC configuration
-			if driverConfig.StaticMAC != "" {
-				parsedMAC, macErr := net.ParseMAC(driverConfig.StaticMAC)
+			if podmanTaskConfig.StaticMAC != "" {
+				parsedMAC, macErr := net.ParseMAC(podmanTaskConfig.StaticMAC)
 				if macErr == nil && parsedMAC != nil {
 					createOpts.ContainerNetworkConfig.StaticMAC = &parsedMAC
 				}
