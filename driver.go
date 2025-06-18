@@ -17,12 +17,14 @@ import (
 	"time"
 
 	"github.com/armon/circbuf"
+	nettypes "github.com/containers/common/libnetwork/types"
 	"github.com/containers/image/v5/docker"
 	dockerArchive "github.com/containers/image/v5/docker/archive"
 	ociArchive "github.com/containers/image/v5/oci/archive"
 	"github.com/containers/image/v5/pkg/shortnames"
 	"github.com/containers/image/v5/types"
 	"github.com/hashicorp/go-hclog"
+	version2 "github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad-driver-podman/api"
 	"github.com/hashicorp/nomad-driver-podman/registry"
 	"github.com/hashicorp/nomad-driver-podman/version"
@@ -816,6 +818,79 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
 			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
+		}
+	}
+
+	// Process static IP and MAC configuration. IPv4Address and IPv6Address are
+	// provided for compatibility with Docker, but the podman API v4 exposes a
+	// list of static addresses too. Add all three options to the API call for
+	// the default network
+	if podmanTaskConfig.StaticMAC != "" || podmanTaskConfig.IPv4Address != "" || podmanTaskConfig.IPv6Address != "" || len(podmanTaskConfig.StaticIPs) > 0 {
+		apiVersion := podmanClient.GetAPIVersion()
+		versionValue, _ := version2.NewVersion(apiVersion)
+		versionCheck, _ := version2.NewConstraint(">=4.0.0")
+
+		var (
+			staticIPv4 *net.IP
+			staticIPv6 *net.IP
+			staticMac  net.HardwareAddr
+		)
+
+		if podmanTaskConfig.IPv4Address != "" {
+			parsedIP := net.ParseIP(podmanTaskConfig.IPv4Address)
+			if parsedIP != nil {
+				staticIPv4 = &parsedIP
+			}
+		}
+
+		if podmanTaskConfig.IPv6Address != "" {
+			parsedIPv6 := net.ParseIP(podmanTaskConfig.IPv6Address)
+			if parsedIPv6 != nil {
+				staticIPv6 = &parsedIPv6
+			}
+		}
+		if podmanTaskConfig.StaticMAC != "" {
+			parsedMAC, macErr := net.ParseMAC(podmanTaskConfig.StaticMAC)
+			if macErr == nil && parsedMAC != nil {
+				staticMac = parsedMAC
+			}
+		}
+
+		if versionCheck.Check(versionValue) {
+			// Podman API v4 uses PerNetworkOptions. For now, we'll just use the
+			// default network.
+			netOpts := api.PerNetworkOptions{StaticIPs: []*net.IP{}}
+
+			if staticIPv4 != nil {
+				netOpts.StaticIPs = append(netOpts.StaticIPs, staticIPv4)
+			}
+			if staticIPv6 != nil {
+				netOpts.StaticIPs = append(netOpts.StaticIPs, staticIPv6)
+			}
+			if staticMac != nil {
+				netOpts.StaticMac = nettypes.HardwareAddr(staticMac)
+			}
+
+			if len(podmanTaskConfig.StaticIPs) > 0 {
+				for _, ip := range podmanTaskConfig.StaticIPs {
+					parsedIP := net.ParseIP(ip)
+					if parsedIP != nil {
+						netOpts.StaticIPs = append(netOpts.StaticIPs, &parsedIP)
+					}
+				}
+			}
+			createOpts.Networks = map[string]api.PerNetworkOptions{"default": netOpts}
+		} else {
+			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
+			if staticIPv4 != nil {
+				createOpts.ContainerNetworkConfig.StaticIP = staticIPv4
+			}
+			if staticIPv6 != nil {
+				createOpts.ContainerNetworkConfig.StaticIPv6 = staticIPv6
+			}
+			if staticMac != nil {
+				createOpts.ContainerNetworkConfig.StaticMAC = &staticMac
+			}
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containers/common/libnetwork/types"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -338,6 +339,19 @@ type ContainerCgroupConfig struct {
 	CgroupParent string `json:"cgroup_parent,omitempty"`
 }
 
+// PerNetworkOptions allows you to set options per network the container is
+// attached to.
+type PerNetworkOptions struct {
+	// Aliases contains a list of names which the dns server should resolve to this container. Should only be set when DNSEnabled is true on the Network. If aliases are set but there is no dns support for this network the network interface implementation should ignore this and NOT error. Optional.
+	Aliases []string `json:"aliases,omitempty"`
+	// InterfaceName for this container. Required in the backend. Optional in the frontend. Will be filled with ethX (where X is a integer) when empty.
+	InterfaceName string `json:"interface_name,omitempty"`
+	// StaticIPs for this container. Optional.
+	StaticIPs []*net.IP `json:"static_ips,omitempty"`
+	// StaticMac for this container. Optional.
+	StaticMac types.HardwareAddr `json:"static_mac,omitempty"`
+}
+
 // ContainerNetworkConfig contains information on a container's network
 // configuration.
 type ContainerNetworkConfig struct {
@@ -419,6 +433,13 @@ type ContainerNetworkConfig struct {
 	// Podman, and instead sourced from the image.
 	// Conflicts with HostAdd.
 	UseImageHosts bool `json:"use_image_hosts,omitempty"`
+	// Map of networks names or ids that the container should join. You can
+	// request additional settings for each network, you can set network
+	// aliases, static ips, static mac address and the network interface name
+	// for this container on the specific network. If the map is empty and the
+	// bridge network mode is set the container will be joined to the default
+	// network.
+	Networks map[string]PerNetworkOptions `json:"newNetworks,omitempty"`
 }
 
 // ContainerResourceConfig contains information on container resource limits.
