@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.6.3 (June 18, 2025)
+
 IMPROVEMENTS:
 
 * api: Added support for ipv6_address, ipv4_address, static_ips, and static_mac options to networking configuration [[GH-359](https://github.com/hashicorp/nomad-driver-podman/pull/359)]
