@@ -106,7 +106,7 @@ var (
 		"ipv4_address": hclspec.NewAttr("ipv4_address", "string", false),
 		"ipv6_address": hclspec.NewAttr("ipv6_address", "string", false),
 		"static_ips":   hclspec.NewAttr("static_ips", "list(string)", false),
-		"static_macs":  hclspec.NewAttr("static_macs", "list(string)", false),
+		"static_mac":   hclspec.NewAttr("static_mac", "string", false),
 		"labels":       hclspec.NewAttr("labels", "list(map(string))", false),
 		"logging": hclspec.NewBlock("logging", false, hclspec.NewObject(map[string]*hclspec.Spec{
 			"driver":  hclspec.NewAttr("driver", "string", false),
