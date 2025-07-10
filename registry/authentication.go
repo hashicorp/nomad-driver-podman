@@ -109,7 +109,7 @@ func (r *RegistryAuthConfig) SetHeader(headers map[string]string) {
 		if err != nil {
 			return
 		}
-		header := base64.StdEncoding.EncodeToString(b)
+		header := base64.URLEncoding.EncodeToString(b)
 		headers["X-Registry-Auth"] = header
 	}
 }
