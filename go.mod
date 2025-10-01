@@ -13,8 +13,8 @@ replace (
 
 require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
-	github.com/containers/common v0.64.1
-	github.com/containers/image/v5 v5.36.1
+	github.com/containers/common v0.64.2
+	github.com/containers/image/v5 v5.36.2
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/nomad v1.10.3
@@ -150,7 +150,7 @@ require (
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
-	github.com/ulikunitz/xz v0.5.14 // indirect
+	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/vbatts/tar-split v0.12.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
