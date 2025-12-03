@@ -16,7 +16,7 @@ require (
 	github.com/containers/common v0.64.2
 	github.com/containers/image/v5 v5.36.2
 	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/go-version v1.7.0
+	github.com/hashicorp/go-version v1.8.0
 	github.com/hashicorp/nomad v1.10.3
 	github.com/hashicorp/nomad/api v0.0.0-20250410143434-48f304d0cab3
 	github.com/opencontainers/runtime-spec v1.2.1
