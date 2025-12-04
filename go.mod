@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-version v1.8.0
 	github.com/hashicorp/nomad v1.11.0
 	github.com/hashicorp/nomad/api v0.0.0-20251111161819-9103d9381333
-	github.com/opencontainers/runtime-spec v1.2.1
+	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v1.12.2
 	golang.org/x/sync v0.18.0
