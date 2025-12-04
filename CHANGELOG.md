@@ -1,7 +1,7 @@
 ## UNRELEASED
 
 * build: Update Nomad version to 1.11.0 [[GH-478](https://github.com/hashicorp/nomad-driver-podman/pull/478)]
-* build: Updated to Go 1.24.4 [[GH-447](https://github.com/hashicorp/nomad-driver-podman/pull/447)]
+* build: Updated to Go 1.25.5 [[GH-477](https://github.com/hashicorp/nomad-driver-podman/pull/477)]
 
 ## 0.6.3 (June 18, 2025)
 
