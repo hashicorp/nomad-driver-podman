@@ -1901,6 +1901,12 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 			mode: "slirp4netns",
 		},
 		{
+			// podman doesn't populate network info for pasta mode:
+			// https://github.com/containers/podman/issues/26650
+			mode:    "pasta",
+			gateway: "",
+		},
+		{
 			mode:    "none",
 			gateway: "",
 		},
