@@ -404,16 +404,19 @@ config {
 
 * **network_mode** - Set the [network mode](http://docs.podman.io/en/latest/markdown/podman-run.1.html#options) for the container.
 
-By default the task uses the network stack defined in the task group, see [network Stanza](https://www.nomadproject.io/docs/job-specification/network). If the groups network behavior is also undefined, it will fallback to `bridge` in rootful mode or `slirp4netns` for rootless containers.
+By default the task uses the network stack defined in the task group, see [network Stanza](https://www.nomadproject.io/docs/job-specification/network). If the groups network behavior is also undefined, it will fallback to `bridge` in rootful mode, `slirp4netns` for rootless containers on Podman <5.0.0, or `pasta` for rootless containers on Podman >=5.0.0.
 
 * `bridge`: create a network stack on the default podman bridge.
 * `none`: no networking
 * `host`: use the Podman host network stack. Note: the host mode gives the
   container full access to local system services such as D-bus and is therefore
   considered insecure
+* `pasta`: use `pasta` to create a userspace network stack. This is the default
+  for rootless containers on Podman >=5.0.0. Podman currently does not support it for
+  rootful containers: [issue](https://github.com/containers/podman/issues/17840).
 * `slirp4netns`: use `slirp4netns` to create a user network stack. This is the
-  default for rootless containers. Podman currently does not support it for root
-  containers [issue](https://github.com/containers/libpod/issues/6097).
+  default for rootless containers on Podman <5.0.0. Podman currently does not support
+  it for root containers [issue](https://github.com/containers/libpod/issues/6097).
 * `container:id`: reuse another podman containers network stack
 * `task:name-of-other-task`: join the network of another task in the same allocation.
 
