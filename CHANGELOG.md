@@ -1,8 +1,14 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+
 * api: Support pasta network_mode and use it as default for rootless containers on Podman 5.0+ [[GH-476](https://github.com/hashicorp/nomad-driver-podman/pull/476)]
 * build: Update Nomad version to 1.11.0 [[GH-478](https://github.com/hashicorp/nomad-driver-podman/pull/478)]
 * build: Updated to Go 1.25.5 [[GH-477](https://github.com/hashicorp/nomad-driver-podman/pull/477)]
+
+BUG FIXES:
+
+* namespaces: Fixed a bug where setting `userns` to `auto` would not correctly configure user/group ID mappings. [[GH-481](https://github.com/hashicorp/nomad-driver-podman/pull/481)]
 
 ## 0.6.3 (June 18, 2025)
 
