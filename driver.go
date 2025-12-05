@@ -756,6 +756,10 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerStorageConfig.ShmSize = &shmsize
 	}
 
+	// Get Podman version as networking option availability depends on the version
+	apiVersion := podmanClient.GetAPIVersion()
+	versionValue, _ := version2.NewVersion(apiVersion)
+
 	// Network config options
 	if cfg.DNS != nil {
 		for _, strdns := range cfg.DNS.Servers {
@@ -795,8 +799,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
 				}
 			} else {
-				// slirp4netns is default for rootless podman
-				createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+				pastaCheck, _ := version2.NewConstraint(">=5.0.0")
+				if pastaCheck.Check(versionValue) {
+					// podman pasta is default for rootless podman >= 5.0.0
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Pasta
+				} else {
+					// slirp4netns is default for rootless podman < 5.0.0
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+				}
 			}
 		case podmanTaskConfig.NetworkMode == "bridge":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
@@ -804,6 +814,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Host
 		case podmanTaskConfig.NetworkMode == "none":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NoNetwork
+		case podmanTaskConfig.NetworkMode == "pasta":
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Pasta
 		case podmanTaskConfig.NetworkMode == "slirp4netns":
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
 		case strings.HasPrefix(podmanTaskConfig.NetworkMode, "container:"):
@@ -826,8 +838,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// list of static addresses too. Add all three options to the API call for
 	// the default network
 	if podmanTaskConfig.StaticMAC != "" || podmanTaskConfig.IPv4Address != "" || podmanTaskConfig.IPv6Address != "" || len(podmanTaskConfig.StaticIPs) > 0 {
-		apiVersion := podmanClient.GetAPIVersion()
-		versionValue, _ := version2.NewVersion(apiVersion)
 		versionCheck, _ := version2.NewConstraint(">=4.0.0")
 
 		var (
