@@ -737,14 +737,12 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	// Populate --userns mode only if configured
 	if podmanTaskConfig.UserNS != "" {
-		userns := strings.SplitN(podmanTaskConfig.UserNS, ":", 2)
-		mode := api.NamespaceMode(userns[0])
-		// Populate value only if specified
-		if len(userns) > 1 {
-			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode, Value: userns[1]}
-		} else {
-			createOpts.ContainerSecurityConfig.UserNS = api.Namespace{NSMode: mode}
+		userns, mappings, userNSerr := parseUserNSConfig(podmanTaskConfig.UserNS)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse userns configuration: %w", userNSerr)
 		}
+		createOpts.ContainerSecurityConfig.UserNS = userns
+		createOpts.ContainerSecurityConfig.IDMappings = mappings
 	}
 
 	// populate shm_size if configured
@@ -1795,4 +1793,101 @@ func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error
 		}
 	}
 	return nil
+}
+
+func parseUserNSConfig(userNSConfig string) (api.Namespace, *api.IDMappingOptions, error) {
+
+	modeWithConfig := strings.SplitN(userNSConfig, ":", 2)
+	mode := api.NamespaceMode(modeWithConfig[0])
+
+	if len(modeWithConfig) == 1 {
+		// if there's no additional configuration, we can bail out early
+		return api.Namespace{NSMode: mode}, nil, nil
+	}
+
+	config := modeWithConfig[1]
+	ns := api.Namespace{NSMode: mode, Value: config}
+
+	switch mode {
+	case "", "host":
+		return ns, nil, nil
+	case "auto":
+		autoOpts := strings.Split(config, ",")
+		mappings := &api.IDMappingOptions{
+			UIDMap:         []api.IDMap{},
+			GIDMap:         []api.IDMap{},
+			AutoUserNs:     true,
+			AutoUserNsOpts: api.AutoUserNsOptions{},
+		}
+		for _, opt := range autoOpts {
+			kv := strings.Split(opt, "=")
+			if len(kv) != 2 {
+				return ns, nil, fmt.Errorf("invalid userns configuration: %q", kv)
+			}
+			switch kv[0] {
+			case "gidmapping":
+				idMap, err := parseIDMapping(kv[1])
+				if err != nil {
+					return ns, nil, fmt.Errorf(
+						"invalid gidmapping configuration %q: %w", kv[1], err)
+				}
+				mappings.GIDMap = append(mappings.GIDMap, *idMap)
+				mappings.AutoUserNsOpts.AdditionalGIDMappings = append(
+					mappings.AutoUserNsOpts.AdditionalGIDMappings, *idMap)
+			case "size":
+				sz, err := strconv.ParseUint(kv[1], 10, 32)
+				if err != nil {
+					return ns, nil, err
+				}
+				mappings.AutoUserNsOpts.Size = uint32(sz)
+			case "uidmapping":
+				idMap, err := parseIDMapping(kv[1])
+				if err != nil {
+					return ns, nil, fmt.Errorf(
+						"invalid uidmapping configuration %q: %w", kv[1], err)
+				}
+				mappings.UIDMap = append(mappings.UIDMap, *idMap)
+				mappings.AutoUserNsOpts.AdditionalUIDMappings = append(
+					mappings.AutoUserNsOpts.AdditionalUIDMappings, *idMap)
+			}
+		}
+
+		return ns, mappings, nil
+	case "keep-id":
+		return ns, &api.IDMappingOptions{}, nil
+	case "nomap", "ns":
+		// TODO: we don't have any configuration for manual mappings; we'll need
+		// to add it here
+		return ns, nil, nil
+	default:
+		return ns, nil, fmt.Errorf("unknown userns mode %q", mode)
+	}
+}
+
+func parseIDMapping(idmapConfig string) (*api.IDMap, error) {
+	fields := strings.Split(idmapConfig, ":")
+	if len(fields) != 3 {
+		return nil, fmt.Errorf("invalid ID mapping configuration %q", idmapConfig)
+	}
+	containerID, err := strconv.ParseInt(fields[0], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"invalid gidmapping configuration %q: %w", idmapConfig, err)
+	}
+	hostID, err := strconv.ParseInt(fields[1], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"invalid gidmapping configuration %q: %w", idmapConfig, err)
+	}
+	sz, err := strconv.ParseUint(fields[2], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"invalid gidmapping configuration %q: %w", idmapConfig, err)
+	}
+
+	return &api.IDMap{
+		ContainerID: int(containerID),
+		HostID:      int(hostID),
+		Size:        int(sz),
+	}, nil
 }

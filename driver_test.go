@@ -2799,3 +2799,82 @@ func startDestroyInspect(t *testing.T, taskCfg TaskConfig, taskName string) api.
 
 	return inspectData
 }
+
+func TestUserNSConfigParsing(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		input           string
+		expectNamespace api.Namespace
+		expectMapping   *api.IDMappingOptions
+		expectErr       string
+	}{
+		{
+			input: "",
+		},
+		{
+			input: "host",
+			expectNamespace: api.Namespace{
+				NSMode: "host",
+			},
+		},
+		{
+			input: "keep-id:uid=200,gid=210",
+			expectNamespace: api.Namespace{
+				NSMode: "keep-id",
+				Value:  "uid=200,gid=210",
+			},
+			expectMapping: &api.IDMappingOptions{},
+		},
+		{
+			input: "auto",
+			expectNamespace: api.Namespace{
+				NSMode: "auto",
+			},
+		},
+		{
+			input: "auto:uidmapping=33:1001:1,gidmapping=34:1002:2,size=3",
+			expectNamespace: api.Namespace{
+				NSMode: "auto",
+				Value:  "uidmapping=33:1001:1,gidmapping=34:1002:2,size=3",
+			},
+			expectMapping: &api.IDMappingOptions{
+				UIDMap: []api.IDMap{{
+					ContainerID: 33,
+					HostID:      1001,
+					Size:        1,
+				}},
+				GIDMap: []api.IDMap{{
+					ContainerID: 34,
+					HostID:      1002,
+					Size:        2,
+				}},
+				AutoUserNs: true,
+				AutoUserNsOpts: api.AutoUserNsOptions{
+					Size: 3,
+					AdditionalUIDMappings: []api.IDMap{{
+						ContainerID: 33,
+						HostID:      1001,
+						Size:        1,
+					}},
+					AdditionalGIDMappings: []api.IDMap{{
+						ContainerID: 34,
+						HostID:      1002,
+						Size:        2,
+					}},
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		gotNs, gotMapping, err := parseUserNSConfig(tc.input)
+		if tc.expectErr != "" {
+			must.EqError(t, err, tc.expectErr, must.Sprint(tc.input))
+		} else {
+			must.NoError(t, err)
+			must.Eq(t, tc.expectNamespace, gotNs, must.Sprint(tc.input))
+			must.Eq(t, tc.expectMapping, gotMapping, must.Sprint(tc.input))
+		}
+	}
+
+}

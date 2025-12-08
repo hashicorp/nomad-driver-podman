@@ -257,6 +257,10 @@ type ContainerSecurityConfig struct {
 	// If set to private, IDMappings must be set.
 	// Mandatory.
 	UserNS Namespace `json:"userns,omitempty"`
+	// IDMappings are UID and GID mappings that will be used by user
+	// namespaces.
+	// Required if UserNS is private.
+	IDMappings *IDMappingOptions `json:"idmappings,omitempty"`
 	// Groups are a list of supplemental groups the container's user will
 	// be granted access to.
 	// Optional.
@@ -312,12 +316,7 @@ type ContainerSecurityConfig struct {
 	// If ALL is passed, all paths will be unmasked.
 	// Optional.
 	Unmask []string `json:"unmask,omitempty"`
-	// IDMappings are UID and GID mappings that will be used by user
-	// namespaces.
-	// Required if UserNS is private.
-	// IDMappings *storage.IDMappingOptions `json:"idmappings,omitempty"`
 	// ReadOnlyFilesystem indicates that everything will be mounted
-
 	// as read-only
 	ReadOnlyFilesystem bool `json:"read_only_filesystem,omitempty"`
 }
@@ -586,6 +585,53 @@ const (
 type Namespace struct {
 	NSMode NamespaceMode `json:"nsmode,omitempty"`
 	Value  string        `json:"value,omitempty"`
+}
+
+// ------------------------------------------------------------------------------------
+// structs copied from https://pkg.go.dev/go.podman.io/storage/types#IDMappingOptions
+
+type IDMappingOptions struct {
+	// UIDMap and GIDMap are used for setting up a layer's root filesystem
+	// for use inside of a user namespace where ID mapping is being used.
+	// If HostUIDMapping/HostGIDMapping is true, no mapping of the
+	// respective type will be used.  Otherwise, if UIDMap and/or GIDMap
+	// contain at least one mapping, one or both will be used.  By default,
+	// if neither of those conditions apply, if the layer has a parent
+	// layer, the parent layer's mapping will be used, and if it does not
+	// have a parent layer, the mapping which was passed to the Store
+	// object when it was initialized will be used.
+	HostUIDMapping bool
+	HostGIDMapping bool
+	UIDMap         []IDMap
+	GIDMap         []IDMap
+	AutoUserNs     bool
+	AutoUserNsOpts AutoUserNsOptions
+}
+
+type AutoUserNsOptions struct {
+	// Size defines the size for the user namespace.  If it is set to a
+	// value bigger than 0, the user namespace will have exactly this size.
+	// If it is not set, some heuristics will be used to find its size.
+	Size uint32
+	// InitialSize defines the minimum size for the user namespace.
+	// The created user namespace will have at least this size.
+	InitialSize uint32
+	// PasswdFile to use if the container uses a volume.
+	PasswdFile string
+	// GroupFile to use if the container uses a volume.
+	GroupFile string
+	// AdditionalUIDMappings specified additional UID mappings to include in
+	// the generated user namespace.
+	AdditionalUIDMappings []IDMap
+	// AdditionalGIDMappings specified additional GID mappings to include in
+	// the generated user namespace.
+	AdditionalGIDMappings []IDMap
+}
+
+type IDMap struct {
+	ContainerID int `json:"container_id"`
+	HostID      int `json:"host_id"`
+	Size        int `json:"size"`
 }
 
 // -------------------------------------------------------------------------------------------------------
