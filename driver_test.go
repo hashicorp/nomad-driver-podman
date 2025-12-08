@@ -1901,6 +1901,12 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 			mode: "slirp4netns",
 		},
 		{
+			// podman doesn't populate network info for pasta mode:
+			// https://github.com/containers/podman/issues/26650
+			mode:    "pasta",
+			gateway: "",
+		},
+		{
 			mode:    "none",
 			gateway: "",
 		},
@@ -1908,6 +1914,9 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s_mode_%s", t.Name(), tc.mode), func(t *testing.T) {
+			if os.Geteuid() == 0 && tc.mode == "pasta" {
+				t.Skip("pasta network mode is not supported by podman when run as root")
+			}
 
 			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 			taskCfg.NetworkMode = tc.mode

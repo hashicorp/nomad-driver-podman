@@ -372,8 +372,8 @@ type ContainerNetworkConfig struct {
 	// Only available if NetNS is set to bridge.
 	// Optional.
 	StaticMAC *net.HardwareAddr `json:"static_mac,omitempty"`
-	// PortBindings is a set of ports to map into the container.
-	// Only available if NetNS is set to bridge or slirp.
+	// PortMappings is a set of ports to map into the container.
+	// Only available if NetNS is set to bridge, pasta or slirp.
 	// Optional.
 	PortMappings []PortMapping `json:"portmappings,omitempty"`
 	// Expose is a number of ports that will be forwarded to the container
@@ -382,7 +382,7 @@ type ContainerNetworkConfig struct {
 	// protocol. Allowed protocols are "tcp", "udp", and "sctp", or some
 	// combination of the three separated by commas.
 	// If protocol is set to "" we will assume TCP.
-	// Only available if NetNS is set to Bridge or Slirp, and
+	// Only available if NetNS is set to Bridge, Pasta or Slirp, and
 	// PublishExposedPorts is set.
 	// Optional.
 	Expose map[uint16]string `json:"expose,omitempty"`
@@ -423,7 +423,7 @@ type ContainerNetworkConfig struct {
 	// random unused ports (guaranteed to be above 1024) on the host.
 	// This is based on ports set in Expose below, and any ports specified
 	// by the Image (if one is given).
-	// Only available if NetNS is set to Bridge or Slirp.
+	// Only available if NetNS is set to Bridge, Pasta or Slirp.
 	PublishExposedPorts bool `json:"publish_image_ports,omitempty"`
 	// UseImageResolvConf indicates that resolv.conf should not be managed
 	// by Podman, but instead sourced from the image.
@@ -569,6 +569,9 @@ const (
 	// Slirp indicates that a slirp4netns network stack should
 	// be used
 	Slirp NamespaceMode = "slirp4netns"
+	// Pasta indicates that a pasta (successor to slirp4netns)
+	// network stack should be used
+	Pasta NamespaceMode = "pasta"
 	// KeepID indicates a user namespace to keep the owner uid inside
 	// of the namespace itself
 	KeepID NamespaceMode = "keep-id"
@@ -1483,6 +1486,7 @@ type HostInfo struct {
 	RemoteSocket   *RemoteSocket          `json:"remoteSocket,omitempty"`
 	Security       SecurityInfo           `json:"security"`
 	Slirp4NetNS    SlirpInfo              `json:"slirp4netns,omitempty"`
+	Pasta          PastaInfo              `json:"pasta,omitempty"`
 	RuntimeInfo    map[string]interface{} `json:"runtimeInfo,omitempty"`
 	Arch           string                 `json:"arch"`
 	BuildahVersion string                 `json:"buildahVersion"`
@@ -1510,6 +1514,14 @@ type RemoteSocket struct {
 // SlirpInfo describes the slirp executable that
 // is being being used.
 type SlirpInfo struct {
+	Executable string `json:"executable"`
+	Package    string `json:"package"`
+	Version    string `json:"version"`
+}
+
+// PastaInfo describes the pasta executable that
+// is being being used.
+type PastaInfo struct {
 	Executable string `json:"executable"`
 	Package    string `json:"package"`
 	Version    string `json:"version"`
