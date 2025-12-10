@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.6.4 (December 10, 2025)
 
 IMPROVEMENTS:
 
