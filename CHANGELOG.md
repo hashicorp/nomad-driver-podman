@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.6.4 (December 10, 2025)
+
 IMPROVEMENTS:
 
 * api: Support pasta network_mode and use it as default for rootless containers on Podman 5.0+ [[GH-476](https://github.com/hashicorp/nomad-driver-podman/pull/476)]
