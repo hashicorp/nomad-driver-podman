@@ -264,8 +264,8 @@ github.com/hashicorp/memberlist v0.5.3 h1:tQ1jOCypD0WvMemw/ZhhtH+PWpzcftQvgCorLu
 github.com/hashicorp/memberlist v0.5.3/go.mod h1:h60o12SZn/ua/j0B6iKAZezA4eDaGsIuPO70eOaJ6WE=
 github.com/hashicorp/nomad v1.11.0 h1:G35zWAriOjZG26SrhP5Dje+ORhZTUJCKvQHP924o1I4=
 github.com/hashicorp/nomad v1.11.0/go.mod h1:Y5GoJlfjTALezhsOm4lwaS7Tk1Z6q22tTROi1SX5QHc=
-github.com/hashicorp/nomad/api v0.0.0-20251111161819-9103d9381333 h1:k7OHZDuFDL0Q0i2pK/KzxSterXORcpqWRKW4PgQE4OM=
-github.com/hashicorp/nomad/api v0.0.0-20251111161819-9103d9381333/go.mod h1:sldFTIgs+FsUeKU3LwVjviAIuksxD8TzDOn02MYwslE=
+github.com/hashicorp/nomad/api v0.0.0-20251209201056-5b76eb053561 h1:AjcmZgtf3Z0l+hCyPDHDo15pcLglj2ToRqXLrJIrvXk=
+github.com/hashicorp/nomad/api v0.0.0-20251209201056-5b76eb053561/go.mod h1:sldFTIgs+FsUeKU3LwVjviAIuksxD8TzDOn02MYwslE=
 github.com/hashicorp/raft v1.7.3 h1:DxpEqZJysHN0wK+fviai5mFcSYsCkNpFUl1xpAW8Rbo=
 github.com/hashicorp/raft v1.7.3/go.mod h1:DfvCGFxpAUPE0L4Uc8JLlTPtc3GzSbdH0MTJCLgnmJQ=
 github.com/hashicorp/raft-autopilot v0.3.0 h1:KhXCecBFqAMpC0i77qVfuYd937cl2dNatSA/sSNs+2s=
