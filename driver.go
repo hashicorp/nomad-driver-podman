@@ -1312,7 +1312,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	}
 
 	// fixme send proper signal to container
-	err := handle.podmanClient.ContainerStop(d.ctx, handle.containerID, int(timeout.Seconds()), true)
+	err := handle.podmanClient.ContainerKill(d.ctx, handle.containerID, signal)
 	switch {
 	case err == nil:
 		return nil
