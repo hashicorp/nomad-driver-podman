@@ -87,7 +87,7 @@ var (
 			drivers.NetIsolationModeHost,
 			drivers.NetIsolationModeTask,
 		},
-		MustInitiateNetwork: false,
+		MustInitiateNetwork: true,
 	}
 )
 
@@ -128,6 +128,8 @@ type Driver struct {
 
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
+
+	pauseContainers map[string]struct{}
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -145,12 +147,13 @@ type TaskState struct {
 func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Driver{
-		eventer:        eventer.NewEventer(ctx, logger),
-		config:         &PluginConfig{},
-		tasks:          newTaskStore(),
-		ctx:            ctx,
-		signalShutdown: cancel,
-		logger:         logger.Named(pluginName),
+		eventer:         eventer.NewEventer(ctx, logger),
+		config:          &PluginConfig{},
+		tasks:           newTaskStore(),
+		ctx:             ctx,
+		signalShutdown:  cancel,
+		logger:          logger.Named(pluginName),
+		pauseContainers: make(map[string]struct{}),
 	}
 }
 
@@ -1891,4 +1894,98 @@ func parseIDMapping(idmapConfig string) (*api.IDMap, error) {
 		HostID:      int(hostID),
 		Size:        int(sz),
 	}, nil
+}
+
+func (d *Driver) CreateNetwork(allocID string, createSpec *drivers.NetworkCreateRequest) (*drivers.NetworkIsolationSpec, bool, error) {
+
+	// Super hacky until we modify the NetworkCreateRequest in Nomad core, but we can use the
+	// hostname to specify which podman socket we want to use.
+	//
+	// Requires bug fix: https://github.com/hashicorp/nomad/pull/27273
+	// Note: This has really only been tested with "bridge" mode.
+	//
+	// Initialize docker API clients
+	podmanClient, err := d.getPodmanClient(createSpec.Hostname)
+	if err != nil {
+		return nil, false, fmt.Errorf("podman client with name %q not found, check your podman driver config", "default")
+	}
+
+	pauseImage := fmt.Sprintf("registry.k8s.io/pause-%s:3.3", runtime.GOARCH)
+
+	podmanClient.ImagePull(context.Background(), &registry.PullConfig{
+		Image: pauseImage,
+	})
+
+	pauseImageName := fmt.Sprintf("pause-%s", allocID)
+
+	container, err := podmanClient.ContainerCreate(context.Background(), api.SpecGenerator{
+		ContainerBasicConfig: api.ContainerBasicConfig{
+			Name: pauseImageName,
+		},
+		ContainerStorageConfig: api.ContainerStorageConfig{
+			Image: pauseImage,
+		},
+		ContainerNetworkConfig: api.ContainerNetworkConfig{
+			NetNS: api.Namespace{
+				NSMode: "none",
+			},
+		},
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create pause container: %+v", err)
+	}
+
+	err = podmanClient.ContainerStart(context.Background(), container.Id)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to start pause container: %+v", err)
+	}
+
+	ins, err := podmanClient.ContainerInspect(context.Background(), pauseImageName)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to inspect pause container: %+v", err)
+	}
+
+	spec := &drivers.NetworkIsolationSpec{
+		Mode: drivers.NetIsolationModeGroup,
+		Path: fmt.Sprintf("/proc/%d/ns/net", ins.State.Pid),
+		HostsConfig: &drivers.HostsConfig{
+			Hostname: createSpec.Hostname,
+		},
+		Labels: make(map[string]string),
+	}
+
+	// If the user supplied a hostname, set the label.
+	if createSpec.Hostname != "" {
+		spec.Labels["podman_pause_hostname"] = createSpec.Hostname
+	}
+
+	// keep track of this pause container for reconciliation
+	d.pauseContainers[pauseImageName] = struct{}{}
+
+	return spec, true, nil
+}
+
+func (d *Driver) DestroyNetwork(allocID string, spec *drivers.NetworkIsolationSpec) error {
+
+	// Initialize docker API clients
+	podmanClient, err := d.getPodmanClient(spec.HostsConfig.Hostname)
+	if err != nil {
+		return fmt.Errorf("podman client with name %q not found, check your podman driver config", "default")
+	}
+
+	pauseImageName := fmt.Sprintf("pause-%s", allocID)
+
+	err = podmanClient.ContainerStop(context.Background(), pauseImageName, 0, false)
+	if err != nil {
+		return fmt.Errorf("failed to stop pause container, %+v", err)
+	}
+
+	err = podmanClient.ContainerDelete(context.Background(), pauseImageName, true, true)
+	if err != nil {
+		return fmt.Errorf("failed to delete pause container, %+v", err)
+	}
+
+	delete(d.pauseContainers, pauseImageName)
+
+	return nil
 }
