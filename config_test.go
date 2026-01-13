@@ -168,3 +168,20 @@ func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	must.Eq(t, "default", tc.Socket)
 }
+
+func TestConfig_GroupAdd(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	expectedGroups := []string{"audio", "video"}
+	validHCL := `
+  config {
+	image = "docker://redis"
+	group_add = ["audio", "video"]
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.SliceContainsAll(t, expectedGroups, tc.GroupAdd)
+}

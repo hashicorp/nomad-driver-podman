@@ -95,6 +95,7 @@ var (
 		"devices":        hclspec.NewAttr("devices", "list(string)", false),
 		"entrypoint":     hclspec.NewAttr("entrypoint", "any", false), // any for compat
 		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
+		"group_add":      hclspec.NewAttr("group_add", "list(string)", false),
 		"hostname":       hclspec.NewAttr("hostname", "string", false),
 		"image":          hclspec.NewAttr("image", "string", true),
 		"image_pull_timeout": hclspec.NewDefault(
@@ -225,6 +226,7 @@ type TaskConfig struct {
 	Devices           []string           `codec:"devices"`
 	Entrypoint        any                `codec:"entrypoint"` // any for compat
 	WorkingDir        string             `codec:"working_dir"`
+	GroupAdd          []string           `codec:"group_add"`
 	Hostname          string             `codec:"hostname"`
 	Image             string             `codec:"image"`
 	ImagePullTimeout  string             `codec:"image_pull_timeout"`

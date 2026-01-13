@@ -1661,6 +1661,55 @@ func TestPodmanDriver_Caps(t *testing.T) {
 	}
 }
 
+// check group_add option
+func TestPodmanDriver_GroupAdd(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// add a group_add
+	taskCfg.GroupAdd = []string{"audio", "video"}
+	inspectData := startDestroyInspect(t, taskCfg, "groupadd")
+	// and compare it
+	must.SliceContains(t, inspectData.HostConfig.GroupAdd, "audio")
+	must.SliceContains(t, inspectData.HostConfig.GroupAdd, "video")
+}
+
+// check group_add option with keep-groups special case
+func TestPodmanDriver_GroupAdd_KeepGroups(t *testing.T) {
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// add a group_add
+	taskCfg.GroupAdd = []string{"keep-groups"}
+	inspectData := startDestroyInspect(t, taskCfg, "groupadd-keep-groups")
+	// and compare it
+	must.NotNil(t, inspectData.Config.Annotations["run.oci.keep_original_groups"])
+	must.Eq(t, inspectData.Config.Annotations["run.oci.keep_original_groups"], "1")
+}
+
+// check group_add option with keep-groups special case
+// with other groups - should error
+func TestPodmanDriver_GroupAdd_KeepGroupsWithOthersError(t *testing.T) {
+	ci.Parallel(t)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	// try to combine keep-groups with other groups - should error
+	taskCfg.GroupAdd = []string{"keep-groups", "audio"}
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "groupadd-error",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, false)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	// should fail with error about keep-groups being mutually exclusive
+	must.Error(t, err)
+	must.ErrorContains(t, err, "keep-groups")
+}
+
 // check security_opt option
 func TestPodmanDriver_SecurityOpt(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
