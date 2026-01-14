@@ -680,11 +680,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, err
 	}
 
-	hard, soft, err := memoryLimits(cfg.Resources.NomadResources.Memory, podmanTaskConfig.MemoryReservation)
+	hard, reserved, err := memoryLimits(cfg.Resources.NomadResources.Memory, podmanTaskConfig.MemoryReservation)
 	if err != nil {
 		return nil, nil, err
 	}
-	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = soft
+	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Reservation = reserved
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
 	// set PidsLimit only if configured.
 	if podmanTaskConfig.PidsLimit > 0 {
@@ -1034,11 +1034,34 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	return handle, driverNet, nil
 }
 
-func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
-	memoryMax := r.MemoryMaxMB * 1024 * 1024
-	memory := r.MemoryMB * 1024 * 1024
+const (
+	// memoryNoLimit is a sentinel value for memory_max that indicates the
+	// driver should not enforce a maximum memory limit
+	memoryNoLimit = -1
+)
 
+// memoryLimits computes the memory and memory_reservation values passed along to
+// the podman host config. These fields represent hard and soft/reserved memory
+// limits from podman's perspective, respectively.
+//
+// The resources.memory field in the jobspec is normally interpreted as a hard
+// limit.
+//
+// If task.config.memory_reservation is set, it is treated as the reserve and
+// resources.memory is the hard limit. This is entirely bypasses the scheduler
+// oversubscription setting.
+//
+// If oversubscription is enabled and resources.memory_max is set,
+// resources.memory_max is treated as the hard limit and either resources.memory
+// or task.config.memory_reservation (whichever is less) is the soft limit. If
+// resources.memory_max = -1, there is no hard limit.
+//
+// Returns (memory (hard), memory_reservation (soft)) values in bytes.
+func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *int64, err error) {
+	memoryMax := r.MemoryMaxMB
+	memory := r.MemoryMB * 1024 * 1024
 	var reserved *int64
+
 	if reservation != "" {
 		reservation, err := memoryInBytes(reservation)
 		if err != nil {
@@ -1046,19 +1069,24 @@ func memoryLimits(r drivers.MemoryResources, reservation string) (hard, soft *in
 		}
 		reserved = &reservation
 	}
-
+	if memoryMax == memoryNoLimit {
+		if reserved != nil && *reserved < memory {
+			return nil, reserved, nil
+		}
+		return nil, &memory, nil
+	}
 	if memoryMax > 0 {
+		memoryMax = memoryMax * 1024 * 1024
 		if reserved != nil && *reserved < memory {
 			memory = *reserved
 		}
 		return &memoryMax, &memory, nil
 	}
-
 	if memory > 0 {
 		return &memory, reserved, nil
 	}
 
-	// We may never actually be here
+	// should be unreachable b/c a default should always be set by the server
 	return nil, reserved, nil
 }
 
