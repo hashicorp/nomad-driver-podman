@@ -2522,19 +2522,19 @@ func Test_memoryLimits(t *testing.T) {
 	ci.Parallel(t)
 
 	cases := []struct {
-		name         string
-		memResources drivers.MemoryResources
-		reservation  string
-		expectedHard int64
-		expectedSoft int64
+		name            string
+		memResources    drivers.MemoryResources
+		reservation     string
+		expectedHard    int64
+		expectedReserve int64
 	}{
 		{
 			name: "plain",
 			memResources: drivers.MemoryResources{
 				MemoryMB: 20,
 			},
-			expectedHard: 20 * 1024 * 1024,
-			expectedSoft: 0,
+			expectedHard:    20 * 1024 * 1024,
+			expectedReserve: 0,
 		},
 		{
 			name: "memory oversubscription",
@@ -2542,17 +2542,17 @@ func Test_memoryLimits(t *testing.T) {
 				MemoryMB:    20,
 				MemoryMaxMB: 30,
 			},
-			expectedHard: 30 * 1024 * 1024,
-			expectedSoft: 20 * 1024 * 1024,
+			expectedHard:    30 * 1024 * 1024,
+			expectedReserve: 20 * 1024 * 1024,
 		},
 		{
 			name: "plain but using memory reservations",
 			memResources: drivers.MemoryResources{
 				MemoryMB: 20,
 			},
-			reservation:  "10m",
-			expectedHard: 20 * 1024 * 1024,
-			expectedSoft: 10 * 1024 * 1024,
+			reservation:     "10m",
+			expectedHard:    20 * 1024 * 1024,
+			expectedReserve: 10 * 1024 * 1024,
 		},
 		{
 			name: "oversubscription but with specifying memory reservation",
@@ -2560,9 +2560,9 @@ func Test_memoryLimits(t *testing.T) {
 				MemoryMB:    20,
 				MemoryMaxMB: 30,
 			},
-			reservation:  "10m",
-			expectedHard: 30 * 1024 * 1024,
-			expectedSoft: 10 * 1024 * 1024,
+			reservation:     "10m",
+			expectedHard:    30 * 1024 * 1024,
+			expectedReserve: 10 * 1024 * 1024,
 		},
 		{
 			name: "oversubscription but with specifying high memory reservation",
@@ -2570,29 +2570,39 @@ func Test_memoryLimits(t *testing.T) {
 				MemoryMB:    20,
 				MemoryMaxMB: 30,
 			},
-			reservation:  "25m",
-			expectedHard: 30 * 1024 * 1024,
-			expectedSoft: 20 * 1024 * 1024,
+			reservation:     "25m",
+			expectedHard:    30 * 1024 * 1024,
+			expectedReserve: 20 * 1024 * 1024,
+		},
+		{
+			name: "oversubscription without hard limit",
+			memResources: drivers.MemoryResources{
+				MemoryMB:    20,
+				MemoryMaxMB: -1,
+			},
+			reservation:     "25m",
+			expectedHard:    0,
+			expectedReserve: 20 * 1024 * 1024,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			hard, soft, err := memoryLimits(c.memResources, c.reservation)
+			hard, reserve, err := memoryLimits(c.memResources, c.reservation)
 			must.NoError(t, err)
 
 			if c.expectedHard > 0 {
-				must.NotNil(t, hard)
+				must.NotNil(t, hard, must.Sprintf("hard limit was nil"))
 				must.Eq(t, c.expectedHard, *hard)
 			} else {
-				must.Nil(t, hard)
+				must.Nil(t, hard, must.Sprintf("hard limit was not nil: %d", hard))
 			}
 
-			if c.expectedSoft > 0 {
-				must.NotNil(t, soft)
-				must.Eq(t, c.expectedSoft, *soft)
+			if c.expectedReserve > 0 {
+				must.NotNil(t, reserve, must.Sprint("reserve was nil"))
+				must.Eq(t, c.expectedReserve, *reserve)
 			} else {
-				must.Nil(t, soft)
+				must.Nil(t, reserve, must.Sprintf("reserve was not nil: %d", reserve))
 			}
 		})
 	}
