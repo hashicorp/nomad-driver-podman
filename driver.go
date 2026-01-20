@@ -1048,7 +1048,7 @@ const (
 // limit.
 //
 // If task.config.memory_reservation is set, it is treated as the reserve and
-// resources.memory is the hard limit. This is entirely bypasses the scheduler
+// resources.memory is the hard limit. This entirely bypasses the scheduler
 // oversubscription setting.
 //
 // If oversubscription is enabled and resources.memory_max is set,
