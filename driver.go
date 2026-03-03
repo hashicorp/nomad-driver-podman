@@ -1918,6 +1918,41 @@ func (d *Driver) CreateNetwork(allocID string, createSpec *drivers.NetworkCreate
 
 	pauseImageName := fmt.Sprintf("pause-%s", allocID)
 
+	// During task recovery, the container may already exist and not need re-creating
+	specFromContainer := func(c api.InspectContainerData, hostname string) *drivers.NetworkIsolationSpec {
+		spec := &drivers.NetworkIsolationSpec{
+			Mode: drivers.NetIsolationModeGroup,
+			Path: c.NetworkSettings.SandboxKey,
+			HostsConfig: &drivers.HostsConfig{
+				Hostname: hostname,
+			},
+			Labels: make(map[string]string),
+		}
+
+		// If the user supplied a hostname, set the label.
+		if hostname != "" {
+			spec.Labels["podman_pause_hostname"] = hostname
+		}
+
+		return spec
+	}
+
+	existingContainer, err := podmanClient.ContainerInspect(context.Background(), pauseImageName)
+	if err == nil {
+		if existingContainer.State.Running {
+			// Reuse the existing running pause container
+			return specFromContainer(existingContainer, createSpec.Hostname), false, nil
+		}
+		// Container exists but is stopped, remove it before creating a new one
+		if err = podmanClient.ContainerDelete(context.Background(), existingContainer.ID, true, true); err != nil {
+			return nil, false, fmt.Errorf("failed to remove stopped pause container: %v", err)
+		}
+	} else if !errors.Is(err, api.ContainerNotFound) {
+		// Some other error occurred
+		return nil, false, err
+	}
+	// Container doesn't exist (or was just removed), proceed to create it
+
 	container, err := podmanClient.ContainerCreate(context.Background(), api.SpecGenerator{
 		ContainerBasicConfig: api.ContainerBasicConfig{
 			Name: pauseImageName,
