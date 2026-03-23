@@ -731,6 +731,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = podmanTaskConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = podmanTaskConfig.ApparmorProfile
 
+	// add group_add if configured
+	if groupAddErr := parseGroupAdd(podmanTaskConfig.GroupAdd, &createOpts); groupAddErr != nil {
+		return nil, nil, fmt.Errorf("failed to parse group_add configuration: %w", groupAddErr)
+	}
+
 	// add security_opt if configured
 	if securiyOptsErr := parseSecurityOpt(podmanTaskConfig.SecurityOpt, &createOpts); securiyOptsErr != nil {
 		return nil, nil, fmt.Errorf("failed to parse security_opt configuration: %w", securiyOptsErr)
@@ -1772,8 +1777,36 @@ func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {
 	return nil
 }
 
+// ensureAnnotations initializes the Annotations map if it's nil
+func ensureAnnotations(createOpts *api.SpecGenerator) {
+	if createOpts.Annotations == nil {
+		createOpts.Annotations = make(map[string]string)
+	}
+}
+
+// parseGroupAdd parses group-add options and sets them in the container creation specification.
+func parseGroupAdd(groupAdd []string, createOpts *api.SpecGenerator) error {
+	ensureAnnotations(createOpts)
+
+	if slices.Contains(groupAdd, "keep-groups") {
+		// "keep-groups" is a special value that is interpreted by crun via annotations
+		// to retain the original user's supplementary groups.
+		// This is mutually exclusive with any other group-add options.
+		if len(groupAdd) > 1 {
+			return fmt.Errorf("the '--group-add keep-groups' option is not allowed with any other --group-add options")
+		}
+		createOpts.Annotations["run.oci.keep_original_groups"] = "1"
+	} else {
+		// Regular group additions as a list of group names.
+		createOpts.ContainerSecurityConfig.Groups = groupAdd
+	}
+
+	return nil
+}
+
 func parseSecurityOpt(securityOpt []string, createOpts *api.SpecGenerator) error {
-	createOpts.Annotations = make(map[string]string)
+	ensureAnnotations(createOpts)
+
 	for _, opt := range securityOpt {
 		con := strings.SplitN(opt, "=", 2)
 		if len(con) == 1 && con[0] != "no-new-privileges" {

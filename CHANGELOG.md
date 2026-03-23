@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+* config: Add support for group_add config with keep-groups ([GH-487](https://github.com/hashicorp/nomad-driver-podman/pull/487))
+
 ## 0.6.4 (December 10, 2025)
 
 IMPROVEMENTS:
