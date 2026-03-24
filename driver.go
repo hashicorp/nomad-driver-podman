@@ -798,13 +798,17 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
 				}
 			} else {
-				pastaCheck, _ := version2.NewConstraint(">=5.0.0")
-				if pastaCheck.Check(versionValue) {
-					// podman pasta is default for rootless podman >= 5.0.0
-					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Pasta
+				if d.config.Networking.DefaultRootlessMode != "" {
+					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.NamespaceMode(d.config.Networking.DefaultRootlessMode)
 				} else {
-					// slirp4netns is default for rootless podman < 5.0.0
-					createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+					pastaCheck, _ := version2.NewConstraint(">=5.0.0")
+					if pastaCheck.Check(versionValue) {
+						// podman pasta is default for rootless podman >= 5.0.0
+						createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Pasta
+					} else {
+						// slirp4netns is default for rootless podman < 5.0.0
+						createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Slirp
+					}
 				}
 			}
 		case podmanTaskConfig.NetworkMode == "bridge":
