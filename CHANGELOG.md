@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+* config: Adds support for plugin configuration `networking.default_rootless_mode` to override the default networking mode when run rootlessly. [[GH-495](https://github.com/hashicorp/nomad-driver-podman/pull/495)]
+
 ## 0.6.4 (December 10, 2025)
 
 IMPROVEMENTS:

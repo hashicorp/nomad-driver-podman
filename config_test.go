@@ -168,3 +168,78 @@ func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
 	parser.ParseHCL(t, validHCL, &tc)
 	must.Eq(t, "default", tc.Socket)
 }
+
+func TestPluginConfig_Parsing(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(configSpec)
+	validHCL := `config {
+
+  socket {
+    name        = "default"
+    socket_path = "unix:///run/user/1000/podman/podman.sock"
+  }
+
+  auth {
+    config = "/etc/podman-auth.json"
+	helper = "ecr-login"
+  }
+
+  gc {
+    container = false
+  }
+
+  recover_stopped        = true
+  extra_labels           = ["nomadproject.io:foo"]
+  disable_log_collection = true
+  client_http_timeout    = "2m"
+  dns_servers            = ["9.9.9.9"]
+
+  logging {
+    driver = "journald"
+    options {
+      tag="{{.ImageName}}"
+    }
+  }
+
+  networking {
+    default_rootless_mode = "slirp4netns"
+  }
+
+  volumes {
+    selinuxlabel = "z"
+  }
+}
+	`
+
+	var pc *PluginConfig
+	parser.ParseHCL(t, validHCL, &pc)
+	must.Eq(t, pc, &PluginConfig{
+		Auth: PluginAuthConfig{
+			FileConfig: "/etc/podman-auth.json",
+			Helper:     "ecr-login",
+		},
+		Volumes: VolumeConfig{
+			Enabled:      true,
+			SelinuxLabel: "z",
+		},
+		GC:                   GCConfig{},
+		RecoverStopped:       true,
+		DisableLogCollection: true,
+		Socket: []PluginSocketConfig{{
+			Name:       "default",
+			SocketPath: "unix:///run/user/1000/podman/podman.sock",
+		}},
+		SocketPath:        "",
+		ClientHttpTimeout: "2m",
+		ExtraLabels:       []string{"nomadproject.io:foo"},
+		DNSServers:        []string{"9.9.9.9"},
+		Logging: LoggingConfig{
+			Driver: "journald",
+			Options: map[string]string{
+				"tag": "{{.ImageName}}",
+			},
+		},
+		Networking: NetworkingConfig{DefaultRootlessMode: "slirp4netns"},
+	})
+}

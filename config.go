@@ -60,6 +60,16 @@ var (
 			options = {}
 		}`)),
 
+		"networking": hclspec.NewDefault(
+			hclspec.NewBlock("networking", false,
+				hclspec.NewObject(map[string]*hclspec.Spec{
+					// empty will default to either pasta (podman 5.0+) or slirp4netns
+					"default_rootless_mode": hclspec.NewAttr(
+						"default_rootless_mode", "string", false),
+				})), hclspec.NewLiteral(`{
+			default_rootless_mode = ""
+		}`)),
+
 		// A list of sockets for the driver to manage
 		"socket": hclspec.NewBlockList("socket", socketBodySpec),
 		// the path to the podman api socket
@@ -159,6 +169,14 @@ type LoggingConfig struct {
 	Options map[string]string `codec:"options"`
 }
 
+// NetworkingConfig controls default network setup behaviors
+type NetworkingConfig struct {
+	// DefaultRootlessMode overrides the default network mode when running in
+	// rootlessly. By default Podman >5.0 will be defaulted to pasta instead of
+	// slirp4netns
+	DefaultRootlessMode string `codec:"default_rootless_mode"`
+}
+
 // LoggingConfig is the tasks logging configuration
 // keep in sync with `LoggingConfig`
 type TaskLoggingConfig struct {
@@ -200,6 +218,7 @@ type PluginConfig struct {
 	ExtraLabels          []string             `codec:"extra_labels"`
 	DNSServers           []string             `codec:"dns_servers"`
 	Logging              LoggingConfig        `codec:"logging"`
+	Networking           NetworkingConfig     `codec:"networking"`
 }
 
 // LogWarnings will emit logs about known problematic configurations
