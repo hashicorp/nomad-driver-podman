@@ -1665,10 +1665,10 @@ func TestPodmanDriver_Caps(t *testing.T) {
 func TestPodmanDriver_SecurityOpt(t *testing.T) {
 	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
 	// add a security_opt
-	taskCfg.SecurityOpt = []string{"label=nested"}
+	taskCfg.SecurityOpt = []string{"label=disable"}
 	inspectData := startDestroyInspect(t, taskCfg, "securityopt")
 	// and compare it
-	must.SliceContains(t, inspectData.HostConfig.SecurityOpt, "label=nested")
+	must.SliceContains(t, inspectData.HostConfig.SecurityOpt, "label=disable")
 }
 
 // check enabled tty option
