@@ -532,6 +532,16 @@ config {
 }
 ```
 
+* **storage_opt** - (Optional) A key-value map of storage options set on container start.
+
+```hcl
+config {
+  storage_opt = {
+    size = "40G"
+  }
+}
+```
+
 * **ulimit** - (Optional) A key-value map of ulimit configurations to set to the containers to start.
 
 ```hcl

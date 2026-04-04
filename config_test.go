@@ -72,6 +72,24 @@ func TestConfig_Labels(t *testing.T) {
 	must.Eq(t, "job", tc.Labels["nomad"])
 }
 
+func TestConfig_StorageOpt(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	validHCL := `
+  config {
+	  image = "docker://redis"
+		storage_opt {
+		  size = "1G"
+		}
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, "1G", tc.StorageOpt["size"])
+}
+
 func TestConfig_ForcePull(t *testing.T) {
 	ci.Parallel(t)
 

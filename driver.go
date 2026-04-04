@@ -654,6 +654,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerStorageConfig.Image = podmanTaskConfig.Image
 	createOpts.ContainerStorageConfig.InitPath = podmanTaskConfig.InitPath
 	createOpts.ContainerStorageConfig.WorkDir = podmanTaskConfig.WorkingDir
+	createOpts.ContainerStorageConfig.StorageOpts = podmanTaskConfig.StorageOpt
 	allMounts, err := d.containerMounts(cfg, &podmanTaskConfig)
 	if err != nil {
 		return nil, nil, err
