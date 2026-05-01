@@ -21,7 +21,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20251209201056-5b76eb053561
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/ryanuber/go-glob v1.0.0
-	github.com/shoenig/test v1.12.2
+	github.com/shoenig/test v1.13.2
 	golang.org/x/sync v0.20.0
 )
 
