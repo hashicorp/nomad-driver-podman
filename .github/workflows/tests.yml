@@ -20,6 +20,9 @@ on:
       - 'README.md'
       - 'Vagrantfile'
 
+permissions:
+  contents: read
+
 jobs:
   run-tests:
     runs-on: ubuntu-24.04
