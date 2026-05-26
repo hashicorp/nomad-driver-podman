@@ -832,7 +832,8 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
-			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
+			// Treat any other value as a custom network name (e.g., "localv6")
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
 		}
 	}
 
@@ -892,7 +893,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 					}
 				}
 			}
-			createOpts.Networks = map[string]api.PerNetworkOptions{"default": netOpts}
+			networkName := "default"
+			if podmanTaskConfig.NetworkMode != "" && podmanTaskConfig.NetworkMode != "bridge" {
+				networkName = podmanTaskConfig.NetworkMode
+			}
+			createOpts.Networks = map[string]api.PerNetworkOptions{networkName: netOpts}
 		} else {
 			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
 			if staticIPv4 != nil {
