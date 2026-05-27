@@ -1014,9 +1014,14 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		return nil, nil, fmt.Errorf("failed to start task, could not inspect container : %w", err)
 	}
 
+	// Resolve the container IP. For the default bridge network, Podman
+	// populates the top-level IPAddress field. For named networks it is
+	// empty and the IP lives in the per-network map instead.
+	containerIP := resolveContainerIP(inspectData.NetworkSettings, podmanTaskConfig.NetworkMode)
+
 	driverNet := &drivers.DriverNetwork{
 		PortMap:       podmanTaskConfig.PortMap,
-		IP:            inspectData.NetworkSettings.IPAddress,
+		IP:            containerIP,
 		AutoAdvertise: true,
 	}
 
@@ -1038,7 +1043,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 
 	go h.runContainerMonitor()
 
-	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", inspectData.NetworkSettings.IPAddress)
+	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", containerIP)
 
 	return handle, driverNet, nil
 }
@@ -1928,4 +1933,24 @@ func parseIDMapping(idmapConfig string) (*api.IDMap, error) {
 		HostID:      int(hostID),
 		Size:        int(sz),
 	}, nil
+}
+
+// resolveContainerIP determines the container's IP address from inspect data.
+// For the default bridge network, Podman populates the top-level IPAddress field.
+// For named networks it is empty and the IP lives in the per-network map instead.
+func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkMode string) string {
+	if networkSettings == nil {
+		return ""
+	}
+	if networkSettings.IPAddress != "" {
+		return networkSettings.IPAddress
+	}
+	networkName := "default"
+	if networkMode != "" && networkMode != "bridge" {
+		networkName = networkMode
+	}
+	if netData, ok := networkSettings.Networks[networkName]; ok {
+		return netData.IPAddress
+	}
+	return ""
 }
