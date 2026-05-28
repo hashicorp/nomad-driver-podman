@@ -2893,37 +2893,27 @@ func TestResolveContainerIP(t *testing.T) {
 	testCases := []struct {
 		name            string
 		networkSettings *api.InspectNetworkSettings
-		networkMode     string
+		networkName     string
 		expectedIP      string
 	}{
 		{
 			name:            "nil network settings returns empty",
 			networkSettings: nil,
-			networkMode:     "",
+			networkName:     "default",
 			expectedIP:      "",
 		},
 		{
-			name: "default bridge populates top-level IPAddress",
+			name: "top-level IPAddress is used when present",
 			networkSettings: &api.InspectNetworkSettings{
 				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
 					IPAddress: "10.88.0.100",
 				},
 			},
-			networkMode: "",
+			networkName: "default",
 			expectedIP:  "10.88.0.100",
 		},
 		{
-			name: "explicit bridge mode uses top-level IPAddress",
-			networkSettings: &api.InspectNetworkSettings{
-				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
-					IPAddress: "10.88.0.50",
-				},
-			},
-			networkMode: "bridge",
-			expectedIP:  "10.88.0.50",
-		},
-		{
-			name: "custom network falls back to per-network map",
+			name: "falls back to named network in per-network map",
 			networkSettings: &api.InspectNetworkSettings{
 				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
 					IPAddress: "",
@@ -2936,11 +2926,11 @@ func TestResolveContainerIP(t *testing.T) {
 					},
 				},
 			},
-			networkMode: "testnet6",
+			networkName: "testnet6",
 			expectedIP:  "10.89.2.100",
 		},
 		{
-			name: "empty network mode falls back to default key",
+			name: "falls back to default key in map when top-level empty",
 			networkSettings: &api.InspectNetworkSettings{
 				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
 					IPAddress: "",
@@ -2953,28 +2943,11 @@ func TestResolveContainerIP(t *testing.T) {
 					},
 				},
 			},
-			networkMode: "",
+			networkName: "default",
 			expectedIP:  "10.88.0.77",
 		},
 		{
-			name: "bridge mode falls back to default key in map",
-			networkSettings: &api.InspectNetworkSettings{
-				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
-					IPAddress: "",
-				},
-				Networks: map[string]*api.InspectAdditionalNetwork{
-					"default": {
-						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
-							IPAddress: "10.88.0.33",
-						},
-					},
-				},
-			},
-			networkMode: "bridge",
-			expectedIP:  "10.88.0.33",
-		},
-		{
-			name: "custom network not in map returns empty",
+			name: "requested network not in map returns empty",
 			networkSettings: &api.InspectNetworkSettings{
 				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
 					IPAddress: "",
@@ -2987,7 +2960,7 @@ func TestResolveContainerIP(t *testing.T) {
 					},
 				},
 			},
-			networkMode: "mynet",
+			networkName: "mynet",
 			expectedIP:  "",
 		},
 		{
@@ -3004,14 +2977,14 @@ func TestResolveContainerIP(t *testing.T) {
 					},
 				},
 			},
-			networkMode: "",
+			networkName: "default",
 			expectedIP:  "10.88.0.100",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := resolveContainerIP(tc.networkSettings, tc.networkMode)
+			result := resolveContainerIP(tc.networkSettings, tc.networkName)
 			must.Eq(t, tc.expectedIP, result)
 		})
 	}

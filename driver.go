@@ -832,8 +832,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
-			// Treat any other value as a custom network name (e.g., "localv6")
-			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
 		}
 	}
 
@@ -893,11 +892,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 					}
 				}
 			}
-			networkName := "default"
-			if podmanTaskConfig.NetworkMode != "" && podmanTaskConfig.NetworkMode != "bridge" {
-				networkName = podmanTaskConfig.NetworkMode
+			// Only bridge mode uses named networks; other modes (host, slirp4netns,
+			// none, task:*, container:*, ns:*) don't honor per-network options.
+			if createOpts.ContainerNetworkConfig.NetNS.NSMode == api.Bridge {
+				createOpts.Networks = map[string]api.PerNetworkOptions{"default": netOpts}
 			}
-			createOpts.Networks = map[string]api.PerNetworkOptions{networkName: netOpts}
 		} else {
 			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
 			if staticIPv4 != nil {
@@ -1017,7 +1016,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// Resolve the container IP. For the default bridge network, Podman
 	// populates the top-level IPAddress field. For named networks it is
 	// empty and the IP lives in the per-network map instead.
-	containerIP := resolveContainerIP(inspectData.NetworkSettings, podmanTaskConfig.NetworkMode)
+	containerIP := resolveContainerIP(inspectData.NetworkSettings, "default")
 
 	driverNet := &drivers.DriverNetwork{
 		PortMap:       podmanTaskConfig.PortMap,
@@ -1938,16 +1937,12 @@ func parseIDMapping(idmapConfig string) (*api.IDMap, error) {
 // resolveContainerIP determines the container's IP address from inspect data.
 // For the default bridge network, Podman populates the top-level IPAddress field.
 // For named networks it is empty and the IP lives in the per-network map instead.
-func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkMode string) string {
+func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkName string) string {
 	if networkSettings == nil {
 		return ""
 	}
 	if networkSettings.IPAddress != "" {
 		return networkSettings.IPAddress
-	}
-	networkName := "default"
-	if networkMode != "" && networkMode != "bridge" {
-		networkName = networkMode
 	}
 	if netData, ok := networkSettings.Networks[networkName]; ok {
 		return netData.IPAddress
