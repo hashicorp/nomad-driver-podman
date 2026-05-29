@@ -2888,3 +2888,104 @@ func TestUserNSConfigParsing(t *testing.T) {
 	}
 
 }
+
+func TestResolveContainerIP(t *testing.T) {
+	testCases := []struct {
+		name            string
+		networkSettings *api.InspectNetworkSettings
+		networkName     string
+		expectedIP      string
+	}{
+		{
+			name:            "nil network settings returns empty",
+			networkSettings: nil,
+			networkName:     "default",
+			expectedIP:      "",
+		},
+		{
+			name: "top-level IPAddress is used when present",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "10.88.0.100",
+				},
+			},
+			networkName: "default",
+			expectedIP:  "10.88.0.100",
+		},
+		{
+			name: "falls back to named network in per-network map",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"testnet6": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress: "10.89.2.100",
+						},
+					},
+				},
+			},
+			networkName: "testnet6",
+			expectedIP:  "10.89.2.100",
+		},
+		{
+			name: "falls back to default key in map when top-level empty",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"default": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress: "10.88.0.77",
+						},
+					},
+				},
+			},
+			networkName: "default",
+			expectedIP:  "10.88.0.77",
+		},
+		{
+			name: "requested network not in map returns empty",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"othernet": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress: "10.99.0.1",
+						},
+					},
+				},
+			},
+			networkName: "mynet",
+			expectedIP:  "",
+		},
+		{
+			name: "top-level IP takes precedence even with networks map",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "10.88.0.100",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"default": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress: "10.88.0.200",
+						},
+					},
+				},
+			},
+			networkName: "default",
+			expectedIP:  "10.88.0.100",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resolveContainerIP(tc.networkSettings, tc.networkName)
+			must.Eq(t, tc.expectedIP, result)
+		})
+	}
+}

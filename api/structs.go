@@ -438,7 +438,7 @@ type ContainerNetworkConfig struct {
 	// for this container on the specific network. If the map is empty and the
 	// bridge network mode is set the container will be joined to the default
 	// network.
-	Networks map[string]PerNetworkOptions `json:"newNetworks,omitempty"`
+	Networks map[string]PerNetworkOptions `json:"Networks,omitempty"`
 }
 
 // ContainerResourceConfig contains information on container resource limits.
