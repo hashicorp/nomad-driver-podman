@@ -2989,3 +2989,104 @@ func TestResolveContainerIP(t *testing.T) {
 		})
 	}
 }
+
+// TestPodmanDriver_CustomNetwork validates custom network_mode behavior:
+// successful attachment, non-existent network error, and unreachable socket error.
+func TestPodmanDriver_CustomNetwork(t *testing.T) {
+	ci.Parallel(t)
+
+	// Create a temporary network for the success case
+	networkName := fmt.Sprintf("test-net-%s", uuid.Generate()[:8])
+	out, err := exec.Command("podman", "network", "create", networkName).CombinedOutput()
+	if err != nil {
+		t.Skipf("Cannot create test network (podman not available?): %s: %s", err, out)
+	}
+	defer func() {
+		_, _ = exec.Command("podman", "network", "rm", networkName).CombinedOutput()
+	}()
+
+	testCases := []struct {
+		name          string
+		networkMode   string
+		harnessConfig map[string]interface{}
+		expectErr     bool
+		errContains   []string
+		verifyNetwork bool // if true, inspect container to verify network attachment
+	}{
+		{
+			name:          "attaches to custom network without static IP",
+			networkMode:   networkName,
+			expectErr:     false,
+			verifyNetwork: true,
+		},
+		{
+			name:        "non-existent network returns clear error",
+			networkMode: "this-network-definitely-does-not-exist-xyz",
+			expectErr:   true,
+			errContains: []string{"not found", "podman network ls"},
+		},
+		{
+			name:        "unreachable socket hints at version requirement",
+			networkMode: "some-custom-network",
+			harnessConfig: map[string]interface{}{
+				"Socket": []PluginSocketConfig{{
+					Name:       "default",
+					SocketPath: "unix:///tmp/nonexistent-podman-socket-test.sock",
+				}},
+			},
+			expectErr:   true,
+			errContains: []string{"failed to check network", "requires Podman >= 4.0"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+			taskCfg.NetworkMode = tc.networkMode
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "custom_net_test",
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+			d := podmanDriverHarness(t, tc.harnessConfig)
+			cleanup := d.MkAllocDir(task, true)
+			defer cleanup()
+
+			containerName := BuildContainerName(task)
+			_, network, err := d.StartTask(task)
+
+			if tc.expectErr {
+				must.Error(t, err)
+				for _, substr := range tc.errContains {
+					must.StrContains(t, err.Error(), substr)
+				}
+				return
+			}
+
+			must.NoError(t, err)
+			defer func() {
+				_ = d.DestroyTask(task.ID, true)
+			}()
+
+			if tc.verifyNetwork {
+				must.NoError(t, d.WaitUntilStarted(task.ID, 20*time.Second))
+
+				inspectData, inspectErr := getPodmanDriver(t, d).defaultPodman.ContainerInspect(context.Background(), containerName)
+				must.NoError(t, inspectErr)
+
+				// Container must be on the expected network
+				_, hasNetwork := inspectData.NetworkSettings.Networks[tc.networkMode]
+				must.True(t, hasNetwork, must.Sprintf("expected container on network %q, got: %v", tc.networkMode, inspectData.NetworkSettings.Networks))
+
+				// Driver-reported IP must match the network's IP
+				netData := inspectData.NetworkSettings.Networks[tc.networkMode]
+				must.Eq(t, netData.IPAddress, network.IP)
+				must.NotEq(t, "", network.IP)
+			}
+		})
+	}
+}
