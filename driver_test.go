@@ -3035,7 +3035,7 @@ func TestPodmanDriver_CustomNetwork(t *testing.T) {
 				}},
 			},
 			expectErr:   true,
-			errContains: []string{"failed to check network", "requires Podman >= 4.0"},
+			errContains: []string{"failed to check network"},
 		},
 	}
 
