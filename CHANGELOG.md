@@ -2,7 +2,7 @@
 
 IMPROVEMENTS:
 * config: Adds support for plugin configuration `networking.default_rootless_mode` to override the default networking mode when run rootlessly. [[GH-495](https://github.com/hashicorp/nomad-driver-podman/pull/495)]
-* config: Support custom Podman network names for static IP/MAC options via `network_mode`. [[GH-TBD](https://github.com/hashicorp/nomad-driver-podman/pull/TBD)]
+* config: Support custom Podman network names for static IP/MAC options via `network_mode`. [[GH-509](https://github.com/hashicorp/nomad-driver-podman/pull/509)]
 
 BUG FIXES:
 * driver: Fixed static IP configuration (`static_ips`, `ipv4_address`, `ipv6_address`, `static_mac`) being silently ignored, corrected related per-network map handling and `driverNet.IP` resolution for service discovery. [[GH-507](https://github.com/hashicorp/nomad-driver-podman/pull/507)]
