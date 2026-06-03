@@ -1005,11 +1005,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		// the container. Nomad's logmon creates FIFOs owned by root:root with 0600;
 		// conmon (running as the podman user) needs write access.
 		if createOpts.LogConfiguration.Driver == "k8s-file" {
-			if err := ensureFifoAccessible(d.logger, cfg.StdoutPath, podmanClient); err != nil {
-				d.logger.Warn("failed to make stdout fifo accessible", "error", err)
+			if fifoErr := ensureFifoAccessible(d.logger, cfg.StdoutPath, podmanClient); fifoErr != nil {
+				d.logger.Warn("failed to make stdout fifo accessible", "error", fifoErr)
 			}
-			if err := ensureFifoAccessible(d.logger, cfg.StderrPath, podmanClient); err != nil {
-				d.logger.Warn("failed to make stderr fifo accessible", "error", err)
+			if fifoErr := ensureFifoAccessible(d.logger, cfg.StderrPath, podmanClient); fifoErr != nil {
+				d.logger.Warn("failed to make stderr fifo accessible", "error", fifoErr)
 			}
 		}
 
