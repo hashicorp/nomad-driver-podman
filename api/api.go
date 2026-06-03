@@ -19,6 +19,7 @@ import (
 type API struct {
 	apiVersion       string
 	baseUrl          string
+	socketPath       string
 	defaultPodman    bool
 	appArmor         bool
 	cgroupV2         bool
@@ -54,6 +55,7 @@ func NewClient(logger hclog.Logger, config ClientConfig) *API {
 	ac := &API{
 		logger:        logger,
 		defaultPodman: config.DefaultPodman,
+		socketPath:    config.SocketPath,
 	}
 
 	ac.logger.Debug("http baseurl", "url", config.SocketPath)
@@ -107,6 +109,10 @@ func (c *API) SetRootless(isRootless bool) {
 
 func (c *API) IsRootless() bool {
 	return c.rootless
+}
+
+func (c *API) GetSocketPath() string {
+	return c.socketPath
 }
 
 func (c *API) SetAppArmor(appArmorEnabled bool) {

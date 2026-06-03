@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -2988,4 +2989,266 @@ func TestResolveContainerIP(t *testing.T) {
 			must.Eq(t, tc.expectedIP, result)
 		})
 	}
+}
+
+// TestGetSocketOwner verifies getSocketOwner returns the correct uid/gid
+// for unix sockets and false for non-unix or missing paths.
+func TestGetSocketOwner(t *testing.T) {
+	ci.Parallel(t)
+
+	// Use /tmp to avoid macOS socket path length limit (108 chars)
+	dir, err := os.MkdirTemp("/tmp", "sock-test-*")
+	must.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	sockPath := filepath.Join(dir, "t.sock")
+	listener, err := net.Listen("unix", sockPath)
+	must.NoError(t, err)
+	defer listener.Close()
+
+	// Get the actual socket ownership for assertions
+	sockInfo, err := os.Stat(sockPath)
+	must.NoError(t, err)
+	sockStat := sockInfo.Sys().(*syscall.Stat_t)
+
+	testCases := []struct {
+		name      string
+		input     string
+		expectOk  bool
+		expectUid int
+		expectGid int
+	}{
+		{
+			name:      "unix colon prefix",
+			input:     "unix:" + sockPath,
+			expectOk:  true,
+			expectUid: int(sockStat.Uid),
+			expectGid: int(sockStat.Gid),
+		},
+		{
+			name:      "unix double slash prefix",
+			input:     "unix://" + sockPath,
+			expectOk:  true,
+			expectUid: int(sockStat.Uid),
+			expectGid: int(sockStat.Gid),
+		},
+		{
+			name:  "http scheme returns false",
+			input: "http://localhost:8080",
+		},
+		{
+			name:  "tcp scheme returns false",
+			input: "tcp://127.0.0.1:8080",
+		},
+		{
+			name:  "empty string returns false",
+			input: "",
+		},
+		{
+			name:  "non-existent socket returns false",
+			input: "unix:///no/such/path/test.sock",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uid, gid, ok := getSocketOwner(tc.input)
+			must.Eq(t, tc.expectOk, ok, must.Sprintf("getSocketOwner(%q) ok mismatch", tc.input))
+			if tc.expectOk {
+				must.Eq(t, tc.expectUid, uid, must.Sprintf("getSocketOwner(%q) uid mismatch", tc.input))
+				must.Eq(t, tc.expectGid, gid, must.Sprintf("getSocketOwner(%q) gid mismatch", tc.input))
+			}
+		})
+	}
+}
+
+// TestEnsureFifoAccessible verifies the FIFO accessibility logic for rootless podman.
+func TestEnsureFifoAccessible(t *testing.T) {
+	ci.Parallel(t)
+
+	// Use /tmp to avoid macOS socket path length limit (108 chars)
+	dir, err := os.MkdirTemp("/tmp", "fifo-test-*")
+	must.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	// Create a unix socket for tests that need it
+	sockPath := filepath.Join(dir, "t.sock")
+	listener, err := net.Listen("unix", sockPath)
+	must.NoError(t, err)
+	defer listener.Close()
+
+	sockInfo, err := os.Stat(sockPath)
+	must.NoError(t, err)
+	sockStat := sockInfo.Sys().(*syscall.Stat_t)
+
+	testCases := []struct {
+		name       string
+		fifoPath   string
+		rootless   bool
+		socketPath string
+		expectErr  string
+		// If set, verify fifo ownership matches socket owner
+		verifyChown bool
+		// If set, verify fifo permissions are 0666
+		verifyChmod bool
+		// If true, skip creating a FIFO (for empty/noop cases)
+		skipFifo bool
+		// If true, test requires root
+		requireRoot bool
+	}{
+		{
+			name:     "empty path is no-op",
+			fifoPath: "",
+			rootless: true,
+			skipFifo: true,
+		},
+		{
+			name:       "rootful is no-op even with bad path",
+			fifoPath:   "/no/such/fifo",
+			rootless:   false,
+			socketPath: "unix:" + sockPath,
+			skipFifo:   true,
+		},
+		{
+			name:        "chown to socket owner",
+			rootless:    true,
+			socketPath:  "unix:" + sockPath,
+			verifyChown: true,
+		},
+		{
+			name:        "chmod fallback for tcp socket path",
+			rootless:    true,
+			socketPath:  "http://localhost:8080",
+			verifyChmod: true,
+		},
+		{
+			name:       "non-existent fifo returns error",
+			fifoPath:   "/no/such/fifo/path",
+			rootless:   true,
+			socketPath: "http://localhost:8080",
+			expectErr:  "failed to chmod fifo",
+			skipFifo:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.requireRoot && os.Getuid() != 0 {
+				t.Skip("test requires root")
+			}
+
+			logger := testlog.HCLogger(t)
+
+			fifoPath := tc.fifoPath
+			if !tc.skipFifo {
+				fifoPath = filepath.Join(dir, fmt.Sprintf("fifo-%s", tc.name))
+				must.NoError(t, exec.Command("mkfifo", fifoPath).Run())
+				must.NoError(t, os.Chmod(fifoPath, 0600))
+			}
+
+			var client *api.API
+			if tc.socketPath != "" {
+				client = api.NewClient(logger, api.ClientConfig{
+					SocketPath:  tc.socketPath,
+					HttpTimeout: 5 * time.Second,
+				})
+			} else {
+				client = &api.API{}
+			}
+			client.SetRootless(tc.rootless)
+
+			err := ensureFifoAccessible(logger, fifoPath, client)
+
+			if tc.expectErr != "" {
+				must.Error(t, err, must.Sprint("ensureFifoAccessible should have returned an error"))
+				must.ErrorContains(t, err, tc.expectErr)
+				return
+			}
+			must.NoError(t, err, must.Sprint("ensureFifoAccessible should not have returned an error"))
+
+			if tc.verifyChown {
+				info, statErr := os.Stat(fifoPath)
+				must.NoError(t, statErr)
+				fifoStat := info.Sys().(*syscall.Stat_t)
+				must.Eq(t, int(sockStat.Uid), int(fifoStat.Uid), must.Sprint("fifo uid should match socket owner after chown"))
+				must.Eq(t, int(sockStat.Gid), int(fifoStat.Gid), must.Sprint("fifo gid should match socket owner after chown"))
+			}
+
+			if tc.verifyChmod {
+				info, statErr := os.Stat(fifoPath)
+				must.NoError(t, statErr)
+				must.Eq(t, os.FileMode(0666)|os.ModeNamedPipe, info.Mode(), must.Sprint("fifo should be world-writable (0666) after chmod fallback"))
+			}
+		})
+	}
+}
+
+// TestPodmanDriver_LogFifoAccessible is an integration test that verifies
+// the k8s-file log driver path works end-to-end: the driver makes FIFOs
+// accessible to rootless podman before starting the container, and container
+// output is captured correctly through the FIFO.
+func TestPodmanDriver_LogFifoAccessible(t *testing.T) {
+	ci.Parallel(t)
+
+	stdoutMagic := uuid.Generate()
+	stderrMagic := uuid.Generate()
+
+	taskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		fmt.Sprintf("echo %s; 1>&2 echo %s", stdoutMagic, stderrMagic),
+	})
+	// Use default logging (maps to k8s-file internally), which is the path
+	// that triggers ensureFifoAccessible before container start.
+	taskCfg.Logging.Driver = "nomad"
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "logFifoAccess",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	// Verify the stdout FIFO exists before start
+	_, err := os.Stat(task.StdoutPath)
+	must.NoError(t, err)
+
+	_, _, err = d.StartTask(task)
+	must.NoError(t, err)
+
+	defer func() {
+		_ = d.DestroyTask(task.ID, true)
+	}()
+
+	// After StartTask, verify the FIFO permissions were made accessible.
+	// In rootless mode this will be chowned; in rootful mode it's unchanged.
+	// Either way, the FIFO should still exist and be writable.
+	fifoInfo, err := os.Stat(task.StdoutPath)
+	must.NoError(t, err)
+	fifoMode := fifoInfo.Mode()
+	// The FIFO should be a named pipe
+	must.True(t, fifoMode&os.ModeNamedPipe != 0, must.Sprint("stdout fifo should be a named pipe after StartTask"))
+
+	// Wait for container to finish
+	waitCh, err := d.WaitTask(context.Background(), task.ID)
+	must.NoError(t, err, must.Sprint("WaitTask should not fail"))
+
+	select {
+	case res := <-waitCh:
+		must.Eq(t, 0, res.ExitCode, must.Sprint("container should exit cleanly"))
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Container did not exit in time")
+	}
+
+	// Verify logs were captured through the FIFO — this confirms conmon
+	// could write to the FIFO (the original bug would cause empty logs
+	// or a permission denied startup failure).
+	stdoutLog := readStdoutLog(t, task)
+	must.StrContains(t, stdoutLog, stdoutMagic)
+	must.StrContains(t, stdoutLog, stderrMagic)
 }

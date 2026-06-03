@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/armon/circbuf"
@@ -1000,6 +1001,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
+		// Ensure log FIFOs are accessible by the rootless podman user before starting
+		// the container. Nomad's logmon creates FIFOs owned by root:root with 0600;
+		// conmon (running as the podman user) needs write access.
+		if createOpts.LogConfiguration.Driver == "k8s-file" {
+			if err := ensureFifoAccessible(d.logger, cfg.StdoutPath, podmanClient); err != nil {
+				d.logger.Warn("failed to make stdout fifo accessible", "error", err)
+			}
+			if err := ensureFifoAccessible(d.logger, cfg.StderrPath, podmanClient); err != nil {
+				d.logger.Warn("failed to make stderr fifo accessible", "error", err)
+			}
+		}
+
 		if startErr := podmanClient.ContainerStart(d.ctx, containerID); startErr != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", startErr)
@@ -1948,4 +1961,53 @@ func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkName
 		return netData.IPAddress
 	}
 	return ""
+}
+
+// ensureFifoAccessible ensures the log FIFO at fifoPath can be written to by
+// the rootless podman user. It determines the podman user by stat-ing the unix
+// socket file and chowns the FIFO to that user. Falls back to chmod 0666 if
+// the user cannot be determined. No-op when podman is running as root.
+func ensureFifoAccessible(logger hclog.Logger, fifoPath string, podmanClient *api.API) error {
+	if fifoPath == "" {
+		return nil
+	}
+	if !podmanClient.IsRootless() {
+		return nil
+	}
+
+	uid, gid, ok := getSocketOwner(podmanClient.GetSocketPath())
+
+	if ok {
+		if err := os.Chown(fifoPath, uid, gid); err != nil {
+			logger.Warn("failed to chown fifo, falling back to chmod", "path", fifoPath, "error", err)
+			return os.Chmod(fifoPath, 0666)
+		}
+	} else {
+		// Socket owner unknown (TCP or stat failed) — fallback to world-writable
+		if err := os.Chmod(fifoPath, 0666); err != nil {
+			return fmt.Errorf("failed to chmod fifo %s: %w", fifoPath, err)
+		}
+	}
+
+	return nil
+}
+
+// getSocketOwner returns the UID/GID of a unix socket file.
+// Returns 0, 0, false if the owner cannot be determined.
+func getSocketOwner(socketPath string) (int, int, bool) {
+	if !strings.HasPrefix(socketPath, "unix:") {
+		return 0, 0, false
+	}
+	sockFile := strings.TrimPrefix(socketPath, "unix:")
+	sockFile = strings.TrimPrefix(sockFile, "//")
+
+	info, err := os.Stat(sockFile)
+	if err != nil {
+		return 0, 0, false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, 0, false
+	}
+	return int(stat.Uid), int(stat.Gid), true
 }
