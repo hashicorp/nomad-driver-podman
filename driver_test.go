@@ -3091,6 +3091,8 @@ func TestEnsureFifoAccessible(t *testing.T) {
 		verifyChown bool
 		// If true, skip creating a FIFO (for empty/noop cases)
 		skipFifo bool
+		// If true, create a symlink instead of a FIFO (for symlink attack test)
+		createSymlink bool
 		// If true, test requires root
 		requireRoot bool
 	}{
@@ -3127,6 +3129,14 @@ func TestEnsureFifoAccessible(t *testing.T) {
 			skipFifo:   true,
 			// Should not error — just logs and returns nil
 		},
+		{
+			name:          "rejects symlink (TOCTOU protection)",
+			rootless:      true,
+			socketPath:    "unix:" + sockPath,
+			expectErr:     "failed to open fifo",
+			createSymlink: true,
+			skipFifo:      true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -3142,6 +3152,14 @@ func TestEnsureFifoAccessible(t *testing.T) {
 				fifoPath = filepath.Join(dir, fmt.Sprintf("fifo-%s", tc.name))
 				must.NoError(t, exec.Command("mkfifo", fifoPath).Run())
 				must.NoError(t, os.Chmod(fifoPath, 0600))
+			}
+			if tc.createSymlink {
+				// Simulate a symlink swap attack: task replaces FIFO with a
+				// symlink pointing to an arbitrary file (e.g. /etc/shadow).
+				fifoPath = filepath.Join(dir, fmt.Sprintf("fifo-%s", tc.name))
+				target := filepath.Join(dir, "attack-target")
+				must.NoError(t, os.WriteFile(target, []byte("sensitive"), 0600))
+				must.NoError(t, os.Symlink(target, fifoPath))
 			}
 
 			var client *api.API
