@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 // NetworkExists checks if a Podman network with the given name exists.
@@ -15,7 +16,7 @@ import (
 // Unlike other endpoints that work with /v1.0.0, this one requires /v4.0.0+.
 func (c *API) NetworkExists(ctx context.Context, name string) (bool, error) {
 
-	res, err := c.Get(ctx, fmt.Sprintf("/v4.0.0/libpod/networks/%s/exists", name))
+	res, err := c.Get(ctx, fmt.Sprintf("/v4.0.0/libpod/networks/%s/exists", url.PathEscape(name)))
 	if err != nil {
 		return false, err
 	}
