@@ -1982,7 +1982,6 @@ func ensureFifoAccessible(logger hclog.Logger, fifoPath string, podmanClient *ap
 
 	if ok {
 		if err := os.Chown(fifoPath, uid, gid); err != nil {
-			logger.Warn("failed to chown fifo", "path", fifoPath, "error", err)
 			return err
 		}
 	} else {
