@@ -1965,12 +1965,15 @@ func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkName
 
 // ensureFifoAccessible ensures the log FIFO at fifoPath can be written to by
 // the rootless podman user. It determines the podman user by stat-ing the unix
-// socket file and chowns the FIFO to that user. Falls back to chmod 0666 if
-// the user cannot be determined. No-op when podman is running as root.
+// socket file and chowns the FIFO to that user. No-op when podman is running
+// as root or when the socket owner cannot be determined (e.g. TCP socket).
 func ensureFifoAccessible(logger hclog.Logger, fifoPath string, podmanClient *api.API) error {
+	// Nothing to do if log collection is disabled (no FIFO path configured).
 	if fifoPath == "" {
 		return nil
 	}
+	// Rootful podman: conmon runs as root and can already write to the
+	// root-owned FIFO, so no ownership change is needed.
 	if !podmanClient.IsRootless() {
 		return nil
 	}
@@ -1979,14 +1982,13 @@ func ensureFifoAccessible(logger hclog.Logger, fifoPath string, podmanClient *ap
 
 	if ok {
 		if err := os.Chown(fifoPath, uid, gid); err != nil {
-			logger.Warn("failed to chown fifo, falling back to chmod", "path", fifoPath, "error", err)
+			logger.Warn("failed to chown fifo", "path", fifoPath, "error", err)
 			return os.Chmod(fifoPath, 0666)
 		}
 	} else {
-		// Socket owner unknown (TCP or stat failed) — fallback to world-writable
-		if err := os.Chmod(fifoPath, 0666); err != nil {
-			return fmt.Errorf("failed to chmod fifo %s: %w", fifoPath, err)
-		}
+		// Cannot determine socket owner (TCP/HTTP socket or stat failed) — skip.
+		// Rootless podman over non-unix sockets is unsupported for log FIFOs.
+		logger.Debug("cannot determine podman socket owner, skipping fifo chown", "path", fifoPath)
 	}
 
 	return nil

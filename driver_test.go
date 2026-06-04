@@ -3116,18 +3116,18 @@ func TestEnsureFifoAccessible(t *testing.T) {
 			verifyChown: true,
 		},
 		{
-			name:        "chmod fallback for tcp socket path",
-			rootless:    true,
-			socketPath:  "http://localhost:8080",
-			verifyChmod: true,
+			name:       "noop for tcp socket path",
+			rootless:   true,
+			socketPath: "http://localhost:8080",
+			// TCP socket — cannot determine owner, should noop (no chown, no chmod)
 		},
 		{
-			name:       "non-existent fifo returns error",
+			name:       "noop for non-existent fifo with tcp socket",
 			fifoPath:   "/no/such/fifo/path",
 			rootless:   true,
 			socketPath: "http://localhost:8080",
-			expectErr:  "failed to chmod fifo",
 			skipFifo:   true,
+			// Should not error — just logs and returns nil
 		},
 	}
 
