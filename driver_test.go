@@ -3089,8 +3089,6 @@ func TestEnsureFifoAccessible(t *testing.T) {
 		expectErr  string
 		// If set, verify fifo ownership matches socket owner
 		verifyChown bool
-		// If set, verify fifo permissions are 0666
-		verifyChmod bool
 		// If true, skip creating a FIFO (for empty/noop cases)
 		skipFifo bool
 		// If true, test requires root
@@ -3172,12 +3170,6 @@ func TestEnsureFifoAccessible(t *testing.T) {
 				fifoStat := info.Sys().(*syscall.Stat_t)
 				must.Eq(t, int(sockStat.Uid), int(fifoStat.Uid), must.Sprint("fifo uid should match socket owner after chown"))
 				must.Eq(t, int(sockStat.Gid), int(fifoStat.Gid), must.Sprint("fifo gid should match socket owner after chown"))
-			}
-
-			if tc.verifyChmod {
-				info, statErr := os.Stat(fifoPath)
-				must.NoError(t, statErr)
-				must.Eq(t, os.FileMode(0666)|os.ModeNamedPipe, info.Mode(), must.Sprint("fifo should be world-writable (0666) after chmod fallback"))
 			}
 		})
 	}
