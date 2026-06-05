@@ -419,6 +419,9 @@ By default the task uses the network stack defined in the task group, see [netwo
   it for root containers [issue](https://github.com/containers/libpod/issues/6097).
 * `container:id`: reuse another podman containers network stack
 * `task:name-of-other-task`: join the network of another task in the same allocation.
+* `custom-network-name`: attach the container to a pre-existing Podman network
+  created with `podman network create`. The network must already exist or the task
+  will fail with a clear error. Requires Podman >= 4.0.
 
 ```hcl
 config {

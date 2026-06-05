@@ -782,6 +782,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		}
 	}
 	// Configure network
+	networkName := "default"
 	if cfg.NetworkIsolation != nil && cfg.NetworkIsolation.Path != "" {
 		createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Path
 		createOpts.ContainerNetworkConfig.NetNS.Value = cfg.NetworkIsolation.Path
@@ -833,7 +834,24 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.FromContainer
 			createOpts.ContainerNetworkConfig.NetNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
 		default:
-			return nil, nil, fmt.Errorf("Unknown/Unsupported network mode: %s", podmanTaskConfig.NetworkMode)
+			// Treat any unrecognized value as a custom Podman network name
+			// (e.g., one created via "podman network create mynet").
+			// Custom networks are bridged networks under the hood, so we set
+			// NSMode = Bridge and specify the network name in the Networks map.
+			// NetworkExists requires Podman API v4+
+			exists, netErr := podmanClient.NetworkExists(d.ctx, podmanTaskConfig.NetworkMode)
+			if netErr != nil {
+				return nil, nil, fmt.Errorf("failed to check network %q: %w", podmanTaskConfig.NetworkMode, netErr)
+			}
+			if !exists {
+				return nil, nil, fmt.Errorf("network %q not found, verify with: podman network ls", podmanTaskConfig.NetworkMode)
+			}
+			d.logger.Debug("Using custom network", "network", podmanTaskConfig.NetworkMode)
+			createOpts.ContainerNetworkConfig.NetNS.NSMode = api.Bridge
+			networkName = podmanTaskConfig.NetworkMode
+			// Always populate the Networks map for custom networks so Podman
+			// attaches to the correct network, not just the default bridge.
+			createOpts.Networks = map[string]api.PerNetworkOptions{networkName: {}}
 		}
 	}
 
@@ -896,7 +914,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			// Only bridge mode uses named networks; other modes (host, slirp4netns,
 			// none, task:*, container:*, ns:*) don't honor per-network options.
 			if createOpts.ContainerNetworkConfig.NetNS.NSMode == api.Bridge {
-				createOpts.Networks = map[string]api.PerNetworkOptions{"default": netOpts}
+				createOpts.Networks = map[string]api.PerNetworkOptions{networkName: netOpts}
 			}
 		} else {
 			// Before version 4, there were StaticIP, StaticIPv6 and StaticMAC properties
@@ -1033,7 +1051,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// Resolve the container IP. For the default bridge network, Podman
 	// populates the top-level IPAddress field. For named networks it is
 	// empty and the IP lives in the per-network map instead.
-	containerIP := resolveContainerIP(inspectData.NetworkSettings, "default")
+	containerIP := resolveContainerIP(inspectData.NetworkSettings, networkName)
 
 	driverNet := &drivers.DriverNetwork{
 		PortMap:       podmanTaskConfig.PortMap,
