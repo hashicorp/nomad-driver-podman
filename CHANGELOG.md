@@ -7,6 +7,7 @@ IMPROVEMENTS:
 BUG FIXES:
 * api: Fixed file descriptor leak when getting logs from the task [[GH-508](https://github.com/hashicorp/nomad-driver-podman/pull/508)]
 * driver: Fixed static IP configuration (`static_ips`, `ipv4_address`, `ipv6_address`, `static_mac`) being silently ignored, corrected related per-network map handling and `driverNet.IP` resolution for service discovery. [[GH-507](https://github.com/hashicorp/nomad-driver-podman/pull/507)]
+* driver: Fixed `userns=auto` being ignored when no sub-options (e.g. size) are specified [[GH-511](https://github.com/hashicorp/nomad-driver-podman/pull/511)]
 
 ## 0.6.4 (December 10, 2025)
 
