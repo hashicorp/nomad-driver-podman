@@ -739,7 +739,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	// Populate --userns mode only if configured
 	if podmanTaskConfig.UserNS != "" {
 		userns, mappings, userNSerr := parseUserNSConfig(podmanTaskConfig.UserNS)
-		if err != nil {
+		if userNSerr != nil {
 			return nil, nil, fmt.Errorf("failed to parse userns configuration: %w", userNSerr)
 		}
 		createOpts.ContainerSecurityConfig.UserNS = userns
@@ -1860,29 +1860,32 @@ func parseUserNSConfig(userNSConfig string) (api.Namespace, *api.IDMappingOption
 	modeWithConfig := strings.SplitN(userNSConfig, ":", 2)
 	mode := api.NamespaceMode(modeWithConfig[0])
 
-	if len(modeWithConfig) == 1 {
-		// if there's no additional configuration, we can bail out early
-		return api.Namespace{NSMode: mode}, nil, nil
+	config := ""
+	if len(modeWithConfig) == 2 {
+		config = modeWithConfig[1]
 	}
 
-	config := modeWithConfig[1]
 	ns := api.Namespace{NSMode: mode, Value: config}
 
 	switch mode {
 	case "", "host":
 		return ns, nil, nil
 	case "auto":
-		autoOpts := strings.Split(config, ",")
 		mappings := &api.IDMappingOptions{
 			UIDMap:         []api.IDMap{},
 			GIDMap:         []api.IDMap{},
 			AutoUserNs:     true,
 			AutoUserNsOpts: api.AutoUserNsOptions{},
 		}
+		if config == "" {
+			return ns, mappings, nil
+		}
+
+		autoOpts := strings.Split(config, ",")
 		for _, opt := range autoOpts {
-			kv := strings.Split(opt, "=")
+			kv := strings.SplitN(opt, "=", 2)
 			if len(kv) != 2 {
-				return ns, nil, fmt.Errorf("invalid userns configuration: %q", kv)
+				return ns, nil, fmt.Errorf("invalid userns configuration: %q", opt)
 			}
 			switch kv[0] {
 			case "gidmapping":
@@ -1897,7 +1900,7 @@ func parseUserNSConfig(userNSConfig string) (api.Namespace, *api.IDMappingOption
 			case "size":
 				sz, err := strconv.ParseUint(kv[1], 10, 32)
 				if err != nil {
-					return ns, nil, err
+					return ns, nil, fmt.Errorf("invalid userns size %q: %w", kv[1], err)
 				}
 				mappings.AutoUserNsOpts.Size = uint32(sz)
 			case "uidmapping":
@@ -1909,6 +1912,8 @@ func parseUserNSConfig(userNSConfig string) (api.Namespace, *api.IDMappingOption
 				mappings.UIDMap = append(mappings.UIDMap, *idMap)
 				mappings.AutoUserNsOpts.AdditionalUIDMappings = append(
 					mappings.AutoUserNsOpts.AdditionalUIDMappings, *idMap)
+			default:
+				return ns, nil, fmt.Errorf("invalid userns auto option %q", kv[0])
 			}
 		}
 

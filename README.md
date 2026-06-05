@@ -549,6 +549,18 @@ config {
 
 ```hcl
 config {
+  userns = "auto"
+}
+```
+
+```hcl
+config {
+  userns = "auto:size=65536"
+}
+```
+
+```hcl
+config {
   userns = "keep-id:uid=200,gid=210"
 }
 ```

@@ -2841,6 +2841,20 @@ func TestUserNSConfigParsing(t *testing.T) {
 			expectNamespace: api.Namespace{
 				NSMode: "auto",
 			},
+			expectMapping: &api.IDMappingOptions{
+				UIDMap:         []api.IDMap{},
+				GIDMap:         []api.IDMap{},
+				AutoUserNs:     true,
+				AutoUserNsOpts: api.AutoUserNsOptions{},
+			},
+		},
+		{
+			input:     "made-up-mode",
+			expectErr: `unknown userns mode "made-up-mode"`,
+		},
+		{
+			input:     "auto:unknown=1",
+			expectErr: `invalid userns auto option "unknown"`,
 		},
 		{
 			input: "auto:uidmapping=33:1001:1,gidmapping=34:1002:2,size=3",
@@ -2887,6 +2901,28 @@ func TestUserNSConfigParsing(t *testing.T) {
 		}
 	}
 
+}
+
+func TestPodmanDriver_StartTask_InvalidUserNS_ReturnsParseError(t *testing.T) {
+	ci.Parallel(t)
+
+	taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+	taskCfg.UserNS = "auto:unknown=1"
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "invalid-userns",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := podmanDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	must.ErrorContains(t, err, "failed to parse userns configuration")
 }
 
 func TestResolveContainerIP(t *testing.T) {
