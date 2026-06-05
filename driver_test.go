@@ -3262,6 +3262,7 @@ func TestPodmanDriver_LogFifoAccessible(t *testing.T) {
 	must.StrContains(t, stdoutLog, stdoutMagic)
 	must.StrContains(t, stdoutLog, stderrMagic)
 }
+
 // TestPodmanDriver_CustomNetwork validates custom network_mode behavior:
 // successful attachment, non-existent network error, and unreachable socket error.
 func TestPodmanDriver_CustomNetwork(t *testing.T) {
