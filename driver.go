@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/armon/circbuf"
@@ -1018,6 +1019,22 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	if !recoverRunningContainer {
+		// Ensure log FIFOs are accessible by the rootless podman user before starting
+		// the container. Nomad's logmon creates FIFOs owned by root:root with 0600;
+		// conmon (running as the podman user) needs write access. If chown fails,
+		// ContainerStart will also fail (conmon crashes with EACCES), so return
+		// early with a clearer error message.
+		if createOpts.LogConfiguration.Driver == "k8s-file" {
+			if fifoErr := ensureFifoAccessible(d.logger, cfg.StdoutPath, podmanClient); fifoErr != nil {
+				cleanup()
+				return nil, nil, fmt.Errorf("failed to make stdout fifo accessible: %w", fifoErr)
+			}
+			if fifoErr := ensureFifoAccessible(d.logger, cfg.StderrPath, podmanClient); fifoErr != nil {
+				cleanup()
+				return nil, nil, fmt.Errorf("failed to make stderr fifo accessible: %w", fifoErr)
+			}
+		}
+
 		if startErr := podmanClient.ContainerStart(d.ctx, containerID); startErr != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("failed to start task, could not start container: %w", startErr)
@@ -1971,4 +1988,81 @@ func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkName
 		return netData.IPAddress
 	}
 	return ""
+}
+
+// ensureFifoAccessible ensures the log FIFO at fifoPath can be written to by
+// the rootless podman user. It determines the podman user by stat-ing the unix
+// socket file and chowns the FIFO to that user. No-op when podman is running
+// as root or when the socket owner cannot be determined (e.g. TCP socket).
+//
+// Uses os.Root to open the FIFO without following symlinks, preventing a
+// symlink swap attack where a restarted task replaces the FIFO with a symlink
+// to an arbitrary file.
+func ensureFifoAccessible(logger hclog.Logger, fifoPath string, podmanClient *api.API) error {
+	// Nothing to do if log collection is disabled (no FIFO path configured).
+	if fifoPath == "" {
+		return nil
+	}
+	// Rootful podman: conmon runs as root and can already write to the
+	// root-owned FIFO, so no ownership change is needed.
+	if !podmanClient.IsRootless() {
+		return nil
+	}
+
+	uid, gid, ok := getSocketOwner(podmanClient.GetSocketPath())
+
+	if ok {
+		// Open the FIFO's parent directory as a root to prevent symlink traversal.
+		dir := filepath.Dir(fifoPath)
+		base := filepath.Base(fifoPath)
+
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			return fmt.Errorf("failed to open fifo parent directory %q: %w", dir, err)
+		}
+		defer root.Close()
+
+		// Open the FIFO itself without following symlinks (os.Root enforces this).
+		// O_RDONLY|O_NONBLOCK avoids blocking on the FIFO (no writer needed).
+		// We only need a valid fd for fchown, not actual I/O.
+		f, err := root.OpenFile(base, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+		if err != nil {
+			return fmt.Errorf("failed to open fifo %q: %w", fifoPath, err)
+		}
+		defer f.Close()
+
+		// Fchown on the file descriptor — safe from TOCTOU/symlink attacks.
+		if err := f.Chown(uid, gid); err != nil {
+			return err
+		}
+	} else {
+		// Cannot determine socket owner (TCP/HTTP socket or stat failed) — skip.
+		// Rootless podman over non-unix sockets is unsupported for log FIFOs.
+		logger.Debug("cannot determine podman socket owner, skipping fifo chown", "path", fifoPath)
+	}
+
+	return nil
+}
+
+// getSocketOwner returns the UID/GID of a unix socket file.
+// Returns 0, 0, false if the owner cannot be determined.
+func getSocketOwner(socketPath string) (int, int, bool) {
+	if !strings.HasPrefix(socketPath, "unix:") {
+		return 0, 0, false
+	}
+	// Two TrimPrefix calls handle both forms of the unix socket URI:
+	// "unix:/run/user/1001/podman/podman.sock"   → strip "unix:"
+	// "unix:///run/user/1001/podman/podman.sock"  → strip "unix:" then "//"
+	sockFile := strings.TrimPrefix(socketPath, "unix:")
+	sockFile = strings.TrimPrefix(sockFile, "//")
+
+	info, err := os.Stat(sockFile)
+	if err != nil {
+		return 0, 0, false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, 0, false
+	}
+	return int(stat.Uid), int(stat.Gid), true
 }
