@@ -1877,7 +1877,7 @@ func parseUserNSConfig(userNSConfig string) (api.Namespace, *api.IDMappingOption
 	modeWithConfig := strings.SplitN(userNSConfig, ":", 2)
 	mode := api.NamespaceMode(modeWithConfig[0])
 
-	config := ""
+	var config string
 	if len(modeWithConfig) == 2 {
 		config = modeWithConfig[1]
 	}
