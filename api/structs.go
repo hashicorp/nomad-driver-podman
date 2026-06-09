@@ -222,6 +222,9 @@ type ContainerStorageConfig struct {
 	// Devices are devices that will be added to the container.
 	// Optional.
 	Devices []spec.LinuxDevice `json:"devices,omitempty"`
+	// StorageOpts are storage driver options.
+	// Optional.
+	StorageOpts map[string]string `json:"storage_opts,omitempty"`
 	// IpcNS is the container's IPC namespace.
 	// Default is private.
 	// Conflicts with ShmSize if not set to private.
