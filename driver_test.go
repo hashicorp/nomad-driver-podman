@@ -2842,6 +2842,20 @@ func TestUserNSConfigParsing(t *testing.T) {
 			expectNamespace: api.Namespace{
 				NSMode: "auto",
 			},
+			expectMapping: &api.IDMappingOptions{
+				UIDMap:         []api.IDMap{},
+				GIDMap:         []api.IDMap{},
+				AutoUserNs:     true,
+				AutoUserNsOpts: api.AutoUserNsOptions{},
+			},
+		},
+		{
+			input:     "made-up-mode",
+			expectErr: `unknown userns mode "made-up-mode"`,
+		},
+		{
+			input:     "auto:unknown=1",
+			expectErr: `invalid userns auto option "unknown"`,
 		},
 		{
 			input: "auto:uidmapping=33:1001:1,gidmapping=34:1002:2,size=3",
