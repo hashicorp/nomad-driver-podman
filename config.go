@@ -5,7 +5,7 @@ package main
 
 import (
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
+	"github.com/hashicorp/nomad-driver-podman/internal/hclcompat"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
 )
 
@@ -180,8 +180,8 @@ type NetworkingConfig struct {
 // LoggingConfig is the tasks logging configuration
 // keep in sync with `LoggingConfig`
 type TaskLoggingConfig struct {
-	Driver  string             `codec:"driver"`
-	Options hclutils.MapStrStr `codec:"options"`
+	Driver  string              `codec:"driver"`
+	Options hclcompat.MapStrStr `codec:"options"`
 }
 
 // Empty returns true if the logging configuration is not set.
@@ -253,7 +253,7 @@ type TaskConfig struct {
 	StaticMAC         string             `codec:"static_mac"`
 	InitPath          string             `codec:"init_path"`
 	Logging           TaskLoggingConfig  `codec:"logging"`
-	Labels            hclutils.MapStrStr `codec:"labels"`
+	Labels            hclcompat.MapStrStr `codec:"labels"`
 	MemoryReservation string             `codec:"memory_reservation"`
 	MemorySwap        string             `codec:"memory_swap"`
 	NetworkMode       string             `codec:"network_mode"`
@@ -262,10 +262,10 @@ type TaskConfig struct {
 	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
 	MemorySwappiness  int64              `codec:"memory_swappiness"`
 	PidsLimit         int64              `codec:"pids_limit"`
-	PortMap           hclutils.MapStrInt `codec:"port_map"`
+	PortMap           hclcompat.MapStrInt `codec:"port_map"`
 	Socket            string             `codec:"socket"`
-	Sysctl            hclutils.MapStrStr `codec:"sysctl"`
-	Ulimit            hclutils.MapStrStr `codec:"ulimit"`
+	Sysctl            hclcompat.MapStrStr `codec:"sysctl"`
+	Ulimit            hclcompat.MapStrStr `codec:"ulimit"`
 	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
