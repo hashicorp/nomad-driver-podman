@@ -230,49 +230,49 @@ func (c *PluginConfig) LogWarnings(logger hclog.Logger) {
 
 // TaskConfig is the driver configuration of a task within a job
 type TaskConfig struct {
-	ApparmorProfile   string             `codec:"apparmor_profile"`
-	Args              []string           `codec:"args"`
-	Auth              TaskAuthConfig     `codec:"auth"`
-	AuthSoftFail      bool               `codec:"auth_soft_fail"`
-	Ports             []string           `codec:"ports"`
-	Tmpfs             []string           `codec:"tmpfs"`
-	Volumes           []string           `codec:"volumes"`
-	CapAdd            []string           `codec:"cap_add"`
-	CapDrop           []string           `codec:"cap_drop"`
-	SelinuxOpts       []string           `codec:"selinux_opts"`
-	Command           string             `codec:"command"`
-	Devices           []string           `codec:"devices"`
-	Entrypoint        any                `codec:"entrypoint"` // any for compat
-	WorkingDir        string             `codec:"working_dir"`
-	Hostname          string             `codec:"hostname"`
-	Image             string             `codec:"image"`
-	ImagePullTimeout  string             `codec:"image_pull_timeout"`
-	IPv4Address       string             `codec:"ipv4_address"`
-	IPv6Address       string             `codec:"ipv6_address"`
-	StaticIPs         []string           `codec:"static_ips"`
-	StaticMAC         string             `codec:"static_mac"`
-	InitPath          string             `codec:"init_path"`
-	Logging           TaskLoggingConfig  `codec:"logging"`
+	ApparmorProfile   string              `codec:"apparmor_profile"`
+	Args              []string            `codec:"args"`
+	Auth              TaskAuthConfig      `codec:"auth"`
+	AuthSoftFail      bool                `codec:"auth_soft_fail"`
+	Ports             []string            `codec:"ports"`
+	Tmpfs             []string            `codec:"tmpfs"`
+	Volumes           []string            `codec:"volumes"`
+	CapAdd            []string            `codec:"cap_add"`
+	CapDrop           []string            `codec:"cap_drop"`
+	SelinuxOpts       []string            `codec:"selinux_opts"`
+	Command           string              `codec:"command"`
+	Devices           []string            `codec:"devices"`
+	Entrypoint        any                 `codec:"entrypoint"` // any for compat
+	WorkingDir        string              `codec:"working_dir"`
+	Hostname          string              `codec:"hostname"`
+	Image             string              `codec:"image"`
+	ImagePullTimeout  string              `codec:"image_pull_timeout"`
+	IPv4Address       string              `codec:"ipv4_address"`
+	IPv6Address       string              `codec:"ipv6_address"`
+	StaticIPs         []string            `codec:"static_ips"`
+	StaticMAC         string              `codec:"static_mac"`
+	InitPath          string              `codec:"init_path"`
+	Logging           TaskLoggingConfig   `codec:"logging"`
 	Labels            hclcompat.MapStrStr `codec:"labels"`
-	MemoryReservation string             `codec:"memory_reservation"`
-	MemorySwap        string             `codec:"memory_swap"`
-	NetworkMode       string             `codec:"network_mode"`
-	OOMScoreAdj       int16              `codec:"oom_score_adj"`
-	ExtraHosts        []string           `codec:"extra_hosts"`
-	CPUCFSPeriod      uint64             `codec:"cpu_cfs_period"`
-	MemorySwappiness  int64              `codec:"memory_swappiness"`
-	PidsLimit         int64              `codec:"pids_limit"`
+	MemoryReservation string              `codec:"memory_reservation"`
+	MemorySwap        string              `codec:"memory_swap"`
+	NetworkMode       string              `codec:"network_mode"`
+	OOMScoreAdj       int16               `codec:"oom_score_adj"`
+	ExtraHosts        []string            `codec:"extra_hosts"`
+	CPUCFSPeriod      uint64              `codec:"cpu_cfs_period"`
+	MemorySwappiness  int64               `codec:"memory_swappiness"`
+	PidsLimit         int64               `codec:"pids_limit"`
 	PortMap           hclcompat.MapStrInt `codec:"port_map"`
-	Socket            string             `codec:"socket"`
+	Socket            string              `codec:"socket"`
 	Sysctl            hclcompat.MapStrStr `codec:"sysctl"`
 	Ulimit            hclcompat.MapStrStr `codec:"ulimit"`
-	CPUHardLimit      bool               `codec:"cpu_hard_limit"`
-	Init              bool               `codec:"init"`
-	Tty               bool               `codec:"tty"`
-	ForcePull         bool               `codec:"force_pull"`
-	Privileged        bool               `codec:"privileged"`
-	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
-	UserNS            string             `codec:"userns"`
-	ShmSize           string             `codec:"shm_size"`
-	SecurityOpt       []string           `codec:"security_opt"`
+	CPUHardLimit      bool                `codec:"cpu_hard_limit"`
+	Init              bool                `codec:"init"`
+	Tty               bool                `codec:"tty"`
+	ForcePull         bool                `codec:"force_pull"`
+	Privileged        bool                `codec:"privileged"`
+	ReadOnlyRootfs    bool                `codec:"readonly_rootfs"`
+	UserNS            string              `codec:"userns"`
+	ShmSize           string              `codec:"shm_size"`
+	SecurityOpt       []string            `codec:"security_opt"`
 }
