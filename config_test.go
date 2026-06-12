@@ -7,14 +7,13 @@ import (
 	"testing"
 
 	"github.com/hashicorp/nomad-driver-podman/ci"
-	"github.com/hashicorp/nomad/helper/pluginutils/hclutils"
 	"github.com/shoenig/test/must"
 )
 
 func TestConfig_Ports(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	expectedPorts := []string{"redis"}
 	validHCL := `
   config {
@@ -31,7 +30,7 @@ func TestConfig_Ports(t *testing.T) {
 func TestConfig_Logging(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	expectedDriver := "journald"
 	expectedTag := "redis"
 	validHCL := `
@@ -57,7 +56,7 @@ func TestConfig_Logging(t *testing.T) {
 func TestConfig_Labels(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 	  image = "docker://redis"
@@ -75,7 +74,7 @@ func TestConfig_Labels(t *testing.T) {
 func TestConfig_ForcePull(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"
@@ -91,7 +90,7 @@ func TestConfig_ForcePull(t *testing.T) {
 func TestConfig_Platform(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://nginx"
@@ -111,7 +110,7 @@ func TestConfig_Platform(t *testing.T) {
 func TestConfig_CPUHardLimit(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"
@@ -129,7 +128,7 @@ func TestConfig_CPUHardLimit(t *testing.T) {
 func TestConfig_ImagePullTimeout(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
   config {
 		image = "docker://redis"
@@ -145,7 +144,7 @@ func TestConfig_ImagePullTimeout(t *testing.T) {
 func TestConfig_ExtraHosts(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
 		config {
 		image = "docker://redis"
@@ -161,7 +160,7 @@ func TestConfig_ExtraHosts(t *testing.T) {
 func TestConfig_PodmanSocketDefaultIfNotGiven(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
 	config {
 		image = "docker://redis"
@@ -176,7 +175,7 @@ func TestConfig_PodmanSocketDefaultIfNotGiven(t *testing.T) {
 func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(taskConfigSpec)
+	parser := newConfigParser(taskConfigSpec)
 	validHCL := `
 	config {
 		image = "docker://redis"
@@ -192,7 +191,7 @@ func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
 func TestPluginConfig_Parsing(t *testing.T) {
 	ci.Parallel(t)
 
-	parser := hclutils.NewConfigParser(configSpec)
+	parser := newConfigParser(configSpec)
 	validHCL := `config {
 
   socket {

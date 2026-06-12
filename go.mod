@@ -15,13 +15,18 @@ require (
 	github.com/armon/circbuf v0.0.0-20190214190532-5111143e8da2
 	github.com/containers/common v0.64.2
 	github.com/containers/image/v5 v5.36.2
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/go-msgpack/v2 v2.1.5
 	github.com/hashicorp/go-version v1.9.0
+	github.com/hashicorp/hcl v1.0.1-vault-7
+	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/nomad v1.11.3
 	github.com/hashicorp/nomad/api v0.0.0-20251209201056-5b76eb053561
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/ryanuber/go-glob v1.0.0
 	github.com/shoenig/test v1.13.2
+	github.com/zclconf/go-cty v1.18.0
 	golang.org/x/sync v0.20.0
 )
 
@@ -58,7 +63,6 @@ require (
 	github.com/go-jose/go-jose/v3 v3.0.5 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gojuno/minimock/v3 v3.4.5 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -78,7 +82,6 @@ require (
 	github.com/hashicorp/go-immutable-radix/v2 v2.1.0 // indirect
 	github.com/hashicorp/go-kms-wrapping/v2 v2.0.20 // indirect
 	github.com/hashicorp/go-metrics v0.5.4 // indirect
-	github.com/hashicorp/go-msgpack/v2 v2.1.5 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
@@ -94,8 +97,6 @@ require (
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
-	github.com/hashicorp/hcl/v2 v2.23.0 // indirect
 	github.com/hashicorp/memberlist v0.5.4 // indirect
 	github.com/hashicorp/raft v1.7.3 // indirect
 	github.com/hashicorp/raft-autopilot v0.3.0 // indirect
@@ -104,7 +105,6 @@ require (
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/hpcloud/tail v1.0.1-0.20170814160653-37f427138745 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
-	github.com/ishidawataru/sctp v0.0.0-20250303034628-ecf9ed6df987 // indirect
 	github.com/jefferai/isbadcipher v0.0.0-20190226160619-51d2077c035f // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
@@ -155,7 +155,6 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	github.com/zclconf/go-cty v1.18.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20250808145144-a408d31f581a // indirect
 	golang.org/x/mod v0.33.0 // indirect

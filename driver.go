@@ -2029,9 +2029,15 @@ func resolveContainerIP(networkSettings *api.InspectNetworkSettings, networkName
 		return networkSettings.IPAddress
 	}
 	if netData, ok := networkSettings.Networks[networkName]; ok {
-		return netData.IPAddress
+		if netData.IPAddress != "" {
+			return netData.IPAddress
+		}
+		// IPv6-only network: no IPv4 address is assigned, so fall back to the
+		// global IPv6 address.
+		return netData.GlobalIPv6Address
 	}
-	return ""
+	// IPv6-only default network: same fallback for the top-level settings.
+	return networkSettings.GlobalIPv6Address
 }
 
 // ensureFifoAccessible ensures the log FIFO at fifoPath can be written to by

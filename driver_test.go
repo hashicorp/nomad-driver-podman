@@ -2995,6 +2995,53 @@ func TestResolveContainerIP(t *testing.T) {
 			networkName: "default",
 			expectedIP:  "10.88.0.100",
 		},
+		{
+			name: "named IPv6-only network falls back to GlobalIPv6Address",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"localv6": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress:         "",
+							GlobalIPv6Address: "2a01:4f8:c2c:cd3c:fefe::10",
+						},
+					},
+				},
+			},
+			networkName: "localv6",
+			expectedIP:  "2a01:4f8:c2c:cd3c:fefe::10",
+		},
+		{
+			name: "named dual-stack network prefers IPv4 over IPv6",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress: "",
+				},
+				Networks: map[string]*api.InspectAdditionalNetwork{
+					"localv6": {
+						InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+							IPAddress:         "10.89.1.10",
+							GlobalIPv6Address: "2a01:4f8:c2c:cd3c:fefe::10",
+						},
+					},
+				},
+			},
+			networkName: "localv6",
+			expectedIP:  "10.89.1.10",
+		},
+		{
+			name: "top-level IPv6-only falls back to GlobalIPv6Address",
+			networkSettings: &api.InspectNetworkSettings{
+				InspectBasicNetworkConfig: api.InspectBasicNetworkConfig{
+					IPAddress:         "",
+					GlobalIPv6Address: "fd00::42",
+				},
+			},
+			networkName: "default",
+			expectedIP:  "fd00::42",
+		},
 	}
 
 	for _, tc := range testCases {
