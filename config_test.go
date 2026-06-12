@@ -88,6 +88,26 @@ func TestConfig_ForcePull(t *testing.T) {
 	must.Eq(t, true, tc.ForcePull)
 }
 
+func TestConfig_Platform(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := hclutils.NewConfigParser(taskConfigSpec)
+	validHCL := `
+  config {
+		image = "docker://nginx"
+		os = "linux"
+		arch = "amd64"
+		variant = "v8"
+  }
+`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, "linux", tc.OS)
+	must.Eq(t, "amd64", tc.Arch)
+	must.Eq(t, "v8", tc.Variant)
+}
+
 func TestConfig_CPUHardLimit(t *testing.T) {
 	ci.Parallel(t)
 

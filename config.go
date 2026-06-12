@@ -107,6 +107,9 @@ var (
 		"working_dir":    hclspec.NewAttr("working_dir", "string", false),
 		"hostname":       hclspec.NewAttr("hostname", "string", false),
 		"image":          hclspec.NewAttr("image", "string", true),
+		"arch":           hclspec.NewAttr("arch", "string", false),
+		"os":             hclspec.NewAttr("os", "string", false),
+		"variant":        hclspec.NewAttr("variant", "string", false),
 		"image_pull_timeout": hclspec.NewDefault(
 			hclspec.NewAttr("image_pull_timeout", "string", false),
 			hclspec.NewLiteral(`"5m"`),
@@ -270,6 +273,9 @@ type TaskConfig struct {
 	Init              bool               `codec:"init"`
 	Tty               bool               `codec:"tty"`
 	ForcePull         bool               `codec:"force_pull"`
+	Arch              string             `codec:"arch"`
+	OS                string             `codec:"os"`
+	Variant           string             `codec:"variant"`
 	Privileged        bool               `codec:"privileged"`
 	ReadOnlyRootfs    bool               `codec:"readonly_rootfs"`
 	UserNS            string             `codec:"userns"`
