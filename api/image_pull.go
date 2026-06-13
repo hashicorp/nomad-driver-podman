@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/hashicorp/nomad-driver-podman/registry"
 )
@@ -36,6 +37,19 @@ func (c *API) ImagePull(ctx context.Context, pullConfig *registry.PullConfig) (s
 	}
 
 	urlPath := fmt.Sprintf("/v1.0.0/libpod/images/pull?reference=%s&tlsVerify=%t", repository, tlsVerify)
+
+	// Optionally override the platform of the image to pull. These map to
+	// podman's --arch, --os and --variant flags and are passed to the libpod
+	// pull endpoint as the Arch, OS and Variant query parameters.
+	if pullConfig.Arch != "" {
+		urlPath += "&Arch=" + url.QueryEscape(pullConfig.Arch)
+	}
+	if pullConfig.OS != "" {
+		urlPath += "&OS=" + url.QueryEscape(pullConfig.OS)
+	}
+	if pullConfig.Variant != "" {
+		urlPath += "&Variant=" + url.QueryEscape(pullConfig.Variant)
+	}
 
 	res, err := c.PostWithHeaders(ctx, urlPath, nil, headers)
 	if err != nil {
