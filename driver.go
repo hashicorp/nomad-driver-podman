@@ -1235,8 +1235,6 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 	return ulimits, nil
 }
 
-// Creates the requested image if missing from storage
-// returns the 64-byte image ID as an unique image identifier
 // imagePlatform holds optional OS/architecture overrides for an image pull.
 // These correspond to podman's --arch, --os and --variant flags.
 type imagePlatform struct {
@@ -1245,11 +1243,13 @@ type imagePlatform struct {
 	variant string
 }
 
-// set reports whether any platform override has been requested.
-func (p imagePlatform) set() bool {
+// isSet reports whether any platform override has been requested.
+func (p imagePlatform) isSet() bool {
 	return p.arch != "" || p.os != "" || p.variant != ""
 }
 
+// Creates the requested image if missing from storage
+// returns the 64-byte image ID as an unique image identifier
 func (d *Driver) createImage(
 	image string,
 	auth *TaskAuthConfig,
@@ -1307,7 +1307,7 @@ func (d *Driver) createImage(
 	// variant is fetched (podman skips the download if it is already present).
 	// Images loaded from an archive cannot be pulled from a registry, so the
 	// platform override does not apply to them and the cache shortcut is kept.
-	usePlatform := platform.set() && !loadedFromArchive
+	usePlatform := platform.isSet() && !loadedFromArchive
 	if !forcePull && !usePlatform && imageID != "" {
 		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
@@ -1348,7 +1348,7 @@ func (d *Driver) createImage(
 	// are not collapsed into a single result.
 	pullKey := imageName
 	if usePlatform {
-		pullKey = strings.Join([]string{imageName, platform.os, platform.arch, platform.variant}, "|")
+		pullKey = fmt.Sprintf("%s|%s|%s|%s", imageName, platform.os, platform.arch, platform.variant)
 	}
 
 	result, err, _ := d.pullGroup.Do(pullKey, func() (interface{}, error) {

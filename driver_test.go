@@ -2349,6 +2349,39 @@ func Test_createImage(t *testing.T) {
 	}
 }
 
+func Test_createImagePlatform(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		Name     string
+		Image    string
+		Platform imagePlatform
+	}{
+		{
+			Name:     "amd64",
+			Image:    "docker.io/library/alpine:latest",
+			Platform: imagePlatform{os: "linux", arch: "amd64"},
+		},
+		{
+			Name:     "arm64",
+			Image:    "docker.io/library/alpine:latest",
+			Platform: imagePlatform{os: "linux", arch: "arm64"},
+		},
+	}
+
+	ids := make(map[string]string, len(testCases))
+	for _, testCase := range testCases {
+		ids[testCase.Name] = createInspectImagePlatform(t, testCase.Image, testCase.Platform)
+	}
+
+	// The platform override must actually take effect: the same image reference
+	// pulled for two different architectures resolves to two different image
+	// IDs. This also exercises the cache-bypass (no force_pull) and the
+	// per-platform singleflight key.
+	must.NotEq(t, ids["amd64"], ids["arm64"],
+		must.Sprint("expected the amd64 and arm64 overrides to resolve to different image IDs"))
+}
+
 func Test_createImageArchives(t *testing.T) {
 	ci.Parallel(t)
 
@@ -2405,6 +2438,23 @@ func createInspectImage(t *testing.T, image, reference string) {
 	idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), reference)
 	must.NoError(t, err)
 	must.Eq(t, idRef, idTest)
+}
+
+func createInspectImagePlatform(t *testing.T, image string, platform imagePlatform) string {
+	d := podmanDriverHarness(t, nil)
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "inspectImagePlatform",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	driver := getPodmanDriver(t, d)
+	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, platform, driver.defaultPodman, 5*time.Minute, task)
+	must.NoError(t, err)
+	must.NotEq(t, "", idTest)
+
+	return idTest
 }
 
 func Test_setTaskCpuset(t *testing.T) {

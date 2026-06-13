@@ -541,14 +541,14 @@ config {
 }
 ```
 
-  Notes:
-  - When any of these are set, the driver always pulls the image (the local image
-    cache lookup is platform-agnostic), so the correct variant is fetched. podman
-    skips the download if the matching image is already present.
-  - Nomad servers treat the task config as an opaque blob and cannot validate
-    these overrides at scheduling time. If a target node cannot run the requested
-    platform, use [`constraint`](https://developer.hashicorp.com/nomad/docs/job-specification/constraint)
-    blocks to pin the workload to compatible nodes, for example:
+  When any of these are set, the driver always pulls the image (the local image
+  cache lookup is platform-agnostic), so the correct variant is fetched. podman
+  skips the download if the matching image is already present.
+
+  Nomad servers treat the task config as an opaque blob and cannot validate these
+  overrides at scheduling time. If a target node cannot run the requested platform,
+  use [`constraint`](https://developer.hashicorp.com/nomad/docs/job-specification/constraint)
+  blocks to pin the workload to compatible nodes, for example:
 
 ```hcl
 constraint {
