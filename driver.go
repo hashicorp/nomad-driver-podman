@@ -756,6 +756,45 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		createOpts.ContainerStorageConfig.ShmSize = &shmsize
 	}
 
+	// Populate the IPC namespace mode only if configured. When unset, Podman
+	// applies its default (private). This mirrors the network_mode handling and
+	// supports the same task: convenience for sharing within an allocation,
+	// which is required for use cases such as NVIDIA MPS GPU sharing.
+	if podmanTaskConfig.IPCMode != "" {
+		// shm_size only makes sense when the container owns its /dev/shm, i.e.
+		// a private or shareable IPC namespace. host/none/container/ns either
+		// inherit an external /dev/shm or have none, so reject the combination
+		// to fail fast with a clear error instead of letting Podman error out.
+		ipcMode := podmanTaskConfig.IPCMode
+		ownsShm := ipcMode == "private" || ipcMode == "shareable"
+		if podmanTaskConfig.ShmSize != "" && !ownsShm {
+			return nil, nil, fmt.Errorf("shm_size cannot be used with ipc_mode=%q; it requires a private or shareable IPC namespace", ipcMode)
+		}
+
+		switch {
+		case ipcMode == "host":
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.Host
+		case ipcMode == "private":
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.Private
+		case ipcMode == "shareable":
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.Shareable
+		case ipcMode == "none":
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.NamespaceMode("none")
+		case strings.HasPrefix(ipcMode, "container:"):
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.FromContainer
+			createOpts.ContainerStorageConfig.IpcNS.Value = strings.TrimPrefix(ipcMode, "container:")
+		case strings.HasPrefix(ipcMode, "ns:"):
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.Path
+			createOpts.ContainerStorageConfig.IpcNS.Value = strings.TrimPrefix(ipcMode, "ns:")
+		case strings.HasPrefix(ipcMode, "task:"):
+			otherTaskName := strings.TrimPrefix(ipcMode, "task:")
+			createOpts.ContainerStorageConfig.IpcNS.NSMode = api.FromContainer
+			createOpts.ContainerStorageConfig.IpcNS.Value = BuildContainerNameForTask(otherTaskName, cfg)
+		default:
+			return nil, nil, fmt.Errorf("invalid ipc_mode %q: expected one of host, private, shareable, none, container:<id>, ns:<path>, task:<name>", ipcMode)
+		}
+	}
+
 	// Get Podman version as networking option availability depends on the version
 	apiVersion := podmanClient.GetAPIVersion()
 	versionValue, _ := version2.NewVersion(apiVersion)

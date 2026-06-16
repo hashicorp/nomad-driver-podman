@@ -565,6 +565,29 @@ config {
 }
 ```
 
+* **ipc_mode** - (Optional) Set the [IPC namespace mode](https://docs.podman.io/en/latest/markdown/podman-run.1.html#ipc-ipc) for the container. When unset, Podman uses its default (a `private` IPC namespace).
+
+* `host`: use the host's IPC namespace. Note: this gives the container access to
+  host IPC primitives and is therefore considered insecure.
+* `private`: create a private IPC namespace (the default).
+* `shareable`: create a private IPC namespace that other containers may join.
+* `none`: create a private IPC namespace without mounting `/dev/shm`.
+* `container:id`: join the IPC namespace of another podman container.
+* `ns:path`: join the IPC namespace at the given path.
+* `task:name-of-other-task`: join the IPC namespace of another task in the same
+  allocation. This is useful for sharing `/dev/shm` between tasks, for example
+  with the NVIDIA Multi-Process Service (MPS) for GPU sharing.
+
+`ipc_mode` cannot be combined with `shm_size` unless it is set to
+`private` or `shareable`, since the other modes do not own the container's
+`/dev/shm`.
+
+```hcl
+config {
+  ipc_mode = "task:mps-daemon"
+}
+```
+
 * **pids_limit** - (Optional) An integer value that specifies the pid limit for the container.
 
 ```hcl

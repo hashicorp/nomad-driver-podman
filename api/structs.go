@@ -559,6 +559,9 @@ const (
 	FromPod NamespaceMode = "pod"
 	// Private indicates the namespace is private
 	Private NamespaceMode = "private"
+	// Shareable indicates the IPC namespace is private but can be shared
+	// with other containers (e.g. via --ipc=container:<id>)
+	Shareable NamespaceMode = "shareable"
 	// NoNetwork indicates no network namespace should
 	// be joined.  loopback should still exists
 	NoNetwork NamespaceMode = "none"

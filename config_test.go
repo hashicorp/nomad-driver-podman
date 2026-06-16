@@ -168,6 +168,22 @@ func TestConfig_PodmanOOMScoreAdj(t *testing.T) {
 	must.Eq(t, "default", tc.Socket)
 }
 
+func TestConfig_IPCMode(t *testing.T) {
+	ci.Parallel(t)
+
+	parser := newConfigParser(taskConfigSpec)
+	validHCL := `
+	config {
+		image = "docker://redis"
+		ipc_mode = "host"
+	}
+	`
+
+	var tc *TaskConfig
+	parser.ParseHCL(t, validHCL, &tc)
+	must.Eq(t, "host", tc.IPCMode)
+}
+
 func TestPluginConfig_Parsing(t *testing.T) {
 	ci.Parallel(t)
 
