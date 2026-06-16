@@ -2452,7 +2452,15 @@ func createInspectImagePlatform(t *testing.T, image string, platform imagePlatfo
 	driver := getPodmanDriver(t, d)
 	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, platform, driver.defaultPodman, 5*time.Minute, task)
 	must.NoError(t, err)
-	must.NotEq(t, "", idTest)
+
+	// Independently inspect the stored image for the requested platform and
+	// confirm createImage returned that exact image ID. This verifies the
+	// correct platform variant was pulled, not merely that some image with the
+	// given name exists.
+	idRef, err := driver.defaultPodman.ImageInspectIDForPlatform(
+		context.Background(), image, platform.os, platform.arch, platform.variant)
+	must.NoError(t, err)
+	must.Eq(t, idRef, idTest)
 
 	return idTest
 }
