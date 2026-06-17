@@ -527,6 +527,41 @@ config {
 }
 ```
 
+* **arch** / **os** / **variant** - (Optional) Override the architecture, operating
+  system and variant of the image to pull. These map to podman's `--arch`, `--os`
+  and `--variant` pull flags. When unset, the host platform defaults are used.
+  This is mainly useful for pulling Linux images on a FreeBSD host, or for pulling
+  a non-native architecture image on a host with emulation configured.
+
+```hcl
+config {
+  image = "docker.io/nginx:latest"
+  os    = "linux"
+  arch  = "amd64"
+}
+```
+
+  When any of these are set, the driver always pulls the image (the local image
+  cache lookup is platform-agnostic), so the correct variant is fetched. podman
+  skips the download if the matching image is already present.
+
+  Nomad servers treat the task config as an opaque blob and cannot validate these
+  overrides at scheduling time. If a target node cannot run the requested platform,
+  use [`constraint`](https://developer.hashicorp.com/nomad/docs/job-specification/constraint)
+  blocks to pin the workload to compatible nodes, for example:
+
+```hcl
+constraint {
+  attribute = "${attr.kernel.name}"
+  value     = "freebsd"
+}
+
+config {
+  image = "docker.io/nginx:latest"
+  os    = "linux"
+}
+```
+
 * **readonly_rootfs** - (Optional)  true or false (default). Mount the rootfs as read-only.
 
 ```hcl
