@@ -2239,7 +2239,7 @@ func startDestroyInspectImage(t *testing.T, image string, taskName string) {
 		Resources: createBasicResources(),
 	}
 	driver := getPodmanDriver(t, d)
-	imageID, err := driver.createImage(image, &TaskAuthConfig{}, false, false, driver.defaultPodman, 5*time.Minute, task)
+	imageID, err := driver.createImage(image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
 	must.NoError(t, err)
 	must.Eq(t, imageID, inspectData.Image)
 }
@@ -2320,7 +2320,7 @@ insecure = true`
 		// Pull image using our proxy.
 		image := "localhost:5000/quay/busybox:latest"
 		driver := getPodmanDriver(t, d)
-		_, err = driver.createImage(image, &TaskAuthConfig{}, false, true, driver.defaultPodman, 3*time.Second, task)
+		_, err = driver.createImage(image, &TaskAuthConfig{}, false, true, imagePlatform{}, driver.defaultPodman, 3*time.Second, task)
 		resultCh <- err
 	}()
 
@@ -2347,6 +2347,39 @@ func Test_createImage(t *testing.T) {
 	for _, testCase := range testCases {
 		createInspectImage(t, testCase.Image, testCase.Reference)
 	}
+}
+
+func Test_createImagePlatform(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		Name     string
+		Image    string
+		Platform imagePlatform
+	}{
+		{
+			Name:     "amd64",
+			Image:    "docker.io/library/alpine:latest",
+			Platform: imagePlatform{os: "linux", arch: "amd64"},
+		},
+		{
+			Name:     "arm64",
+			Image:    "docker.io/library/alpine:latest",
+			Platform: imagePlatform{os: "linux", arch: "arm64"},
+		},
+	}
+
+	ids := make(map[string]string, len(testCases))
+	for _, testCase := range testCases {
+		ids[testCase.Name] = createInspectImagePlatform(t, testCase.Image, testCase.Platform)
+	}
+
+	// The platform override must actually take effect: the same image reference
+	// pulled for two different architectures resolves to two different image
+	// IDs. This also exercises the cache-bypass (no force_pull) and the
+	// per-platform singleflight key.
+	must.NotEq(t, ids["amd64"], ids["arm64"],
+		must.Sprint("expected the amd64 and arm64 overrides to resolve to different image IDs"))
 }
 
 func Test_createImageArchives(t *testing.T) {
@@ -2399,12 +2432,37 @@ func createInspectImage(t *testing.T, image, reference string) {
 		Resources: createBasicResources(),
 	}
 	driver := getPodmanDriver(t, d)
-	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, driver.defaultPodman, 5*time.Minute, task)
+	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
 	must.NoError(t, err)
 
 	idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), reference)
 	must.NoError(t, err)
 	must.Eq(t, idRef, idTest)
+}
+
+func createInspectImagePlatform(t *testing.T, image string, platform imagePlatform) string {
+	d := podmanDriverHarness(t, nil)
+
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "inspectImagePlatform",
+		AllocID:   uuid.Generate(),
+		Resources: createBasicResources(),
+	}
+	driver := getPodmanDriver(t, d)
+	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, platform, driver.defaultPodman, 5*time.Minute, task)
+	must.NoError(t, err)
+
+	// Independently inspect the stored image for the requested platform and
+	// confirm createImage returned that exact image ID. This verifies the
+	// correct platform variant was pulled, not merely that some image with the
+	// given name exists.
+	idRef, err := driver.defaultPodman.ImageInspectIDForPlatform(
+		context.Background(), image, platform.os, platform.arch, platform.variant)
+	must.NoError(t, err)
+	must.Eq(t, idRef, idTest)
+
+	return idTest
 }
 
 func Test_setTaskCpuset(t *testing.T) {

@@ -974,6 +974,11 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 			&podmanTaskConfig.Auth,
 			podmanTaskConfig.AuthSoftFail,
 			podmanTaskConfig.ForcePull,
+			imagePlatform{
+				arch:    podmanTaskConfig.Arch,
+				os:      podmanTaskConfig.OS,
+				variant: podmanTaskConfig.Variant,
+			},
 			podmanClient,
 			imagePullTimeout,
 			cfg,
@@ -1230,6 +1235,19 @@ func sliceMergeUlimit(ulimitsRaw map[string]string) ([]spec.POSIXRlimit, error) 
 	return ulimits, nil
 }
 
+// imagePlatform holds optional OS/architecture overrides for an image pull.
+// These correspond to podman's --arch, --os and --variant flags.
+type imagePlatform struct {
+	arch    string
+	os      string
+	variant string
+}
+
+// isSet reports whether any platform override has been requested.
+func (p imagePlatform) isSet() bool {
+	return p.arch != "" || p.os != "" || p.variant != ""
+}
+
 // Creates the requested image if missing from storage
 // returns the 64-byte image ID as an unique image identifier
 func (d *Driver) createImage(
@@ -1237,12 +1255,14 @@ func (d *Driver) createImage(
 	auth *TaskAuthConfig,
 	authSoftFail bool,
 	forcePull bool,
+	platform imagePlatform,
 	podmanClient *api.API,
 	imagePullTimeout time.Duration,
 	cfg *drivers.TaskConfig,
 ) (string, error) {
 	var imageID string
 	imageName := image
+	loadedFromArchive := false
 	// If it is a shortname, we should not have to worry
 	// Let podman deal with it according to user configuration
 	if !shortnames.IsShortName(image) {
@@ -1271,6 +1291,7 @@ func (d *Driver) createImage(
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
 			}
+			loadedFromArchive = true
 		}
 	}
 
@@ -1280,7 +1301,14 @@ func (d *Driver) createImage(
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "error", err)
 	}
-	if !forcePull && imageID != "" {
+	// The local image lookup above is platform-agnostic: it resolves an image
+	// by name regardless of its OS/architecture. When a platform override is
+	// requested, bypass the cache shortcut and always pull so the correct
+	// variant is fetched (podman skips the download if it is already present).
+	// Images loaded from an archive cannot be pulled from a registry, so the
+	// platform override does not apply to them and the cache shortcut is kept.
+	usePlatform := platform.isSet() && !loadedFromArchive
+	if !forcePull && !usePlatform && imageID != "" {
 		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
 	}
@@ -1306,8 +1334,24 @@ func (d *Driver) createImage(
 		CredentialsHelper: d.config.Auth.Helper,
 		AuthSoftFail:      authSoftFail,
 	}
+	// Only thread the platform override through for pullable references. For
+	// archive-loaded images these fields are meaningless and the image is
+	// already present locally.
+	if !loadedFromArchive {
+		pc.Arch = platform.arch
+		pc.OS = platform.os
+		pc.Variant = platform.variant
+	}
 
-	result, err, _ := d.pullGroup.Do(imageName, func() (interface{}, error) {
+	// Key the singleflight group on both the image name and the requested
+	// platform so concurrent pulls of the same image for different platforms
+	// are not collapsed into a single result.
+	pullKey := imageName
+	if usePlatform {
+		pullKey = fmt.Sprintf("%s|%s|%s|%s", imageName, platform.os, platform.arch, platform.variant)
+	}
+
+	result, err, _ := d.pullGroup.Do(pullKey, func() (interface{}, error) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), imagePullTimeout)
 		defer cancel()
