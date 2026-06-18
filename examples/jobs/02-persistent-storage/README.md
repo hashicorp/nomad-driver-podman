@@ -1,4 +1,4 @@
-# 03 - Persistent Storage
+# 02 - Persistent Storage
 
 Run a stateful [PostgreSQL](https://www.postgresql.org/) database whose data
 survives task restarts, by bind-mounting a host directory into the container.
@@ -26,7 +26,7 @@ not create it). Create it first, then run the job.
 **Rootful Podman** (default path):
 
 ```sh
-cd examples/jobs/03-persistent-storage
+cd examples/jobs/02-persistent-storage
 sudo mkdir -p /srv/podman-examples/postgres
 nomad job run postgres.nomad
 ```
@@ -34,7 +34,7 @@ nomad job run postgres.nomad
 **Rootless Podman** — point the job at a directory your user owns:
 
 ```sh
-cd examples/jobs/03-persistent-storage
+cd examples/jobs/02-persistent-storage
 mkdir -p "$HOME/pg-data"
 nomad job run -var "host_data_dir=$HOME/pg-data" postgres.nomad
 ```
@@ -56,14 +56,14 @@ Postgres user inside the container.
 nomad job status persistent-storage
 
 # Create a table and a row.
-cid=$(podman ps -qf name=postgres)
+cid=$(podman ps -qf name=^postgres-)
 podman exec -i "$cid" psql -U demo -d demo -c \
   "CREATE TABLE IF NOT EXISTS t (msg text); INSERT INTO t VALUES ('it persists');"
 
 # Restart the task, then confirm the row is still there.
 nomad alloc restart $(nomad job allocs -json persistent-storage | jq -r '.[0].ID')
 sleep 5
-cid=$(podman ps -qf name=postgres)
+cid=$(podman ps -qf name=^postgres-)
 podman exec -i "$cid" psql -U demo -d demo -c "SELECT msg FROM t;"
 ```
 
@@ -111,5 +111,5 @@ sudo rm -rf /srv/podman-examples/postgres
 
 ## Next
 
-Continue to [04 - Service Discovery & Health Checks](../04-service-health/) to
-register a service and gate traffic on health checks.
+Continue to [03 - Sidecar / Shared Network](../03-sidecar-network/) to run
+multiple containers that share a single network namespace.

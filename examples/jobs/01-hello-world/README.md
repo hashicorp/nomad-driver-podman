@@ -31,7 +31,7 @@ nomad job run redis.nomad
 nomad job status hello-world
 
 # 2. Podman should show the container.
-podman ps --filter name=redis
+podman ps --filter name=^redis-
 
 # 3. Talk to Redis through the published port. Read the host:port that Nomad
 #    assigned, then PING it.
@@ -45,7 +45,7 @@ redis-cli -u "redis://${addr}" PING
 If you don't have `redis-cli` locally, exec into the container instead:
 
 ```sh
-podman exec -it $(podman ps -qf name=redis) redis-cli PING
+podman exec -it $(podman ps -qf name=^redis-) redis-cli PING
 ```
 
 ## Expected output
@@ -80,5 +80,5 @@ nomad job stop -purge hello-world
 
 ## Next
 
-Continue to [02 - Configuration & Templates](../02-config-templates/) to learn
-how to inject configuration files and environment variables into a container.
+Continue to [02 - Persistent Storage](../02-persistent-storage/) to run a
+stateful container whose data survives task restarts.

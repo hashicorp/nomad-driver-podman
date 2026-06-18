@@ -1,7 +1,7 @@
 # Podman Driver Examples
 
 A curated, progressive set of Nomad + Podman examples. They start from a
-single-container "hello world" and build up to a production-shaped deployment.
+single-container "hello world" and build up to a rootless, hardened deployment.
 Each example is self-contained: a runnable job spec plus a README explaining
 what it demonstrates, exact run/verify steps, and the expected output.
 
@@ -13,12 +13,9 @@ top of the previous.
 | # | Example | What you learn | Key options |
 | --- | --- | --- | --- |
 | 1 | [Hello World](01-hello-world/) | The minimal runnable job | `image`, `ports`, `resources` |
-| 2 | [Configuration & Templates](02-config-templates/) | Inject config/files into a stock image | `template`, `env`, `volumes` |
-| 3 | [Persistent Storage](03-persistent-storage/) | Stateful data that survives restarts | bind-mount `volumes`, job `variable` |
-| 4 | [Service Discovery & Health](04-service-health/) | Register a service, gate on health | `service` (Nomad provider), `check` |
-| 5 | [Sidecar / Shared Network](05-sidecar-network/) | Multiple containers, one namespace | `network_mode = "task:..."`, `lifecycle` |
-| 6 | [Rootless & Hardened](06-rootless-hardened/) | Unprivileged, locked-down containers | `socket`, `user`, `cap_drop`, `readonly_rootfs`, `security_opt` |
-| 7 | [Production Scaling & Rollouts](07-production-scaling/) | Scale + safely upgrade a service | `count`, `update` (canary), `restart`, `reschedule` |
+| 2 | [Persistent Storage](02-persistent-storage/) | Stateful data that survives restarts | bind-mount `volumes` (`:U`), job `variable` |
+| 3 | [Sidecar / Shared Network](03-sidecar-network/) | Multiple containers, one namespace | `network_mode = "task:..."`, `lifecycle` |
+| 4 | [Rootless & Hardened](04-rootless-hardened/) | Unprivileged, locked-down containers | `socket`, `user`, `cap_drop`, `readonly_rootfs`, `security_opt` |
 
 ## Prerequisites (all examples)
 

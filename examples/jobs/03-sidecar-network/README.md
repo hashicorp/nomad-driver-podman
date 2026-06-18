@@ -1,4 +1,4 @@
-# 05 - Sidecar with a Shared Network Namespace
+# 03 - Sidecar with a Shared Network Namespace
 
 Run two cooperating containers in a single network namespace: an application
 that binds a **private** port on localhost, and a reverse-proxy sidecar that
@@ -37,7 +37,7 @@ relative to your **current working directory** (not the job file). Run from
 this directory so the template is found:
 
 ```sh
-cd examples/jobs/05-sidecar-network
+cd examples/jobs/03-sidecar-network
 nomad job run app.nomad
 ```
 
@@ -89,5 +89,5 @@ nomad job stop -purge sidecar-network
 
 ## Next
 
-Continue to [06 - Rootless & Hardened](../06-rootless-hardened/) to run
+Continue to [04 - Rootless & Hardened](../04-rootless-hardened/) to run
 containers as an unprivileged user with a tightened security profile.

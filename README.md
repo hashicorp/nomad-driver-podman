@@ -78,16 +78,13 @@ CONTAINER ID  IMAGE                           COMMAND               CREATED     
 For practical, end-to-end examples that go beyond this single-container snippet,
 see the [examples directory](examples/jobs/README.md). It contains a curated
 learning path that progresses from a "hello world" container to a
-production-shaped deployment, with each example documenting what it demonstrates,
+rootless, hardened deployment, with each example documenting what it demonstrates,
 exact run/verify steps, and the expected output:
 
 1. [Hello World](examples/jobs/01-hello-world/) — the minimal runnable job
-2. [Configuration & Templates](examples/jobs/02-config-templates/) — inject config into a stock image
-3. [Persistent Storage](examples/jobs/03-persistent-storage/) — stateful data that survives restarts
-4. [Service Discovery & Health](examples/jobs/04-service-health/) — register a service and gate on health
-5. [Sidecar / Shared Network](examples/jobs/05-sidecar-network/) — multiple containers in one network namespace
-6. [Rootless & Hardened](examples/jobs/06-rootless-hardened/) — unprivileged, locked-down containers
-7. [Production Scaling & Rollouts](examples/jobs/07-production-scaling/) — scale and safely upgrade a service
+2. [Persistent Storage](examples/jobs/02-persistent-storage/) — stateful data that survives restarts
+3. [Sidecar / Shared Network](examples/jobs/03-sidecar-network/) — multiple containers in one network namespace
+4. [Rootless & Hardened](examples/jobs/04-rootless-hardened/) — unprivileged, locked-down containers
 
 ## Building The Driver from source
 
@@ -603,7 +600,7 @@ config {
 
 A typical example is a network server and a metric exporter or log shipping sidecar. The metric exporter needs access to i.E. a private monitoring Port which should not be exposed the the network and thus is usually bound to localhost.
 
-The repository includes three different examples jobs for such a setup. All of them will start a [nats](https://nats.io/) server and a [prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter) using different approaches. For a minimal, fully documented version of this sidecar pattern, see [examples/jobs/05-sidecar-network](examples/jobs/05-sidecar-network/).
+The repository includes three different examples jobs for such a setup. All of them will start a [nats](https://nats.io/) server and a [prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter) using different approaches. For a minimal, fully documented version of this sidecar pattern, see [examples/jobs/03-sidecar-network](examples/jobs/03-sidecar-network/).
 
 You can use `curl` to proof that the job is working correctly and that you can get prometheus metrics:
 

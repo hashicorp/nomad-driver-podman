@@ -27,7 +27,7 @@ config.
 
 - A running Nomad agent with the `nomad-driver-podman` plugin.
 - The driver's `volumes` feature must be enabled (it is by default):
-  ```hcl
+yes  ```hcl
   plugin "nomad-driver-podman" {
     config {
       volumes { enabled = true }

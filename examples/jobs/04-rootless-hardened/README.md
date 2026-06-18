@@ -1,4 +1,4 @@
-# 06 - Rootless & Hardened
+# 04 - Rootless & Hardened
 
 Run a container as an unprivileged user against a **rootless** Podman socket,
 with a defense-in-depth security profile. This is the recommended posture for
@@ -42,7 +42,7 @@ untrusted or internet-facing workloads.
 ## Run
 
 ```sh
-cd examples/jobs/06-rootless-hardened
+cd examples/jobs/04-rootless-hardened
 nomad job run web.nomad
 ```
 
@@ -101,5 +101,6 @@ nomad job stop -purge rootless-hardened
 
 ## Next
 
-Continue to [07 - Production Scaling & Rollouts](../07-production-scaling/) to
-put the patterns together into a scaled, safely-updated deployment.
+That's the end of the learning path. Head back to the
+[examples index](../README.md) to revisit any example or explore the additional
+scenario jobs.
