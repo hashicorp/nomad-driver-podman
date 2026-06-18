@@ -26,6 +26,7 @@ not create it). Create it first, then run the job.
 **Rootful Podman** (default path):
 
 ```sh
+cd examples/jobs/03-persistent-storage
 sudo mkdir -p /srv/podman-examples/postgres
 nomad job run postgres.nomad
 ```
@@ -33,12 +34,21 @@ nomad job run postgres.nomad
 **Rootless Podman** — point the job at a directory your user owns:
 
 ```sh
+cd examples/jobs/03-persistent-storage
 mkdir -p "$HOME/pg-data"
 nomad job run -var "host_data_dir=$HOME/pg-data" postgres.nomad
 ```
 
 The job mounts the directory with the `:U` option so Podman chowns it to the
 Postgres user inside the container.
+
+> **Rootless tip:** the data directory must be owned by the user that runs the
+> Podman socket so the `:U` chown can succeed. If you previously started this
+> example with rootful Podman (or `sudo`), the directory may be left owned by
+> `root` and the rootless run will fail with
+> `failed to chown recursively host path: ... operation not permitted`.
+> Remove the stale directory and recreate it as your user:
+> `sudo rm -rf "$HOME/pg-data" && mkdir -p "$HOME/pg-data"`.
 
 ## Verify
 

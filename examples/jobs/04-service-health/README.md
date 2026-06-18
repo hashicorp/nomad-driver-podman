@@ -19,6 +19,7 @@ required.
 ## Run
 
 ```sh
+cd examples/jobs/04-service-health
 nomad job run echo.nomad
 ```
 

@@ -22,6 +22,7 @@ upgrades, automatic recovery, and health-gated service discovery.
 ## Run
 
 ```sh
+cd examples/jobs/07-production-scaling
 nomad job run api.nomad
 ```
 

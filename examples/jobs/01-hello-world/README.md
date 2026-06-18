@@ -20,6 +20,7 @@ Nomad + Podman workload before.
 ## Run
 
 ```sh
+cd examples/jobs/01-hello-world
 nomad job run redis.nomad
 ```
 

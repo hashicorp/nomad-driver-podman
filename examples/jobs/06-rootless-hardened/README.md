@@ -39,6 +39,7 @@ untrusted or internet-facing workloads.
 ## Run
 
 ```sh
+cd examples/jobs/06-rootless-hardened
 nomad job run web.nomad
 ```
 
