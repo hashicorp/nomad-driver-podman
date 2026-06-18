@@ -84,7 +84,8 @@ exact run/verify steps, and the expected output:
 1. [Hello World](examples/jobs/01-hello-world/) — the minimal runnable job
 2. [Persistent Storage](examples/jobs/02-persistent-storage/) — stateful data that survives restarts
 3. [Sidecar / Shared Network](examples/jobs/03-sidecar-network/) — multiple containers in one network namespace
-4. [Rootless & Hardened](examples/jobs/04-rootless-hardened/) — unprivileged, locked-down containers
+4. [Service Discovery & Health Checks](examples/jobs/04-service-health/) — native service registration with a health check
+5. [Rootless & Hardened](examples/jobs/05-rootless-hardened/) — unprivileged, locked-down containers
 
 ## Building The Driver from source
 

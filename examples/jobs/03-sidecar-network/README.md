@@ -89,5 +89,5 @@ nomad job stop -purge sidecar-network
 
 ## Next
 
-Continue to [04 - Rootless & Hardened](../04-rootless-hardened/) to run
-containers as an unprivileged user with a tightened security profile.
+Continue to [04 - Service Discovery & Health Checks](../04-service-health/) to
+register a workload in Nomad's service catalog and gate it on a health check.

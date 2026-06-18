@@ -1,4 +1,4 @@
-# 04 - Rootless & Hardened
+# 05 - Rootless & Hardened
 
 Run a container as an unprivileged user against a **rootless** Podman socket,
 with a defense-in-depth security profile. This is the recommended posture for
@@ -42,7 +42,7 @@ untrusted or internet-facing workloads.
 ## Run
 
 ```sh
-cd examples/jobs/04-rootless-hardened
+cd examples/jobs/05-rootless-hardened
 nomad job run web.nomad
 ```
 

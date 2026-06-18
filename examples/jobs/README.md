@@ -15,7 +15,8 @@ top of the previous.
 | 1 | [Hello World](01-hello-world/) | The minimal runnable job | `image`, `ports`, `resources` |
 | 2 | [Persistent Storage](02-persistent-storage/) | Stateful data that survives restarts | bind-mount `volumes` (`:U`), job `variable` |
 | 3 | [Sidecar / Shared Network](03-sidecar-network/) | Multiple containers, one namespace | `network_mode = "task:..."`, `lifecycle` |
-| 4 | [Rootless & Hardened](04-rootless-hardened/) | Unprivileged, locked-down containers | `socket`, `user`, `cap_drop`, `readonly_rootfs`, `security_opt` |
+| 4 | [Service Discovery & Health Checks](04-service-health/) | Native service registration, health-gated allocations | `service`, `check`, `provider = "nomad"` |
+| 5 | [Rootless & Hardened](05-rootless-hardened/) | Unprivileged, locked-down containers | `socket`, `user`, `cap_drop`, `readonly_rootfs`, `security_opt` |
 
 ## Prerequisites (all examples)
 
