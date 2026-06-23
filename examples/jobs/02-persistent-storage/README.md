@@ -14,7 +14,18 @@ survives task restarts, by bind-mounting a host directory into the container.
 ## Prerequisites
 
 - A running Nomad agent with the `nomad-driver-podman` plugin.
-- The driver's `volumes` feature enabled (default).
+- The driver's `volumes` feature must be enabled so the task can bind-mount a
+  host path into the container. It is enabled by default, but if your agent
+  configures the plugin explicitly, make sure the block includes it:
+  ```hcl
+  plugin "nomad-driver-podman" {
+    config {
+      volumes {
+        enabled = true
+      }
+    }
+  }
+  ```
 - A client node where Podman may create/write the host data directory
   (`/srv/podman-examples/postgres` by default).
 
