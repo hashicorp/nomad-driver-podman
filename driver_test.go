@@ -2136,15 +2136,15 @@ func TestPodmanDriver_IPCModes(t *testing.T) {
 			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 			d := podmanDriverHarness(t, nil)
-			defer d.MkAllocDir(task, true)()
+			t.Cleanup(d.MkAllocDir(task, true))
 
 			containerName := BuildContainerName(task)
 			_, _, err := d.StartTask(task)
 			must.NoError(t, err)
 
-			defer func() {
+			t.Cleanup(func() {
 				_ = d.DestroyTask(task.ID, true)
-			}()
+			})
 
 			must.NoError(t, d.WaitUntilStarted(task.ID, 20*time.Second))
 
@@ -2196,27 +2196,25 @@ func TestPodmanDriver_IPCMode_Task(t *testing.T) {
 	must.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
 
 	mainHarness := podmanDriverHarness(t, nil)
-	mainCleanup := mainHarness.MkAllocDir(mainTask, true)
-	defer mainCleanup()
+	t.Cleanup(mainHarness.MkAllocDir(mainTask, true))
 
 	_, _, err := mainHarness.StartTask(mainTask)
 	must.NoError(t, err)
-	defer func() {
+	t.Cleanup(func() {
 		_ = mainHarness.DestroyTask(mainTask.ID, true)
-	}()
+	})
 
 	// ensure the main task is running before the sidecar attempts to join
 	must.NoError(t, mainHarness.WaitUntilStarted(mainTask.ID, 20*time.Second))
 
 	sidecarHarness := podmanDriverHarness(t, nil)
-	sidecarCleanup := sidecarHarness.MkAllocDir(sidecarTask, true)
-	defer sidecarCleanup()
+	t.Cleanup(sidecarHarness.MkAllocDir(sidecarTask, true))
 
 	_, _, err = sidecarHarness.StartTask(sidecarTask)
 	must.NoError(t, err)
-	defer func() {
+	t.Cleanup(func() {
 		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
-	}()
+	})
 
 	// Attempt to wait
 	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
@@ -2225,7 +2223,7 @@ func TestPodmanDriver_IPCMode_Task(t *testing.T) {
 	select {
 	case res := <-waitCh:
 		// should have a exitcode=0 result
-		must.True(t, res.Successful())
+		must.True(t, res.Successful(), must.Sprint("expected sidecar task to be successful"))
 	case <-time.After(15 * time.Second):
 		t.Fatalf("Sidecar did not exit in time")
 	}
@@ -2268,7 +2266,7 @@ func TestPodmanDriver_IPCMode_ShmSizeConflict(t *testing.T) {
 			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 			d := podmanDriverHarness(t, nil)
-			defer d.MkAllocDir(task, true)()
+			t.Cleanup(d.MkAllocDir(task, true))
 
 			_, _, err := d.StartTask(task)
 			must.Error(t, err)
