@@ -2440,6 +2440,51 @@ func createInspectImage(t *testing.T, image, reference string) {
 	must.Eq(t, idRef, idTest)
 }
 
+func Test_createImageArchivesHTTP(t *testing.T) {
+	ci.Parallel(t)
+
+	doesNotExist := func(filepath string) bool {
+		_, err := os.Stat(filepath)
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
+		must.NoError(t, err)
+		return false
+	}
+
+	if doesNotExist("/tmp/oci-archive") || doesNotExist("/tmp/docker-archive") {
+		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
+	}
+
+	archiveDir := os.Getenv("ARCHIVE_DIR")
+	if archiveDir == "" {
+		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+	}
+
+	// Serve the prepared archive files over HTTP so createImage exercises the
+	// download-then-load path instead of reading from disk.
+	server := httptest.NewServer(http.FileServer(http.Dir(archiveDir)))
+	t.Cleanup(server.Close)
+
+	testCases := []struct {
+		Image     string
+		Reference string
+	}{
+		{
+			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", server.URL),
+			Reference: "docker.io/library/alpine:latest",
+		},
+		{
+			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", server.URL),
+			Reference: "docker.io/library/alpine:latest",
+		},
+	}
+
+	for _, testCase := range testCases {
+		createInspectImage(t, testCase.Image, testCase.Reference)
+	}
+}
+
 func createInspectImagePlatform(t *testing.T, image string, platform imagePlatform) string {
 	d := podmanDriverHarness(t, nil)
 
@@ -2697,6 +2742,83 @@ func Test_parseImage(t *testing.T) {
 		}
 
 	}
+}
+
+func Test_archiveTransportURL(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		Name    string
+		Input   string
+		WantURL string
+		WantOK  bool
+	}{
+		{
+			Name:    "oci-archive http",
+			Input:   "oci-archive:http://10.211.55.9:9999/uploads/myhttp.tar",
+			WantURL: "http://10.211.55.9:9999/uploads/myhttp.tar",
+			WantOK:  true,
+		},
+		{
+			Name:    "oci-archive https",
+			Input:   "oci-archive:https://example.com/image.tar",
+			WantURL: "https://example.com/image.tar",
+			WantOK:  true,
+		},
+		{
+			Name:    "docker-archive http",
+			Input:   "docker-archive:http://example.com/image.tar",
+			WantURL: "http://example.com/image.tar",
+			WantOK:  true,
+		},
+		{
+			Name:   "docker-archive local path with tag",
+			Input:  "docker-archive:/tmp/image.tar:latest",
+			WantOK: false,
+		},
+		{
+			Name:   "docker transport url",
+			Input:  "docker://quay.io/repo/busybox:latest",
+			WantOK: false,
+		},
+		{
+			Name:   "plain image name",
+			Input:  "busybox:latest",
+			WantOK: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			gotURL, gotOK := archiveTransportURL(testCase.Input)
+			must.Eq(t, testCase.WantOK, gotOK)
+			must.Eq(t, testCase.WantURL, gotURL)
+		})
+	}
+}
+
+// Test_loadImageFromURL_httpError verifies that a non-200 response from the
+// archive URL produces a clear error before any podman interaction.
+func Test_loadImageFromURL_httpError(t *testing.T) {
+	ci.Parallel(t)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "no such archive", http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	driver, ok := NewPodmanDriver(testlog.HCLogger(t)).(*Driver)
+	must.True(t, ok)
+
+	task := &drivers.TaskConfig{
+		ID:      uuid.Generate(),
+		Name:    "loadImageFromURL",
+		AllocID: uuid.Generate(),
+	}
+
+	_, err := driver.loadImageFromURL(server.URL+"/missing.tar", nil, time.Minute, task)
+	must.ErrorContains(t, err, "404")
+	must.ErrorContains(t, err, "unexpected status")
 }
 
 func Test_namedSocketIsDefault(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1263,9 +1264,20 @@ func (d *Driver) createImage(
 	var imageID string
 	imageName := image
 	loadedFromArchive := false
-	// If it is a shortname, we should not have to worry
-	// Let podman deal with it according to user configuration
-	if !shortnames.IsShortName(image) {
+	// Archive transports (oci-archive/docker-archive) pointing at an http(s)
+	// URL are handled here because the upstream containers/image reference
+	// parsers reject a URL in place of a local path. The archive is streamed
+	// straight to podman's load endpoint without staging it on disk.
+	if archiveURL, ok := archiveTransportURL(image); ok {
+		loadedName, err := d.loadImageFromURL(archiveURL, podmanClient, imagePullTimeout, cfg)
+		if err != nil {
+			return imageID, err
+		}
+		imageName = loadedName
+		loadedFromArchive = true
+	} else if !shortnames.IsShortName(image) {
+		// If it is a shortname, we should not have to worry
+		// Let podman deal with it according to user configuration
 		imageRef, err := parseImage(image)
 		if err != nil {
 			return imageID, fmt.Errorf("invalid image reference %s: %w", image, err)
@@ -1280,13 +1292,7 @@ func (d *Driver) createImage(
 			archiveData := imageRef.StringWithinTransport()
 			path := strings.Split(archiveData, ":")[0]
 			d.logger.Debug("Load image archive", "path", path)
-			_ = d.eventer.EmitEvent(&drivers.TaskEvent{
-				TaskID:    cfg.ID,
-				TaskName:  cfg.Name,
-				AllocID:   cfg.AllocID,
-				Timestamp: time.Now(),
-				Message:   "Loading image " + path,
-			})
+			d.emitImageEvent(cfg, "Loading image "+path)
 			imageName, err = podmanClient.ImageLoad(d.ctx, path)
 			if err != nil {
 				return imageID, fmt.Errorf("error while loading image: %w", err)
@@ -1315,13 +1321,7 @@ func (d *Driver) createImage(
 
 	d.logger.Info("Pulling image", "image", imageName)
 
-	_ = d.eventer.EmitEvent(&drivers.TaskEvent{
-		TaskID:    cfg.ID,
-		TaskName:  cfg.Name,
-		AllocID:   cfg.AllocID,
-		Timestamp: time.Now(),
-		Message:   "Pulling image " + imageName,
-	})
+	d.emitImageEvent(cfg, "Pulling image "+imageName)
 
 	pc := &registry.PullConfig{
 		Image:     imageName,
@@ -1367,6 +1367,75 @@ func (d *Driver) createImage(
 	imageID = result.(string)
 	d.logger.Debug("Pulled image ID", "imageID", imageID)
 	return imageID, nil
+}
+
+// emitImageEvent broadcasts a task event for an image operation (loading or
+// pulling), filling in the task identity fields shared by every such event.
+func (d *Driver) emitImageEvent(cfg *drivers.TaskConfig, message string) {
+	_ = d.eventer.EmitEvent(&drivers.TaskEvent{
+		TaskID:    cfg.ID,
+		TaskName:  cfg.Name,
+		AllocID:   cfg.AllocID,
+		Timestamp: time.Now(),
+		Message:   message,
+	})
+}
+
+// loadImageFromURL downloads an image archive from an http(s) URL and streams
+// it directly to podman's image load endpoint. The download is bounded by
+// imagePullTimeout and the archive is never staged on local disk. It returns
+// the name of the loaded image.
+func (d *Driver) loadImageFromURL(
+	url string,
+	podmanClient *api.API,
+	imagePullTimeout time.Duration,
+	cfg *drivers.TaskConfig,
+) (string, error) {
+	d.logger.Debug("Downloading image archive", "url", url)
+	d.emitImageEvent(cfg, "Loading image "+url)
+
+	ctx, cancel := context.WithTimeout(d.ctx, imagePullTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to build request for image archive %s: %w", url, err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to download image archive %s: %w", url, err)
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download image archive %s: unexpected status %s", url, resp.Status)
+	}
+
+	imageName, err := podmanClient.ImageLoadReader(ctx, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error while loading image: %w", err)
+	}
+	
+	return imageName, nil
+}
+
+// archiveTransportURL detects an oci-archive or docker-archive image reference
+// whose archive is located at an http(s) URL, e.g.
+// "oci-archive:http://host:9999/image.tar". The upstream containers/image
+// reference parsers cannot handle a URL in place of a local path, so these
+// references must be intercepted before parseImage. It returns the URL and true
+// when the reference matches, and "", false otherwise.
+func archiveTransportURL(image string) (string, bool) {
+	for _, transport := range []string{"oci-archive:", "docker-archive:"} {
+		if rest, ok := strings.CutPrefix(image, transport); ok {
+			if strings.HasPrefix(rest, "http://") || strings.HasPrefix(rest, "https://") {
+				return rest, true
+			}
+		}
+	}
+	return "", false
 }
 
 func parseImage(image string) (types.ImageReference, error) {
