@@ -1,6 +1,7 @@
 ## UNRELEASED
 
 IMPROVEMENTS:
+* driver: Adds support for loading `oci-archive` and `docker-archive` images from `http(s)` URLs. [[GH-517](https://github.com/hashicorp/nomad-driver-podman/pull/517)]
 * config: Adds support for plugin configuration `networking.default_rootless_mode` to override the default networking mode when run rootlessly. [[GH-495](https://github.com/hashicorp/nomad-driver-podman/pull/495)]
 * config: Support custom Podman network names for static IP/MAC options via `network_mode`. [[GH-509](https://github.com/hashicorp/nomad-driver-podman/pull/509)]
 * config: Added support for `os`, `arch` and `variant` task config options to override the platform of the image to pull. [[GH-514](https://github.com/hashicorp/nomad-driver-podman/pull/514)]
