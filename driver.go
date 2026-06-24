@@ -1417,7 +1417,7 @@ func (d *Driver) loadImageFromURL(
 	if err != nil {
 		return "", fmt.Errorf("error while loading image: %w", err)
 	}
-	
+
 	return imageName, nil
 }
 
