@@ -2106,6 +2106,177 @@ func TestPodmanDriver_NetworkMode_Task(t *testing.T) {
 	must.StrContains(t, tasklog, "127.0.0.1:6748")
 }
 
+// check ipc_mode configuration is applied to the container. Each mode listed
+// here is reported back verbatim by podman via inspect.
+func TestPodmanDriver_IPCModes(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		mode     string
+		expected string
+	}{
+		{mode: "host", expected: "host"},
+		{mode: "private", expected: "private"},
+		{mode: "shareable", expected: "shareable"},
+		{mode: "none", expected: "none"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s_mode_%s", t.Name(), tc.mode), func(t *testing.T) {
+			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+			taskCfg.IPCMode = tc.mode
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      fmt.Sprintf("ipc_mode_%s", tc.mode),
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+			d := podmanDriverHarness(t, nil)
+			t.Cleanup(d.MkAllocDir(task, true))
+
+			containerName := BuildContainerName(task)
+			_, _, err := d.StartTask(task)
+			must.NoError(t, err)
+
+			t.Cleanup(func() {
+				_ = d.DestroyTask(task.ID, true)
+			})
+
+			must.NoError(t, d.WaitUntilStarted(task.ID, 20*time.Second))
+
+			inspectData, err := getPodmanDriver(t, d).defaultPodman.ContainerInspect(context.Background(), containerName)
+			must.NoError(t, err)
+			must.Eq(t, tc.expected, inspectData.HostConfig.IpcMode)
+		})
+	}
+}
+
+// let a task join the IPC namespace of another container via ipc_mode=task:.
+// This is the pattern used for NVIDIA MPS, where clients share the IPC
+// namespace (and thus /dev/shm) of the MPS control daemon. We verify the
+// sharing by writing a marker file to /dev/shm in the main task and
+// confirming the sidecar, which joins that IPC namespace, can read it.
+func TestPodmanDriver_IPCMode_Task(t *testing.T) {
+	ci.Parallel(t)
+
+	allocId := uuid.Generate()
+
+	// main task writes a marker into the shared /dev/shm then stays alive
+	mainTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		"echo shared-ipc-ok > /dev/shm/marker && sleep 600",
+	})
+	mainTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "maintask",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, mainTask.EncodeConcreteDriverConfig(&mainTaskCfg))
+
+	// sidecar joins the main task's IPC namespace and reads the marker
+	sidecarTaskCfg := newTaskConfig("", []string{
+		"sh",
+		"-c",
+		// give the main task a moment to write the marker
+		"sleep 2 && cat /dev/shm/marker",
+	})
+	sidecarTaskCfg.IPCMode = "task:maintask"
+	sidecarTask := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "sidecar",
+		AllocID:   allocId,
+		Resources: createBasicResources(),
+	}
+	must.NoError(t, sidecarTask.EncodeConcreteDriverConfig(&sidecarTaskCfg))
+
+	mainHarness := podmanDriverHarness(t, nil)
+	t.Cleanup(mainHarness.MkAllocDir(mainTask, true))
+
+	_, _, err := mainHarness.StartTask(mainTask)
+	must.NoError(t, err)
+	t.Cleanup(func() {
+		_ = mainHarness.DestroyTask(mainTask.ID, true)
+	})
+
+	// ensure the main task is running before the sidecar attempts to join
+	must.NoError(t, mainHarness.WaitUntilStarted(mainTask.ID, 20*time.Second))
+
+	sidecarHarness := podmanDriverHarness(t, nil)
+	t.Cleanup(sidecarHarness.MkAllocDir(sidecarTask, true))
+
+	_, _, err = sidecarHarness.StartTask(sidecarTask)
+	must.NoError(t, err)
+	t.Cleanup(func() {
+		_ = sidecarHarness.DestroyTask(sidecarTask.ID, true)
+	})
+
+	// Attempt to wait
+	waitCh, err := sidecarHarness.WaitTask(context.Background(), sidecarTask.ID)
+	must.NoError(t, err)
+
+	select {
+	case res := <-waitCh:
+		// should have a exitcode=0 result
+		must.True(t, res.Successful(), must.Sprint("expected sidecar task to be successful"))
+	case <-time.After(15 * time.Second):
+		t.Fatalf("Sidecar did not exit in time")
+	}
+
+	// the marker is only visible if the sidecar shares the main task's
+	// IPC namespace (and therefore its /dev/shm)
+	tasklog := readStdoutLog(t, sidecarTask)
+	must.StrContains(t, tasklog, "shared-ipc-ok")
+}
+
+// check that combining shm_size with an ipc_mode that does not own the
+// container's /dev/shm is rejected by StartTask before the container is
+// created. Modes that own /dev/shm (private, shareable) are allowed and
+// covered separately.
+func TestPodmanDriver_IPCMode_ShmSizeConflict(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		name    string
+		ipcMode string
+	}{
+		{name: "host", ipcMode: "host"},
+		{name: "none", ipcMode: "none"},
+		{name: "container", ipcMode: "container:somecontainer"},
+		{name: "ns", ipcMode: "ns:/proc/1/ns/ipc"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s_%s", t.Name(), tc.name), func(t *testing.T) {
+			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
+			taskCfg.IPCMode = tc.ipcMode
+			taskCfg.ShmSize = "64m"
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      fmt.Sprintf("ipc_shm_conflict_%s", tc.name),
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+			d := podmanDriverHarness(t, nil)
+			t.Cleanup(d.MkAllocDir(task, true))
+
+			_, _, err := d.StartTask(task)
+			must.Error(t, err)
+			must.StrContains(t, err.Error(), "shm_size cannot be used with ipc_mode")
+
+			_ = d.DestroyTask(task.ID, true)
+		})
+	}
+}
+
 // test kill / signal support
 func TestPodmanDriver_SignalTask(t *testing.T) {
 	ci.Parallel(t)
