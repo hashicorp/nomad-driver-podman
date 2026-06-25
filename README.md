@@ -224,11 +224,18 @@ plugin "nomad-driver-podman" {
 
 ## Task Configuration
 
-* **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences.
+* **image** - The image to run. Accepted transports are `docker` (default if missing), `oci-archive` and `docker-archive`. Images reference as [short-names](https://github.com/containers/image/blob/master/docs/containers-registries.conf.5.md#short-name-aliasing) will be treated according to user-configured preferences. The `oci-archive` and `docker-archive` transports also accept an `http(s)://` URL; the archive is downloaded (bounded by `image_pull_timeout`) and loaded into Podman.
 
 ```hcl
 config {
   image = "docker://redis"
+}
+```
+
+```hcl
+config {
+  # Load an image archive served over HTTP.
+  image = "oci-archive:https://example.com/images/redis.tar"
 }
 ```
 
