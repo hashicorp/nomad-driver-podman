@@ -128,6 +128,11 @@ type Driver struct {
 	// For any call where it's unspecified/unknown which podman should be used
 	defaultPodman *api.API
 
+	// httpClient is used to download image archives referenced by an http(s)
+	// URL. It is kept on the driver so request behaviour is configured in one
+	// place rather than relying on http.DefaultClient.
+	httpClient *http.Client
+
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
 }
@@ -153,6 +158,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
+		httpClient:     &http.Client{},
 	}
 }
 
@@ -1397,21 +1403,11 @@ func (d *Driver) loadImageFromURL(
 	ctx, cancel := context.WithTimeout(d.ctx, imagePullTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := d.getImageArchive(ctx, url)
 	if err != nil {
-		return "", fmt.Errorf("failed to build request for image archive %s: %w", url, err)
+		return "", err
 	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to download image archive %s: %w", url, err)
-	}
-
 	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download image archive %s: unexpected status %s", url, resp.Status)
-	}
 
 	imageName, err := podmanClient.ImageLoadReader(ctx, resp.Body)
 	if err != nil {
@@ -1419,6 +1415,30 @@ func (d *Driver) loadImageFromURL(
 	}
 
 	return imageName, nil
+}
+
+// getImageArchive issues the GET request for an image archive using the
+// driver's http client and returns the response on success. It encapsulates the
+// request boilerplate (building the request, performing it, and validating the
+// status) so the load logic stays separate from the transport concerns. The
+// caller is responsible for closing the response body.
+func (d *Driver) getImageArchive(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request for image archive %s: %w", url, err)
+	}
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download image archive %s: %w", url, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("failed to download image archive %s: unexpected status %s", url, resp.Status)
+	}
+
+	return resp, nil
 }
 
 // archiveTransportURL detects an oci-archive or docker-archive image reference

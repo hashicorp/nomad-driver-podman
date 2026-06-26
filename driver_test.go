@@ -2345,7 +2345,24 @@ func Test_createImage(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		createInspectImage(t, testCase.Image, testCase.Reference)
+		t.Run(testCase.Image, func(t *testing.T) {
+			d := podmanDriverHarness(t, nil)
+			driver := getPodmanDriver(t, d)
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "inspectImage",
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			idTest, err := driver.createImage(testCase.Image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
+			must.NoError(t, err)
+
+			idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), testCase.Reference)
+			must.NoError(t, err)
+			must.Eq(t, idRef, idTest)
+		})
 	}
 }
 
@@ -2394,13 +2411,15 @@ func Test_createImageArchives(t *testing.T) {
 		return false
 	}
 
-	if doesNotExist("/tmp/oci-archive") || doesNotExist("/tmp/docker-archive") {
-		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
-	}
-
+	// Archives are prepared by .github/machinesetup.sh in /tmp; ARCHIVE_DIR can
+	// override the location for local runs.
 	archiveDir := os.Getenv("ARCHIVE_DIR")
 	if archiveDir == "" {
-		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+		archiveDir = "/tmp"
+	}
+
+	if doesNotExist(archiveDir+"/oci-archive") || doesNotExist(archiveDir+"/docker-archive") {
+		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
 	}
 
 	testCases := []struct {
@@ -2409,35 +2428,34 @@ func Test_createImageArchives(t *testing.T) {
 	}{
 		{
 			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", archiveDir),
-			Reference: "docker.io/library/alpine:latest",
+			Reference: "docker.io/library/alpine:3",
 		},
 		{
 			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", archiveDir),
-			Reference: "docker.io/library/alpine:latest",
+			Reference: "docker.io/library/alpine:3",
 		},
 	}
 
 	for _, testCase := range testCases {
-		createInspectImage(t, testCase.Image, testCase.Reference)
+		t.Run(testCase.Image, func(t *testing.T) {
+			d := podmanDriverHarness(t, nil)
+			driver := getPodmanDriver(t, d)
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "inspectImage",
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			idTest, err := driver.createImage(testCase.Image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
+			must.NoError(t, err)
+
+			idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), testCase.Reference)
+			must.NoError(t, err)
+			must.Eq(t, idRef, idTest)
+		})
 	}
-}
-
-func createInspectImage(t *testing.T, image, reference string) {
-	d := podmanDriverHarness(t, nil)
-
-	task := &drivers.TaskConfig{
-		ID:        uuid.Generate(),
-		Name:      "inspectImage",
-		AllocID:   uuid.Generate(),
-		Resources: createBasicResources(),
-	}
-	driver := getPodmanDriver(t, d)
-	idTest, err := driver.createImage(image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
-	must.NoError(t, err)
-
-	idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), reference)
-	must.NoError(t, err)
-	must.Eq(t, idRef, idTest)
 }
 
 func Test_createImageArchivesHTTP(t *testing.T) {
@@ -2452,13 +2470,15 @@ func Test_createImageArchivesHTTP(t *testing.T) {
 		return false
 	}
 
-	if doesNotExist("/tmp/oci-archive") || doesNotExist("/tmp/docker-archive") {
-		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
-	}
-
+	// Archives are prepared by .github/machinesetup.sh in /tmp; ARCHIVE_DIR can
+	// override the location for local runs.
 	archiveDir := os.Getenv("ARCHIVE_DIR")
 	if archiveDir == "" {
-		t.Skip("Skipping image archive test. Missing \"ARCHIVE_DIR\" environment variable")
+		archiveDir = "/tmp"
+	}
+
+	if doesNotExist(archiveDir+"/oci-archive") || doesNotExist(archiveDir+"/docker-archive") {
+		t.Skip("Skipping image archive test. Missing prepared archive file(s).")
 	}
 
 	// Serve the prepared archive files over HTTP so createImage exercises the
@@ -2472,16 +2492,33 @@ func Test_createImageArchivesHTTP(t *testing.T) {
 	}{
 		{
 			Image:     fmt.Sprintf("oci-archive:%s/oci-archive", server.URL),
-			Reference: "docker.io/library/alpine:latest",
+			Reference: "docker.io/library/alpine:3",
 		},
 		{
 			Image:     fmt.Sprintf("docker-archive:%s/docker-archive", server.URL),
-			Reference: "docker.io/library/alpine:latest",
+			Reference: "docker.io/library/alpine:3",
 		},
 	}
 
 	for _, testCase := range testCases {
-		createInspectImage(t, testCase.Image, testCase.Reference)
+		t.Run(testCase.Image, func(t *testing.T) {
+			d := podmanDriverHarness(t, nil)
+			driver := getPodmanDriver(t, d)
+
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "inspectImage",
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			idTest, err := driver.createImage(testCase.Image, &TaskAuthConfig{}, false, false, imagePlatform{}, driver.defaultPodman, 5*time.Minute, task)
+			must.NoError(t, err)
+
+			idRef, err := driver.defaultPodman.ImageInspectID(context.Background(), testCase.Reference)
+			must.NoError(t, err)
+			must.Eq(t, idRef, idTest)
+		})
 	}
 }
 
