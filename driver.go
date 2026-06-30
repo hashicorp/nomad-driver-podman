@@ -52,6 +52,11 @@ const (
 	// fingerprintPeriod is the interval at which the driver will send fingerprint responses
 	fingerprintPeriod = 30 * time.Second
 
+	// defaultHTTPTimeout bounds requests made by the driver's httpClient when
+	// downloading image archives from an http(s) URL. It matches the 60s used
+	// by the podman api client.
+	defaultHTTPTimeout = 60 * time.Second
+
 	// taskHandleVersion is the version of task handle which this driver sets
 	// and understands how to decode driver state
 	taskHandleVersion = 1
@@ -158,7 +163,7 @@ func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 		ctx:            ctx,
 		signalShutdown: cancel,
 		logger:         logger.Named(pluginName),
-		httpClient:     &http.Client{},
+		httpClient:     &http.Client{Timeout: defaultHTTPTimeout},
 	}
 }
 
