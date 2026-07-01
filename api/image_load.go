@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2019, 2025
+// Copyright IBM Corp. 2019, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package api
@@ -16,13 +16,21 @@ type imageLoadResponse struct {
 	Names []string `json:"Names"`
 }
 
-// ImageLoad uploads a tar archive as an image
+// ImageLoad uploads a tar archive on the local filesystem as an image.
 func (c *API) ImageLoad(ctx context.Context, path string) (string, error) {
 	archive, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer ignoreClose(archive)
+	return c.ImageLoadReader(ctx, archive)
+}
+
+// ImageLoadReader uploads a tar archive read from archive as an image. The
+// caller is responsible for closing archive. This allows loading an archive
+// from any source (e.g. a local file or an HTTP response body) without first
+// staging it on disk.
+func (c *API) ImageLoadReader(ctx context.Context, archive io.Reader) (string, error) {
 	response := imageLoadResponse{}
 
 	res, err := c.Post(ctx, "/v1.0.0/libpod/images/load", archive)
