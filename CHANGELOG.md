@@ -1,5 +1,7 @@
 ## UNRELEASED
 
+## 0.6.5 (July 13, 2026)
+
 IMPROVEMENTS:
 * driver: Adds support for loading `oci-archive` and `docker-archive` images from `http(s)` URLs. [[GH-517](https://github.com/hashicorp/nomad-driver-podman/pull/517)]
 * config: Adds support for plugin configuration `networking.default_rootless_mode` to override the default networking mode when run rootlessly. [[GH-495](https://github.com/hashicorp/nomad-driver-podman/pull/495)]
