@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.6.5 (July 13, 2026)
 
 IMPROVEMENTS:
 * driver: Adds support for loading `oci-archive` and `docker-archive` images from `http(s)` URLs. [[GH-517](https://github.com/hashicorp/nomad-driver-podman/pull/517)]
