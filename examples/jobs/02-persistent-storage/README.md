@@ -63,24 +63,40 @@ Postgres user inside the container.
 
 ## Verify
 
+Confirm the allocation is running:
+
 ```sh
 nomad job status persistent-storage
+```
 
-# Create a table and a row.
+```
+Allocations
+ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+xxxxxxxx  xxxxxxxx  db          0        run      running  20s ago  5s ago
+```
+
+Create a table and insert a row:
+
+```sh
 cid=$(podman ps -qf name=^postgres-)
 podman exec -i "$cid" psql -U demo -d demo -c \
   "CREATE TABLE IF NOT EXISTS t (msg text); INSERT INTO t VALUES ('it persists');"
+```
 
-# Restart the task, then confirm the row is still there.
+```
+CREATE TABLE
+INSERT 0 1
+```
+
+Restart the task, then read the row back. It survives because the data lives on
+the host bind-mount, not inside the container:
+
+```sh
 nomad alloc restart $(nomad job allocs -json persistent-storage | jq -r '.[0].ID')
 sleep 5
 cid=$(podman ps -qf name=^postgres-)
 podman exec -i "$cid" psql -U demo -d demo -c "SELECT msg FROM t;"
 ```
-
-## Expected output
-
-After the restart the previously inserted row is still returned:
 
 ```
      msg
@@ -93,7 +109,10 @@ You can also confirm the data files exist on the host:
 
 ```sh
 sudo ls /srv/podman-examples/postgres/pgdata
-# base  global  pg_wal  postgresql.conf  ...
+```
+
+```
+base  global  pg_wal  postgresql.conf  ...
 ```
 
 ## Adapt this for your own workload

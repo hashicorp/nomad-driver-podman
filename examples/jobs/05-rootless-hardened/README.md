@@ -48,42 +48,69 @@ nomad job run web.nomad
 
 ## Verify
 
+Confirm the allocation is running:
+
 ```sh
 nomad job status rootless-hardened
+```
 
-# Page is served.
+```
+Allocations
+ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+xxxxxxxx  xxxxxxxx  web         0        run      running  20s ago  5s ago
+```
+
+Confirm the page is served through the published port:
+
+```sh
 addr=$(nomad alloc status -json $(nomad job allocs -json rootless-hardened \
   | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
   | "127.0.0.1:\(.Value)"')
-curl -sI "http://${addr}/" | head -n1
+curl -I "http://${addr}/" | head -n1
+```
 
-# Run these as the rootless user that owns the `app1` socket so podman can see
-# the container. The container runs rootless (owned by that user, not root).
+```
+HTTP/1.1 200 OK
+```
+
+List the container. Run this as the rootless user that owns the `app1` socket so
+Podman can see it (the container runs rootless, owned by that user, not root):
+
+```sh
 podman ps --filter name=^web-
+```
 
-# Confirm the hardening took effect.
+```
+CONTAINER ID  IMAGE                                       COMMAND               STATUS         PORTS                      NAMES
+a1b2c3d4e5f6  docker.io/nginxinc/nginx-unprivileged:1.27  nginx -g daemon o...  Up 20 seconds  127.0.0.1:20995->8080/tcp  web-xxxxxxxx-...
+```
+
+Confirm the hardening took effect. Podman expands `cap_drop = ["ALL"]` into the
+concrete set of dropped capabilities:
+
+```sh
 cid=$(podman ps -qf name=^web-)
 podman inspect "$cid" --format \
   'ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{.HostConfig.CapDrop}} SecurityOpt={{.HostConfig.SecurityOpt}}'
 ```
 
-## Expected output
+```
+ReadonlyRootfs=true CapDrop=[CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_NET_BIND_SERVICE CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT] SecurityOpt=[no-new-privileges]
+```
 
-- `curl -I` returns `HTTP/1.1 200 OK`.
-- `podman inspect` shows the read-only rootfs and dropped capabilities. Podman
-  expands `cap_drop = ["ALL"]` into the concrete set of dropped capabilities, so
-  the output looks like:
-  ```
-  ReadonlyRootfs=true CapDrop=[CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_NET_BIND_SERVICE CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT] SecurityOpt=[no-new-privileges]
-  ```
-  The key signals are `ReadonlyRootfs=true`, a non-empty `CapDrop`, and
-  `SecurityOpt=[no-new-privileges]`.
-- Because the root filesystem is read-only, a write outside the tmpfs paths is
-  rejected:
-  ```sh
-  podman exec "$cid" sh -c 'echo x > /etc/test' 2>&1
-  # sh: 1: cannot create /etc/test: Read-only file system
-  ```
+The key signals are `ReadonlyRootfs=true`, a non-empty `CapDrop`, and
+`SecurityOpt=[no-new-privileges]`.
+
+Because the root filesystem is read-only, a write outside the tmpfs paths is
+rejected:
+
+```sh
+podman exec "$cid" sh -c 'echo x > /etc/test' 2>&1
+```
+
+```
+sh: 1: cannot create /etc/test: Read-only file system
+```
 
 ## Adapt this for your own workload
 

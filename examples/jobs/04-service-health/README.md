@@ -25,39 +25,46 @@ nomad job run echo.nomad
 
 ## Verify
 
+The allocation becomes healthy once the check passes:
+
 ```sh
-# The allocation should become "healthy" once the check passes.
 nomad job status service-health
-
-# The service is registered in Nomad's catalog.
-nomad service info echo-api
-
-# Hit the application through the registered address.
-addr=$(nomad service info -json echo-api | jq -r '.[0].Address + ":" + (.[0].Port|tostring)')
-curl -s "http://${addr}/"
-
-# The health-check endpoint used by the check block.
-curl -s "http://${addr}/health"
 ```
 
-## Expected output
+```
+Allocations
+ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+xxxxxxxx  xxxxxxxx  api         0        run      running  15s ago  2s ago
+```
 
-`nomad service info echo-api` lists one healthy instance:
+Confirm the service is registered in Nomad's catalog:
+
+```sh
+nomad service info echo-api
+```
 
 ```
 Job ID          Address          Tags  Node ID   Alloc ID
 service-health  127.0.0.1:24658  []    a1b2c3d4  e5f6a7b8
 ```
 
-`nomad job status service-health` shows the deployment as healthy. The root
-path returns the configured text:
+Hit the application through the registered address:
+
+```sh
+addr=$(nomad service info -json echo-api | jq -r '.[0].Address + ":" + (.[0].Port|tostring)')
+curl "http://${addr}/"
+```
 
 ```
 hello from a healthy service
 ```
 
-The `/health` endpoint (built into the `http-echo` image and used by the
-`check` block) returns:
+Check the `/health` endpoint used by the `check` block (built into the
+`http-echo` image):
+
+```sh
+curl "http://${addr}/health"
+```
 
 ```
 {"status":"ok"}

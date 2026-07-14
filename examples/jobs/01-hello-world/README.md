@@ -26,31 +26,11 @@ nomad job run redis.nomad
 
 ## Verify
 
+Use `nomad job status` to confirm the job is running:
+
 ```sh
-# 1. The allocation should be "running".
 nomad job status hello-world
-
-# 2. Podman should show the container.
-podman ps --filter name=^redis-
-
-# 3. Talk to Redis through the published port. Read the host:port that Nomad
-#    assigned, then PING it.
-addr=$(nomad alloc status -json $(nomad job allocs -json hello-world \
-  | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
-  | "\(env.NOMAD_IP // "127.0.0.1"):\(.Value)"')
-
-redis-cli -u "redis://${addr}" PING
 ```
-
-If you don't have `redis-cli` locally, exec into the container instead:
-
-```sh
-podman exec -it $(podman ps -qf name=^redis-) redis-cli PING
-```
-
-## Expected output
-
-`nomad job status hello-world` shows one allocation in the `running` state:
 
 ```
 Allocations
@@ -58,8 +38,38 @@ ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
 xxxxxxxx  xxxxxxxx  cache       0        run      running  10s ago  3s ago
 ```
 
-`podman ps` lists the container with a `redis-server` command and a published
-port, and the `PING` returns:
+List the Podman container matching the `^redis-` filter:
+
+```sh
+podman ps --filter name=^redis-
+```
+
+```
+CONTAINER ID  IMAGE                      COMMAND       STATUS         PORTS                                                 NAMES
+a1b2c3d4e5f6  docker.io/library/redis:7  redis-server  Up 10 seconds  127.0.0.1:24089->6379/tcp, 127.0.0.1:24089->6379/udp  redis-xxxxxxxx-...
+```
+
+Read the dynamic host port Nomad assigned into a variable, then use it to `PING`
+the Redis server:
+
+```sh
+addr=$(nomad alloc status -json $(nomad job allocs -json hello-world \
+  | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
+  | "\(env.NOMAD_IP // "127.0.0.1"):\(.Value)"')
+
+redis-cli -u "redis://${addr}" PING
+```
+
+```
+PONG
+```
+
+If you don't have `redis-cli` locally, exec into the container instead — it
+returns the same `PONG`:
+
+```sh
+podman exec -it $(podman ps -qf name=^redis-) redis-cli PING
+```
 
 ```
 PONG
