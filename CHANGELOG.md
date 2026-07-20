@@ -1,5 +1,9 @@
 ## UNRELEASED
 
+BUG FIXES:
+
+* driver: Fixed `localhost/` and shortname images incorrectly falling through to a registry pull instead of resolving from local storage. [[GH-479](https://github.com/hashicorp/nomad-driver-podman/issues/479)]
+
 ## 0.6.5 (July 13, 2026)
 
 IMPROVEMENTS:
