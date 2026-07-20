@@ -2718,6 +2718,102 @@ func createInspectImagePlatform(t *testing.T, image string, platform imagePlatfo
 	return idTest
 }
 
+// TestPodmanDriver_LocalOnlyImage is an end-to-end regression test for GH-479.
+// A "localhost/"-prefixed image is a local-only image that can never be pulled
+// from a registry. createImage must resolve a present one from local storage
+// and must NOT fall through to a registry pull (which fails with a confusing
+// "connection refused" against localhost:80), and it must return a clear error
+// for a genuinely absent one instead of attempting that doomed pull.
+func TestPodmanDriver_LocalOnlyImage(t *testing.T) {
+	ci.Parallel(t)
+
+	// Ensure the busybox base image is present, then tag it under the
+	// "localhost/" registry to simulate a locally-built, never-pushed image.
+	if out, err := exec.Command("podman", "pull", "docker.io/library/busybox:latest").CombinedOutput(); err != nil {
+		t.Skipf("Cannot pull busybox (podman not available?): %s: %s", err, out)
+	}
+	localImage := fmt.Sprintf("localhost/nomad-479-%s:local", uuid.Generate()[:8])
+	if out, err := exec.Command("podman", "tag", "docker.io/library/busybox:latest", localImage).CombinedOutput(); err != nil {
+		t.Fatalf("failed to tag local-only image: %s: %s", err, out)
+	}
+	defer func() {
+		_, _ = exec.Command("podman", "rmi", "-f", localImage).CombinedOutput()
+	}()
+
+	d := podmanDriverHarness(t, nil)
+	driver := getPodmanDriver(t, d)
+
+	// The busybox base image ID the local-only tag points at; a successful
+	// resolution must return exactly this ID.
+	baseID, err := driver.defaultPodman.ImageInspectID(
+		context.Background(), "docker.io/library/busybox:latest")
+	must.NoError(t, err)
+
+	missingImage := fmt.Sprintf("localhost/nomad-479-missing-%s:local", uuid.Generate()[:8])
+
+	testCases := []struct {
+		name        string
+		image       string
+		forcePull   bool
+		expectID    string // non-empty: expect success returning this image ID
+		errContains string // non-empty: expect an error containing this text
+	}{
+		{
+			name:      "present image without force_pull resolves from local storage",
+			image:     localImage,
+			forcePull: false,
+			expectID:  baseID,
+		},
+		{
+			// tgross's case F: a locally-built image referenced by a bare
+			// shortname (no "localhost/" prefix) that Podman stored under the
+			// implicit "localhost/" registry must still resolve locally.
+			name:      "present image referenced by bare shortname resolves from local storage",
+			image:     strings.TrimPrefix(localImage, "localhost/"),
+			forcePull: false,
+			expectID:  baseID,
+		},
+		{
+			name:        "absent image without force_pull errors instead of pulling",
+			image:       missingImage,
+			forcePull:   false,
+			errContains: "local-only",
+		},
+		{
+			name:        "present image with force_pull errors instead of pulling",
+			image:       localImage,
+			forcePull:   true,
+			errContains: "local-only",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "local-only-image",
+				AllocID:   uuid.Generate(),
+				Resources: createBasicResources(),
+			}
+
+			id, err := driver.createImage(tc.image, &TaskAuthConfig{}, false, tc.forcePull,
+				imagePlatform{}, driver.defaultPodman, 1*time.Minute, task)
+
+			if tc.errContains != "" {
+				must.Error(t, err)
+				must.StrContains(t, err.Error(), tc.errContains)
+				// A "localhost/" image must never fall through to a doomed
+				// registry pull against localhost.
+				must.StrNotContains(t, err.Error(), "connection refused")
+				return
+			}
+
+			must.NoError(t, err)
+			must.Eq(t, tc.expectID, id)
+		})
+	}
+}
+
 func Test_setTaskCpuset(t *testing.T) {
 	ci.Parallel(t)
 

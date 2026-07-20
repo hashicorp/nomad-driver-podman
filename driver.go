@@ -1314,6 +1314,7 @@ func (d *Driver) createImage(
 	var imageID string
 	imageName := image
 	loadedFromArchive := false
+	isShortName := shortnames.IsShortName(image)
 	// Archive transports (oci-archive/docker-archive) pointing at an http(s)
 	// URL are handled here because the upstream containers/image reference
 	// parsers reject a URL in place of a local path. The archive is streamed
@@ -1325,7 +1326,7 @@ func (d *Driver) createImage(
 		}
 		imageName = loadedName
 		loadedFromArchive = true
-	} else if !shortnames.IsShortName(image) {
+	} else if !isShortName {
 		// If it is a shortname, we should not have to worry
 		// Let podman deal with it according to user configuration
 		imageRef, err := parseImage(image)
@@ -1364,9 +1365,58 @@ func (d *Driver) createImage(
 	// Images loaded from an archive cannot be pulled from a registry, so the
 	// platform override does not apply to them and the cache shortcut is kept.
 	usePlatform := platform.isSet() && !loadedFromArchive
+
+	// A "localhost/"-prefixed reference is a local-only image that was never
+	// pushed to a registry, so it can never be pulled. The platform override's
+	// "always pull the correct variant" behavior is therefore meaningless for
+	// it: neutralize usePlatform so a present local-only image is used instead
+	// of falling through to a doomed registry pull.
+	localOnly := isLocalOnlyImage(imageName)
+	if localOnly {
+		usePlatform = false
+	}
+
 	if !forcePull && !usePlatform && imageID != "" {
 		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
 		return imageID, nil
+	}
+
+	// Podman's name-based inspect above can spuriously report a locally-built
+	// image as missing (returning api.ImageNotFound) depending on how its name
+	// was recorded in storage, which would otherwise send us into a doomed
+	// registry pull. This affects "localhost/"-prefixed references as well as
+	// bare shortnames that Podman stored under the implicit "localhost/"
+	// registry (e.g. "busybox:local"). Before pulling, confirm the image is
+	// really absent using a store-wide lookup that mirrors `podman images`, and
+	// if it is present use its ID instead of pulling.
+	if !forcePull && !usePlatform && imageID == "" && (localOnly || isShortName) {
+		id, found, existsErr := podmanClient.ImageExists(d.ctx, imageName)
+		switch {
+		case found:
+			d.logger.Debug("Found local image via store lookup", "image", imageName, "imageID", id)
+			return id, nil
+		case localOnly:
+			// A localhost/ image can never be pulled; whether it is genuinely
+			// absent or the list call failed, do not fall through to a doomed
+			// registry pull.
+			if existsErr != nil {
+				d.logger.Warn("Unable to list local images", "image", imageName, "error", existsErr)
+			}
+			return "", fmt.Errorf("image %s was not found in local storage and cannot be pulled: localhost/-prefixed images are local-only", imageName)
+		case existsErr != nil:
+			// Shortname: list failed, but a registry pull may still succeed.
+			d.logger.Warn("Unable to list local images", "image", imageName, "error", existsErr)
+		}
+		// A shortname that is not present locally can still be pulled from the
+		// configured registries, so fall through to the pull path below.
+	}
+
+	// A forced pull of a "localhost/"-prefixed image can never succeed: it was
+	// never pushed to a registry, so the pull below would fail with a confusing
+	// "connection refused" against localhost:80. Fail fast with an actionable
+	// error instead of attempting the doomed pull.
+	if forcePull && localOnly {
+		return "", fmt.Errorf("cannot pull %s: localhost/-prefixed images are local-only. Set force_pull=false", imageName)
 	}
 
 	d.logger.Info("Pulling image", "image", imageName)
@@ -1417,6 +1467,14 @@ func (d *Driver) createImage(
 	imageID = result.(string)
 	d.logger.Debug("Pulled image ID", "imageID", imageID)
 	return imageID, nil
+}
+
+// isLocalOnlyImage reports whether an image reference is a local-only image
+// that can never be pulled from a registry. Podman uses the "localhost/"
+// registry prefix for images that were built or loaded locally and never
+// pushed, so a registry pull of such a reference is guaranteed to fail.
+func isLocalOnlyImage(image string) bool {
+	return strings.HasPrefix(image, "localhost/")
 }
 
 // emitImageEvent broadcasts a task event for an image operation (loading or
