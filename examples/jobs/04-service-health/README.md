@@ -25,54 +25,54 @@ nomad job run echo.nomad
 
 ## Verify
 
-The allocation becomes healthy once the check passes:
+1. Confirm the allocation is running and healthy (the check must pass first).
 
-```sh
-nomad job status service-health
-```
+   ```sh
+   nomad job status service-health
+   ```
 
-```
-Allocations
-ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
-xxxxxxxx  xxxxxxxx  api         0        run      running  15s ago  2s ago
-```
+   ```
+   Allocations
+   ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+   xxxxxxxx  xxxxxxxx  api         0        run      running  15s ago  2s ago
+   ```
 
-Confirm the service is registered in Nomad's catalog:
+2. Confirm the service is registered in Nomad's catalog.
 
-```sh
-nomad service info echo-api
-```
+   ```sh
+   nomad service info echo-api
+   ```
 
-```
-Job ID          Address          Tags  Node ID   Alloc ID
-service-health  127.0.0.1:24658  []    a1b2c3d4  e5f6a7b8
-```
+   ```
+   Job ID          Address          Tags  Node ID   Alloc ID
+   service-health  127.0.0.1:24658  []    a1b2c3d4  e5f6a7b8
+   ```
 
-Hit the application through the registered address:
+3. Read the registered address into a variable and hit the application endpoint.
 
-```sh
-addr=$(nomad service info -json echo-api | jq -r '.[0].Address + ":" + (.[0].Port|tostring)')
-curl "http://${addr}/"
-```
+   ```sh
+   addr=$(nomad service info -json echo-api | jq -r '.[0].Address + ":" + (.[0].Port|tostring)')
+   curl "http://${addr}/"
+   ```
 
-```
-hello from a healthy service
-```
+   ```
+   hello from a healthy service
+   ```
 
-Check the `/health` endpoint used by the `check` block (built into the
-`http-echo` image):
+4. Check the `/health` endpoint that the `check` block polls (built into the
+   `http-echo` image).
 
-```sh
-curl "http://${addr}/health"
-```
+   ```sh
+   curl "http://${addr}/health"
+   ```
 
-```
-{"status":"ok"}
-```
+   ```
+   {"status":"ok"}
+   ```
 
-To see the check in action, watch how an unhealthy task is held back: change
-`-listen=:5678` to a different port (so the check can't reach it) and re-run —
-the deployment will not mark the allocation healthy.
+> To see the check in action, watch how an unhealthy task is held back: change
+> `-listen=:5678` to a different port (so the check can't reach it) and re-run —
+> the deployment will not mark the allocation healthy.
 
 ## Adapt this for your own workload
 

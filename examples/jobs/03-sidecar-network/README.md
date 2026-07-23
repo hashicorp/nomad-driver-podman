@@ -47,44 +47,44 @@ nomad job run app.nomad
 
 ## Verify
 
-Confirm both tasks (app + proxy sidecar) are running:
+1. Confirm both tasks (app + proxy sidecar) are running.
 
-```sh
-nomad job status sidecar-network
-```
+   ```sh
+   nomad job status sidecar-network
+   ```
 
-```
-Allocations
-ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
-xxxxxxxx  xxxxxxxx  web         0        run      running  25s ago  10s ago
-```
+   ```
+   Allocations
+   ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+   xxxxxxxx  xxxxxxxx  web         0        run      running  25s ago  10s ago
+   ```
 
-Send traffic to the published port. It reaches the proxy, which forwards it to
-the private app over localhost:
+2. Read the dynamic port into a variable and send traffic to the published port.
+   It reaches the proxy, which forwards it to the private app over localhost.
 
-```sh
-addr=$(nomad alloc status -json $(nomad job allocs -json sidecar-network \
-  | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
-  | "127.0.0.1:\(.Value)"')
+   ```sh
+   addr=$(nomad alloc status -json $(nomad job allocs -json sidecar-network \
+     | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
+     | "127.0.0.1:\(.Value)"')
 
-curl "http://${addr}/"
-```
+   curl "http://${addr}/"
+   ```
 
-```
-response from the private app
-```
+   ```
+   response from the private app
+   ```
 
-The app's own port `5678` is not published, so a direct request is refused —
-confirming the app port stays private to the shared namespace:
+3. Confirm the app's own port `5678` is not publicly reachable — it stays
+   private to the shared namespace.
 
-```sh
-curl --max-time 2 "http://${addr%:*}:5678/" || echo "app port not exposed (expected)"
-```
+   ```sh
+   curl --max-time 2 "http://${addr%:*}:5678/" || echo "app port not exposed (expected)"
+   ```
 
-```
-curl: (7) Failed to connect to 127.0.0.1 port 5678 after 0 ms: Connection refused
-app port not exposed (expected)
-```
+   ```
+   curl: (7) Failed to connect to 127.0.0.1 port 5678 after 0 ms: Connection refused
+   app port not exposed (expected)
+   ```
 
 ## Adapt this for your own workload
 

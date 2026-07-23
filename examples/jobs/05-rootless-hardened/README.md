@@ -48,69 +48,70 @@ nomad job run web.nomad
 
 ## Verify
 
-Confirm the allocation is running:
+1. Confirm the allocation is running.
 
-```sh
-nomad job status rootless-hardened
-```
+   ```sh
+   nomad job status rootless-hardened
+   ```
 
-```
-Allocations
-ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
-xxxxxxxx  xxxxxxxx  web         0        run      running  20s ago  5s ago
-```
+   ```
+   Allocations
+   ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+   xxxxxxxx  xxxxxxxx  web         0        run      running  20s ago  5s ago
+   ```
 
-Confirm the page is served through the published port:
+2. Read the dynamic port into a variable and confirm the page is served.
 
-```sh
-addr=$(nomad alloc status -json $(nomad job allocs -json rootless-hardened \
-  | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
-  | "127.0.0.1:\(.Value)"')
-curl -I "http://${addr}/" | head -n1
-```
+   ```sh
+   addr=$(nomad alloc status -json $(nomad job allocs -json rootless-hardened \
+     | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
+     | "127.0.0.1:\(.Value)"')
+   curl -I "http://${addr}/" | head -n1
+   ```
 
-```
-HTTP/1.1 200 OK
-```
+   ```
+   HTTP/1.1 200 OK
+   ```
 
-List the container. Run this as the rootless user that owns the `app1` socket so
-Podman can see it (the container runs rootless, owned by that user, not root):
+3. List the container. Run this as the rootless user that owns the `app1` socket
+   so Podman can see it (the container runs rootless, owned by that user, not
+   root).
 
-```sh
-podman ps --filter name=^web-
-```
+   ```sh
+   podman ps --filter name=^web-
+   ```
 
-```
-CONTAINER ID  IMAGE                                       COMMAND               STATUS         PORTS                      NAMES
-a1b2c3d4e5f6  docker.io/nginxinc/nginx-unprivileged:1.27  nginx -g daemon o...  Up 20 seconds  127.0.0.1:20995->8080/tcp  web-xxxxxxxx-...
-```
+   ```
+   CONTAINER ID  IMAGE                                       COMMAND               STATUS         PORTS                      NAMES
+   a1b2c3d4e5f6  docker.io/nginxinc/nginx-unprivileged:1.27  nginx -g daemon o...  Up 20 seconds  127.0.0.1:20995->8080/tcp  web-xxxxxxxx-...
+   ```
 
-Confirm the hardening took effect. Podman expands `cap_drop = ["ALL"]` into the
-concrete set of dropped capabilities:
+4. Confirm the hardening took effect. Podman expands `cap_drop = ["ALL"]` into
+   the concrete set of dropped capabilities.
 
-```sh
-cid=$(podman ps -qf name=^web-)
-podman inspect "$cid" --format \
-  'ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{.HostConfig.CapDrop}} SecurityOpt={{.HostConfig.SecurityOpt}}'
-```
+   ```sh
+   cid=$(podman ps -qf name=^web-)
+   podman inspect "$cid" --format \
+     'ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{.HostConfig.CapDrop}} SecurityOpt={{.HostConfig.SecurityOpt}}'
+   ```
 
-```
-ReadonlyRootfs=true CapDrop=[CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_NET_BIND_SERVICE CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT] SecurityOpt=[no-new-privileges]
-```
+   ```
+   ReadonlyRootfs=true CapDrop=[CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_FSETID CAP_KILL CAP_NET_BIND_SERVICE CAP_SETFCAP CAP_SETGID CAP_SETPCAP CAP_SETUID CAP_SYS_CHROOT] SecurityOpt=[no-new-privileges]
+   ```
 
-The key signals are `ReadonlyRootfs=true`, a non-empty `CapDrop`, and
-`SecurityOpt=[no-new-privileges]`.
+   The key signals are `ReadonlyRootfs=true`, a non-empty `CapDrop`, and
+   `SecurityOpt=[no-new-privileges]`.
 
-Because the root filesystem is read-only, a write outside the tmpfs paths is
-rejected:
+5. Confirm the read-only root filesystem rejects writes outside the tmpfs
+   paths.
 
-```sh
-podman exec "$cid" sh -c 'echo x > /etc/test' 2>&1
-```
+   ```sh
+   podman exec "$cid" sh -c 'echo x > /etc/test' 2>&1
+   ```
 
-```
-sh: 1: cannot create /etc/test: Read-only file system
-```
+   ```
+   sh: 1: cannot create /etc/test: Read-only file system
+   ```
 
 ## Adapt this for your own workload
 

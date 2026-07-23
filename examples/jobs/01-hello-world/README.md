@@ -26,54 +26,54 @@ nomad job run redis.nomad
 
 ## Verify
 
-Use `nomad job status` to confirm the job is running:
+1. Use `nomad job status` to confirm the job is running.
 
-```sh
-nomad job status hello-world
-```
+   ```sh
+   nomad job status hello-world
+   ```
 
-```
-Allocations
-ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
-xxxxxxxx  xxxxxxxx  cache       0        run      running  10s ago  3s ago
-```
+   ```
+   Allocations
+   ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+   xxxxxxxx  xxxxxxxx  cache       0        run      running  10s ago  3s ago
+   ```
 
-List the Podman container matching the `^redis-` filter:
+2. List all Podman containers matching the `^redis-` filter.
 
-```sh
-podman ps --filter name=^redis-
-```
+   ```sh
+   podman ps --filter name=^redis-
+   ```
 
-```
-CONTAINER ID  IMAGE                      COMMAND       STATUS         PORTS                                                 NAMES
-a1b2c3d4e5f6  docker.io/library/redis:7  redis-server  Up 10 seconds  127.0.0.1:24089->6379/tcp, 127.0.0.1:24089->6379/udp  redis-xxxxxxxx-...
-```
+   ```
+   CONTAINER ID  IMAGE                      COMMAND       STATUS         PORTS                                                 NAMES
+   a1b2c3d4e5f6  docker.io/library/redis:7  redis-server  Up 10 seconds  127.0.0.1:24089->6379/tcp, 127.0.0.1:24089->6379/udp  redis-xxxxxxxx-...
+   ```
 
-Read the dynamic host port Nomad assigned into a variable, then use it to `PING`
-the Redis server:
+3. Read the dynamic host port Nomad assigned into a variable, then use it to
+   `PING` the Redis server.
 
-```sh
-addr=$(nomad alloc status -json $(nomad job allocs -json hello-world \
-  | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
-  | "\(env.NOMAD_IP // "127.0.0.1"):\(.Value)"')
+   ```sh
+   addr=$(nomad alloc status -json $(nomad job allocs -json hello-world \
+     | jq -r '.[0].ID') | jq -r '.Resources.Networks[0].DynamicPorts[0]
+     | "\(env.NOMAD_IP // "127.0.0.1"):\(.Value)"')
 
-redis-cli -u "redis://${addr}" PING
-```
+   redis-cli -u "redis://${addr}" PING
+   ```
 
-```
-PONG
-```
+   ```
+   PONG
+   ```
 
-If you don't have `redis-cli` locally, exec into the container instead — it
-returns the same `PONG`:
+   If you don't have `redis-cli` locally, exec into the container instead — it
+   returns the same `PONG`:
 
-```sh
-podman exec -it $(podman ps -qf name=^redis-) redis-cli PING
-```
+   ```sh
+   podman exec -it $(podman ps -qf name=^redis-) redis-cli PING
+   ```
 
-```
-PONG
-```
+   ```
+   PONG
+   ```
 
 ## Adapt this for your own workload
 
