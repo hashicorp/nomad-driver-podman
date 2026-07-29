@@ -3812,3 +3812,203 @@ func TestPodmanDriver_CustomNetwork(t *testing.T) {
 		})
 	}
 }
+
+// TestContainerMounts_VolumesDisabled verifies that when volumes are disabled,
+// containerMounts rejects bind sources that escape the alloc dir (including
+// symlinks that point to an absolute path), while allowing paths within it.
+func TestContainerMounts_VolumesDisabled(t *testing.T) {
+	tmp := t.TempDir()
+	allocDir := filepath.Join(tmp, "alloc")
+	taskDir := filepath.Join(allocDir, "web")
+	must.NoError(t, os.MkdirAll(taskDir, 0755))
+
+	// a file that lives inside the alloc dir
+	safeFile := filepath.Join(taskDir, "local-file")
+	must.NoError(t, os.WriteFile(safeFile, []byte("hi"), 0600))
+
+	// a symlink inside the task dir whose target is an absolute path
+	absLink := filepath.Join(taskDir, "abs-link")
+	must.NoError(t, os.Symlink("/etc/passwd", absLink))
+
+	d := &Driver{
+		logger: testlog.HCLogger(t),
+		config: &PluginConfig{
+			Volumes: VolumeConfig{Enabled: false}, // explicitly disabled
+		},
+	}
+
+	task := &drivers.TaskConfig{
+		Name:     "web",
+		AllocDir: allocDir,
+		Env:      map[string]string{},
+	}
+
+	cases := []struct {
+		name      string
+		volume    string
+		expectErr string
+	}{
+		{
+			name:   "absolute path inside alloc dir is allowed",
+			volume: safeFile + ":/container/file",
+		},
+		{
+			name:   "relative path inside task dir is allowed",
+			volume: "local-file:/container/file",
+		},
+		{
+			name:      "absolute path outside alloc dir is rejected",
+			volume:    "/etc/passwd:/container/file",
+			expectErr: "volumes are disabled; cannot mount host path",
+		},
+		{
+			name:      "symlink to absolute path is rejected",
+			volume:    absLink + ":/container/file",
+			expectErr: "volumes are disabled; cannot mount host path",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			driverCfg := &TaskConfig{
+				Volumes: []string{tc.volume},
+			}
+			_, err := d.containerMounts(task, driverCfg)
+			if tc.expectErr == "" {
+				must.NoError(t, err)
+			} else {
+				must.ErrorContains(t, err, tc.expectErr)
+			}
+		})
+	}
+}
+
+// TestEscapesParentDir makes sure a given mount can't escape a parent dir.
+//
+// Like the func itself, this is copied from hashicorp/nomad - helper/escapingfs
+func TestEscapesParentDir(t *testing.T) {
+	// this is the main error we want to catch, from os.Root.Stat()
+	pathEscapesParent := "path escapes from parent"
+
+	tmp := t.TempDir()
+
+	// set up directory structure
+
+	// parent/
+	parent := filepath.Join(tmp, "parent")
+	must.NoError(t, os.Mkdir(parent, 0755))
+
+	// parent/just-a-file
+	absFile := filepath.Join(parent, "just-a-file")
+	must.NoError(t, os.WriteFile(absFile, []byte("hi"), 0600))
+
+	// parent/subdir/
+	subdir := filepath.Join(parent, "subdir")
+	must.NoError(t, os.Mkdir(subdir, 0755))
+
+	// symlinks - a symlink is safe if the link itself is in the parent, either
+	// absolute or relative, and the target is a relative path in the parent.
+	safeLink := filepath.Join(parent, "safe-link")
+	must.NoError(t, os.Symlink("just-a-file", safeLink))
+
+	// absolute symlink targets are not allowed, even if they are in the parent.
+	unsafeLink := filepath.Join(parent, "absolute-target-link")
+	must.NoError(t, os.Symlink(absFile, unsafeLink))
+
+	// symlink target must not escape the parent.
+	// note: target needs to actually exist. "001" is part of Go's t.TempDir()
+	escapeLink := filepath.Join(parent, "escape-link")
+	must.NoError(t, os.Symlink("../../001", escapeLink))
+
+	cases := []struct {
+		name      string
+		child     string
+		expectErr string
+	}{
+		{
+			name:  "child is parent",
+			child: parent,
+		},
+		// relative paths
+		{
+			name:  "relative child inside parent",
+			child: "just-a-file",
+		},
+		{
+			name:  "relative subdirectory inside parent",
+			child: "subdir",
+		},
+		{
+			name:  "relative non-existent child",
+			child: "no-exist",
+		},
+		{
+			name:      "relative escape via traversal",
+			child:     "../escape",
+			expectErr: pathEscapesParent,
+		},
+		// absolute paths
+		{
+			name:  "absolute child inside parent",
+			child: absFile,
+		},
+		{
+			name:  "absolute non-existent child inside parent",
+			child: filepath.Join(parent, "no-exist"),
+		},
+		{
+			name:      "absolute child outside parent",
+			child:     "/tmp",
+			expectErr: pathEscapesParent,
+		},
+		// symlinks
+		{
+			name:  "relative symlink to relative path inside parent",
+			child: "safe-link",
+		},
+		{
+			name:  "absolute symlink to relative path inside parent",
+			child: filepath.Join(parent, "safe-link"),
+		},
+		{
+			name:      "symlink to absolute path inside parent",
+			child:     "absolute-target-link",
+			expectErr: pathEscapesParent,
+		},
+		{
+			name:      "symlink escaping parent",
+			child:     "escape-link",
+			expectErr: pathEscapesParent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := escapesParentDir(parent, tc.child)
+			if tc.expectErr == "" {
+				must.NoError(t, err)
+			} else {
+				must.ErrorContains(t, err, tc.expectErr)
+			}
+		})
+	}
+
+	t.Run("relative parent", func(t *testing.T) {
+		// this test must not be t.Parallel, because os.Chdir is global.
+		curDir, err := os.Getwd()
+		must.NoError(t, err)
+		t.Cleanup(func() {
+			must.NoError(t, os.Chdir(curDir), must.Sprint("failed to restore original working dir"))
+		})
+		// go into tmp to test paths ./relative to it
+		must.NoError(t, os.Chdir(tmp))
+
+		must.NoError(t, escapesParentDir("./parent", "./parent/just-a-file"))
+
+		dotdot := filepath.Join("..", filepath.Base(tmp), "parent") // ../001/parent
+		must.NoError(t, escapesParentDir(dotdot, "./parent/just-a-file"))
+
+		absChildErr := fmt.Sprintf("Rel: can't make %s relative to ./parent", absFile)
+		must.EqError(t, escapesParentDir("./parent", absFile), absChildErr)
+	})
+}
