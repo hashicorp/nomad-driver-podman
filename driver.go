@@ -1376,39 +1376,41 @@ func (d *Driver) createImage(
 		usePlatform = false
 	}
 
-	if !forcePull && !usePlatform && imageID != "" {
-		d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
-		return imageID, nil
-	}
+	if !forcePull && !usePlatform {
+		if imageID != "" {
+			d.logger.Debug("Found imageID", imageID, "for image", imageName, "in local storage")
+			return imageID, nil
+		}
 
-	// Podman's name-based inspect above can spuriously report a locally-built
-	// image as missing (returning api.ImageNotFound) depending on how its name
-	// was recorded in storage, which would otherwise send us into a doomed
-	// registry pull. This affects "localhost/"-prefixed references as well as
-	// bare shortnames that Podman stored under the implicit "localhost/"
-	// registry (e.g. "busybox:local"). Before pulling, confirm the image is
-	// really absent using a store-wide lookup that mirrors `podman images`, and
-	// if it is present use its ID instead of pulling.
-	if !forcePull && !usePlatform && imageID == "" && (localOnly || isShortName) {
-		id, found, existsErr := podmanClient.ImageExists(d.ctx, imageName)
-		switch {
-		case found:
-			d.logger.Debug("Found local image via store lookup", "image", imageName, "imageID", id)
-			return id, nil
-		case localOnly:
-			// A localhost/ image can never be pulled; whether it is genuinely
-			// absent or the list call failed, do not fall through to a doomed
-			// registry pull.
-			if existsErr != nil {
+		// Podman's name-based inspect above can spuriously report a locally-built
+		// image as missing (returning api.ImageNotFound) depending on how its name
+		// was recorded in storage, which would otherwise send us into a doomed
+		// registry pull. This affects "localhost/"-prefixed references as well as
+		// bare shortnames that Podman stored under the implicit "localhost/"
+		// registry (e.g. "busybox:local"). Before pulling, confirm the image is
+		// really absent using a store-wide lookup that mirrors `podman images`, and
+		// if it is present use its ID instead of pulling.
+		if localOnly || isShortName {
+			id, found, existsErr := podmanClient.ImageExists(d.ctx, imageName)
+			switch {
+			case found:
+				d.logger.Debug("Found local image via store lookup", "image", imageName, "imageID", id)
+				return id, nil
+			case localOnly:
+				// A localhost/ image can never be pulled; whether it is genuinely
+				// absent or the list call failed, do not fall through to a doomed
+				// registry pull.
+				if existsErr != nil {
+					d.logger.Warn("Unable to list local images", "image", imageName, "error", existsErr)
+				}
+				return "", fmt.Errorf("image %s was not found in local storage and cannot be pulled: localhost/-prefixed images are local-only", imageName)
+			case existsErr != nil:
+				// Shortname: list failed, but a registry pull may still succeed.
 				d.logger.Warn("Unable to list local images", "image", imageName, "error", existsErr)
 			}
-			return "", fmt.Errorf("image %s was not found in local storage and cannot be pulled: localhost/-prefixed images are local-only", imageName)
-		case existsErr != nil:
-			// Shortname: list failed, but a registry pull may still succeed.
-			d.logger.Warn("Unable to list local images", "image", imageName, "error", existsErr)
+			// A shortname that is not present locally can still be pulled from the
+			// configured registries, so fall through to the pull path below.
 		}
-		// A shortname that is not present locally can still be pulled from the
-		// configured registries, so fall through to the pull path below.
 	}
 
 	// A forced pull of a "localhost/"-prefixed image can never succeed: it was

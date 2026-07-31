@@ -35,6 +35,18 @@ func TestApi_imageIDForReference(t *testing.T) {
 			WantFound: true,
 		},
 		{
+			Name:      "bare shortname does not match docker.io registry tag",
+			Reference: "busybox:latest",
+			WantID:    "",
+			WantFound: false,
+		},
+		{
+			Name:      "localhost prefix does not match different tag",
+			Reference: "localhost/testapp:other",
+			WantID:    "",
+			WantFound: false,
+		},
+		{
 			Name:      "fully qualified registry match",
 			Reference: "docker.io/library/busybox:latest",
 			WantID:    "bbb222",
@@ -61,11 +73,4 @@ func TestApi_imageIDForReference(t *testing.T) {
 			must.Eq(t, testCase.WantID, id)
 		})
 	}
-}
-
-func TestApi_referenceMatchesTag(t *testing.T) {
-	must.True(t, referenceMatchesTag("localhost/testapp:local", "localhost/testapp:local"))
-	must.True(t, referenceMatchesTag("testapp:local", "localhost/testapp:local"))
-	must.False(t, referenceMatchesTag("testapp:local", "docker.io/library/testapp:local"))
-	must.False(t, referenceMatchesTag("localhost/testapp:local", "localhost/testapp:other"))
 }

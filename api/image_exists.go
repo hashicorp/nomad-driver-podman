@@ -58,26 +58,17 @@ func (c *API) ImageExists(ctx context.Context, image string) (string, bool, erro
 }
 
 // imageIDForReference returns the image ID of the first listed image whose
-// RepoTags contain a match for reference.
+// RepoTags contain a match for reference. It matches exactly, and also
+// tolerates a reference that omits the implicit "localhost/" registry prefix
+// that Podman records for locally-built images (e.g. reference "busybox:local"
+// matching RepoTag "localhost/busybox:local").
 func imageIDForReference(reference string, images []imageListEntry) (string, bool) {
 	for _, img := range images {
 		for _, tag := range img.RepoTags {
-			if referenceMatchesTag(reference, tag) {
+			if reference == tag || "localhost/"+reference == tag {
 				return img.Id, true
 			}
 		}
 	}
 	return "", false
-}
-
-// referenceMatchesTag reports whether an image reference matches a stored
-// RepoTag. It matches exactly, and also tolerates a reference that omits the
-// implicit "localhost/" registry prefix that Podman records for locally-built
-// images (e.g. reference "busybox:local" matching RepoTag
-// "localhost/busybox:local").
-func referenceMatchesTag(reference, tag string) bool {
-	if reference == tag {
-		return true
-	}
-	return "localhost/"+reference == tag
 }
