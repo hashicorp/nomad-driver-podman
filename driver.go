@@ -474,7 +474,6 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskSocketName)),
 		logPointer:            time.Now(), // do not rewind log to the startetAt date.
 		logStreamer:           taskState.LogStreamer,
-		collectionInterval:    time.Second,
 		totalCPUStats:         cpustats.New(d.compute),
 		userCPUStats:          cpustats.New(d.compute),
 		systemCPUStats:        cpustats.New(d.compute),
@@ -511,6 +510,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	d.tasks.Set(handle.Config.ID, h)
 
 	go h.runContainerMonitor()
+	go h.runStatsMonitor()
 	d.logger.Debug("Recovered container handle", "container", taskState.ContainerID, "podman client", podmanTaskSocketName)
 
 	return nil
@@ -1067,7 +1067,6 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		logger:                d.logger.Named(fmt.Sprintf("podman.%s", podmanTaskSocketName)),
 		logStreamer:           createOpts.LogConfiguration.Driver == LOG_DRIVER_JOURNALD,
 		logPointer:            time.Now(),
-		collectionInterval:    time.Second,
 		totalCPUStats:         cpustats.New(d.compute),
 		userCPUStats:          cpustats.New(d.compute),
 		systemCPUStats:        cpustats.New(d.compute),
@@ -1132,6 +1131,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	d.tasks.Set(cfg.ID, h)
 
 	go h.runContainerMonitor()
+	go h.runStatsMonitor()
 
 	d.logger.Info("Completely started container", "taskID", cfg.ID, "container", containerID, "ip", containerIP)
 
@@ -1597,7 +1597,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 		if err != nil {
 			d.logger.Warn("failed to stop/kill container during destroy", "error", err)
 		}
-		// wait a while for stats emitter to collect exit code etc.
+		// Wait for the lifecycle monitor to collect the exit code and final state.
 		for i := 0; i < 20; i++ {
 			if !handle.isRunning() {
 				break
@@ -1605,7 +1605,7 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 			time.Sleep(time.Millisecond * 250)
 		}
 		if handle.isRunning() {
-			d.logger.Warn("stats emitter did not exit while stop/kill container during destroy", "error", err)
+			d.logger.Warn("lifecycle monitor did not observe container exit during destroy", "error", err)
 		}
 	}
 

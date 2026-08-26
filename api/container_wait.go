@@ -10,10 +10,16 @@ import (
 	"strings"
 )
 
-// ContainerWait waits on a container to met a given condition
+// ContainerWait waits on a container to meet one of the given conditions.
+// It uses the streaming client because a container may run longer than the
+// regular API client timeout.
 func (c *API) ContainerWait(ctx context.Context, name string, conditions []string) error {
-
-	res, err := c.Post(ctx, fmt.Sprintf("/v1.0.0/libpod/containers/%s/wait?condition=%s", name, strings.Join(conditions, "&condition=")), nil)
+	path := fmt.Sprintf("/v1.0.0/libpod/containers/%s/wait?condition=%s", name, strings.Join(conditions, "&condition="))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseUrl+path, nil)
+	if err != nil {
+		return err
+	}
+	res, err := c.Do(req, true)
 	if err != nil {
 		return err
 	}
