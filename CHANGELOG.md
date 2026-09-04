@@ -9,6 +9,7 @@ IMPROVEMENTS:
 * config: Added `ipc_mode` task configuration option to control the container IPC namespace (`host`, `private`, `shareable`, `none`, `container:<id>`, `ns:<path>`, `task:<name>`) [[GH-515](https://github.com/hashicorp/nomad-driver-podman/pull/515)]
 * config: Added support for `os`, `arch` and `variant` task config options to override the platform of the image to pull. [[GH-514](https://github.com/hashicorp/nomad-driver-podman/pull/514)]
 * build: Eliminated transitive dependency on Docker packages via `hclutils`.[[GH-512](https://github.com/hashicorp/nomad-driver-podman/pull/512)]
+* docs: Added a progressive set of real-world example jobs (hello-world through a rootless, hardened deployment), each with a runnable spec and a README covering run/verify steps and expected output. [[GH-516](https://github.com/hashicorp/nomad-driver-podman/pull/516)]
 
 BUG FIXES:
 * api: Fixed file descriptor leak when getting logs from the task [[GH-508](https://github.com/hashicorp/nomad-driver-podman/pull/508)]

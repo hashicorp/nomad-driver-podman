@@ -1,0 +1,146 @@
+# 02 - Persistent Storage
+
+Run a stateful [PostgreSQL](https://www.postgresql.org/) database whose data
+survives task restarts, by bind-mounting a host directory into the container.
+
+## What this demonstrates
+
+- Persisting container data with a host bind-mount in the `volumes` config.
+- Configuring a stateful image through `env` (`POSTGRES_*`).
+- Using a job `variable` to parameterize the host data path.
+- The trade-off of host bind-mounts: the allocation is pinned to the node that
+  holds the data.
+
+## Prerequisites
+
+- A running Nomad agent with the `nomad-driver-podman` plugin.
+- The driver's `volumes` feature must be enabled so the task can bind-mount a
+  host path into the container. It is enabled by default, but if your agent
+  configures the plugin explicitly, make sure the block includes it:
+  ```hcl
+  plugin "nomad-driver-podman" {
+    config {
+      volumes {
+        enabled = true
+      }
+    }
+  }
+  ```
+- A client node where Podman may create/write the host data directory
+  (`/srv/podman-examples/postgres` by default).
+
+## Run
+
+The bind-mount source directory must exist before the job starts (Podman does
+not create it). Create it first, then run the job.
+
+**Rootful Podman** (default path):
+
+```sh
+cd examples/jobs/02-persistent-storage
+sudo mkdir -p /srv/podman-examples/postgres
+nomad job run postgres.nomad
+```
+
+**Rootless Podman** — point the job at a directory your user owns:
+
+```sh
+cd examples/jobs/02-persistent-storage
+mkdir -p "$HOME/pg-data"
+nomad job run -var "host_data_dir=$HOME/pg-data" postgres.nomad
+```
+
+The job mounts the directory with the `:U` option so Podman chowns it to the
+Postgres user inside the container.
+
+> **Rootless tip:** the data directory must be owned by the user that runs the
+> Podman socket so the `:U` chown can succeed. If you previously started this
+> example with rootful Podman (or `sudo`), the directory may be left owned by
+> `root` and the rootless run will fail with
+> `failed to chown recursively host path: ... operation not permitted`.
+> Remove the stale directory and recreate it as your user:
+> `sudo rm -rf "$HOME/pg-data" && mkdir -p "$HOME/pg-data"`.
+
+## Verify
+
+1. Confirm the allocation is running.
+
+   ```sh
+   nomad job status persistent-storage
+   ```
+
+   ```
+   Allocations
+   ID        Node ID   Task Group  Version  Desired  Status   Created  Modified
+   xxxxxxxx  xxxxxxxx  db          0        run      running  20s ago  5s ago
+   ```
+
+2. Create a table and insert a row.
+
+   ```sh
+   cid=$(podman ps -qf name=^postgres-)
+   podman exec -i "$cid" psql -U demo -d demo -c \
+     "CREATE TABLE IF NOT EXISTS t (msg text); INSERT INTO t VALUES ('it persists');"
+   ```
+
+   ```
+   CREATE TABLE
+   INSERT 0 1
+   ```
+
+3. Restart the task, wait for Postgres to come back, then read the row back.
+   It survives because the data lives on the host bind-mount, not inside the
+   container.
+
+   ```sh
+   nomad alloc restart $(nomad job allocs -json persistent-storage | jq -r '.[0].ID')
+   sleep 5
+   cid=$(podman ps -qf name=^postgres-)
+   podman exec -i "$cid" psql -U demo -d demo -c "SELECT msg FROM t;"
+   ```
+
+   ```
+        msg
+   -------------
+    it persists
+   (1 row)
+   ```
+
+4. Confirm the data files exist on the host.
+
+   ```sh
+   sudo ls /srv/podman-examples/postgres/pgdata
+   ```
+
+   ```
+   base  global  pg_wal  postgresql.conf  ...
+   ```
+
+## Adapt this for your own workload
+
+- **Secrets**: replace the inline `POSTGRES_PASSWORD` with a `template` that
+  reads a [Nomad Variable](https://developer.hashicorp.com/nomad/docs/concepts/variables)
+  or a Vault secret, e.g.
+  ```hcl
+  template {
+    data        = "POSTGRES_PASSWORD={{ with nomadVar \"nomad/jobs/persistent-storage\" }}{{ .password }}{{ end }}"
+    destination = "secrets/db.env"
+    env         = true
+  }
+  ```
+- **Durable multi-node storage**: swap the host bind-mount for a
+  [CSI volume](https://developer.hashicorp.com/nomad/docs/other-specifications/volume)
+  so the workload can reschedule across nodes.
+
+## Cleanup
+
+```sh
+nomad job stop -purge persistent-storage
+# Remove persisted data (irreversible):
+sudo rm -rf /srv/podman-examples/postgres
+```
+
+## Next
+
+Continue to [03 - Sidecar / Shared Network](../03-sidecar-network/) to run
+multiple containers that share a single network namespace.

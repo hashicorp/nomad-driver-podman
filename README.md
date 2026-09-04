@@ -73,6 +73,20 @@ CONTAINER ID  IMAGE                           COMMAND               CREATED     
 6d2d700cbce6  docker.io/library/redis:latest  docker-entrypoint...  16 seconds ago  Up 16 seconds ago         redis-60fdc69b-65cb-8ece-8554-df49321b3462
 ```
 
+## Examples & Learning Paths
+
+For practical, end-to-end examples that go beyond this single-container snippet,
+see the [examples directory](examples/jobs/README.md). It contains a curated
+learning path that progresses from a "hello world" container to a
+rootless, hardened deployment, with each example documenting what it demonstrates,
+exact run/verify steps, and the expected output:
+
+1. [Hello World](examples/jobs/01-hello-world/) — the minimal runnable job
+2. [Persistent Storage](examples/jobs/02-persistent-storage/) — stateful data that survives restarts
+3. [Sidecar / Shared Network](examples/jobs/03-sidecar-network/) — multiple containers in one network namespace
+4. [Service Discovery & Health Checks](examples/jobs/04-service-health/) — native service registration with a health check
+5. [Rootless & Hardened](examples/jobs/05-rootless-hardened/) — unprivileged, locked-down containers
+
 ## Building The Driver from source
 
 This project has a `go.mod` definition. So you can clone it to whatever directory you want.
@@ -652,7 +666,7 @@ config {
 
 A typical example is a network server and a metric exporter or log shipping sidecar. The metric exporter needs access to i.E. a private monitoring Port which should not be exposed the the network and thus is usually bound to localhost.
 
-The repository includes three different examples jobs for such a setup. All of them will start a [nats](https://nats.io/) server and a [prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter) using different approaches.
+The repository includes three different examples jobs for such a setup. All of them will start a [nats](https://nats.io/) server and a [prometheus-nats-exporter](https://github.com/nats-io/prometheus-nats-exporter) using different approaches. For a minimal, fully documented version of this sidecar pattern, see [examples/jobs/03-sidecar-network](examples/jobs/03-sidecar-network/).
 
 You can use `curl` to proof that the job is working correctly and that you can get prometheus metrics:
 
@@ -660,7 +674,7 @@ You can use `curl` to proof that the job is working correctly and that you can g
 
 ### 2 Task setup, server defines the network
 
-See `examples/jobs/nats_simple_pod.nomad`
+See [examples/jobs/nats_simple_pod.nomad](examples/jobs/nats_simple_pod.nomad)
 
 Here, the _server_ task is started as main workload and the _exporter_ runs as a poststart sidecar.
 Because of that, Nomad guarantees that the server is started first and thus the exporter can
@@ -672,7 +686,7 @@ Be aware that ports must be defined in the parent network namespace, here _serve
 
 ### 3 Task setup, a pause container defines the network
 
-See `examples/jobs/nats_pod.nomad`
+See [examples/jobs/nats_pod.nomad](examples/jobs/nats_pod.nomad)
 
 A slightly different setup is demonstrated in this job. It reassembles more closely the idea of a _pod_ by starting a
 pause task, named _pod_ via a prestart/sidecar [hook](https://www.nomadproject.io/docs/job-specification/lifecycle).
@@ -684,7 +698,7 @@ Note that all ports must be defined on the _pod_ level.
 
 ### 2 Task setup, shared Nomad network namespace
 
-See `examples/jobs/nats_group.nomad`
+See [examples/jobs/nats_group.nomad](examples/jobs/nats_group.nomad)
 
 This example is very different. Both _server_ and _exporter_ join a network namespace which is created and managed
 by Nomad itself. See [nomad network stanza](https://www.nomadproject.io/docs/job-specification/network) to get started with this generic approach.
