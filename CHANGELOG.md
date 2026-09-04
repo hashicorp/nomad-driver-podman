@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+SECURITY:
+* driver: Prevent using volumes to mount symlinks targeting the host filesystem when volumes are explicitly disabled [[GH-527](https://github.com/hashicorp/nomad-driver-podman/pull/527)]
+
 ## 0.6.5 (July 13, 2026)
 
 IMPROVEMENTS:
