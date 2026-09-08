@@ -51,3 +51,67 @@ func TestRootlessTaskDirPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestRootlessTaskDirRewritePath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		mountDir string
+		allocDir string
+		path     string
+		expected string
+	}{
+		{
+			name:     "empty mount directory",
+			allocDir: filepath.Join("a", "alloc"),
+			path:     filepath.Join("a", "alloc", "task", "file"),
+			expected: filepath.Join("a", "alloc", "task", "file"),
+		},
+		{
+			name:     "empty allocation directory",
+			mountDir: filepath.Join("run", "mount"),
+			path:     filepath.Join("a", "alloc", "task", "file"),
+			expected: filepath.Join("a", "alloc", "task", "file"),
+		},
+		{
+			name:     "allocation directory itself",
+			mountDir: filepath.Join("run", "mount"),
+			allocDir: filepath.Join("a", "alloc"),
+			path:     filepath.Join("a", "alloc"),
+			expected: filepath.Join("run", "mount"),
+		},
+		{
+			name:     "path under allocation directory",
+			mountDir: filepath.Join("run", "mount"),
+			allocDir: filepath.Join("a", "alloc"),
+			path:     filepath.Join("a", "alloc", "task", "file"),
+			expected: filepath.Join("run", "mount", "task", "file"),
+		},
+		{
+			name:     "path outside allocation directory",
+			mountDir: filepath.Join("run", "mount"),
+			allocDir: filepath.Join("a", "alloc"),
+			path:     filepath.Join("var", "log", "task.log"),
+			expected: filepath.Join("var", "log", "task.log"),
+		},
+		{
+			name:     "sibling prefix is currently rewritten",
+			mountDir: "/run/mount",
+			allocDir: "/a/alloc",
+			path:     "/a/alloc-other/x",
+			expected: "/run/mount-other/x",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootlessDir := &rootlessTaskDir{
+				mountDir: tc.mountDir,
+				allocDir: tc.allocDir,
+			}
+
+			// NOTE: rewritePath uses strings.HasPrefix, so sibling names that
+			// share the allocDir prefix are also rewritten.
+			must.Eq(t, tc.expected, rootlessDir.rewritePath(tc.path))
+		})
+	}
+}

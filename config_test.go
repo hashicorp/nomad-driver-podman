@@ -204,6 +204,36 @@ func TestConfig_IPCMode(t *testing.T) {
 	must.Eq(t, "host", tc.IPCMode)
 }
 
+func TestConfig_UserSquash(t *testing.T) {
+	ci.Parallel(t)
+
+	testCases := []struct {
+		name     string
+		setting  string
+		expected bool
+	}{
+		{name: "default", expected: true},
+		{name: "disabled", setting: "user_squash = false", expected: false},
+		{name: "enabled", setting: "user_squash = true", expected: true},
+	}
+
+	parser := newConfigParser(taskConfigSpec)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			hcl := `
+				config {
+					image = "docker://redis"
+					` + tc.setting + `
+				}
+			`
+
+			var taskConfig *TaskConfig
+			parser.ParseHCL(t, hcl, &taskConfig)
+			must.Eq(t, tc.expected, taskConfig.UserSquash)
+		})
+	}
+}
+
 func TestPluginConfig_Parsing(t *testing.T) {
 	ci.Parallel(t)
 
