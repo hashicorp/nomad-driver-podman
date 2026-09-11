@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -94,7 +95,7 @@ var (
 			drivers.NetIsolationModeHost,
 			drivers.NetIsolationModeTask,
 		},
-		MustInitiateNetwork: false,
+		MustInitiateNetwork: true,
 	}
 )
 
@@ -140,6 +141,11 @@ type Driver struct {
 
 	// singleflight group to prevent parallel image downloads
 	pullGroup singleflight.Group
+
+	pauseContainers map[string]struct{}
+
+	// cleanupOnce ensures the cleanup goroutine is only started once
+	cleanupOnce sync.Once
 }
 
 // TaskState is the state which is encoded in the handle returned in
@@ -157,13 +163,14 @@ type TaskState struct {
 func NewPodmanDriver(logger hclog.Logger) drivers.DriverPlugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Driver{
-		eventer:        eventer.NewEventer(ctx, logger),
-		config:         &PluginConfig{},
-		tasks:          newTaskStore(),
-		ctx:            ctx,
-		signalShutdown: cancel,
-		logger:         logger.Named(pluginName),
-		httpClient:     &http.Client{Timeout: defaultHTTPTimeout},
+		eventer:         eventer.NewEventer(ctx, logger),
+		config:          &PluginConfig{},
+		tasks:           newTaskStore(),
+		ctx:             ctx,
+		signalShutdown:  cancel,
+		logger:          logger.Named(pluginName),
+		httpClient:      &http.Client{Timeout: defaultHTTPTimeout},
+		pauseContainers: make(map[string]struct{}),
 	}
 }
 
@@ -226,6 +233,11 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 	}
 	d.compute = cfg.AgentConfig.Compute()
 
+	// Start background cleanup goroutine for orphaned rootless bind mounts (only once)
+	d.cleanupOnce.Do(func() {
+		go d.runOrphanCleanup()
+	})
+
 	return nil
 }
 
@@ -281,6 +293,10 @@ func cleanUpSocketName(name string) string {
 }
 
 func (d *Driver) getPodmanClient(clientName string) (*api.API, error) {
+	// Normalise empty socket name to "default" to match makePodmanClients behaviour
+	if clientName == "" {
+		clientName = "default"
+	}
 	p, ok := d.podmanClients[clientName]
 	if ok {
 		return p, nil
@@ -334,6 +350,35 @@ func (d *Driver) handleFingerprint(ctx context.Context, ch chan<- *drivers.Finge
 		case <-ticker.C:
 			ticker.Reset(fingerprintPeriod)
 			ch <- d.buildFingerprint()
+		}
+	}
+}
+
+// runOrphanCleanup periodically cleans up orphaned rootless bind mounts.
+// This runs as a dedicated goroutine instead of piggybacking on fingerprinting.
+func (d *Driver) runOrphanCleanup() {
+	// safeCleanup wraps cleanup with panic recovery so the goroutine survives errors
+	safeCleanup := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				d.logger.Error("panic in orphan cleanup", "panic", r)
+			}
+		}()
+		d.cleanupOrphanedMounts()
+	}
+
+	// Initial cleanup on startup
+	safeCleanup()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-d.ctx.Done():
+			return
+		case <-ticker.C:
+			safeCleanup()
 		}
 	}
 }
@@ -527,17 +572,17 @@ func BuildContainerNameForTask(taskName string, cfg *drivers.TaskConfig) string 
 }
 
 // StartTask creates and starts a new Container based on the given TaskConfig.
-func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drivers.DriverNetwork, error) {
+func (d *Driver) StartTask(cfg *drivers.TaskConfig) (handle *drivers.TaskHandle, network *drivers.DriverNetwork, err error) {
 	if _, ok := d.tasks.Get(cfg.ID); ok {
 		return nil, nil, fmt.Errorf("task with ID %q already started", cfg.ID)
 	}
 
 	var podmanTaskConfig TaskConfig
-	if err := cfg.DecodeDriverConfig(&podmanTaskConfig); err != nil {
+	if err = cfg.DecodeDriverConfig(&podmanTaskConfig); err != nil {
 		return nil, nil, fmt.Errorf("failed to decode driver config: %w", err)
 	}
 
-	handle := drivers.NewTaskHandle(taskHandleVersion)
+	handle = drivers.NewTaskHandle(taskHandleVersion)
 	handle.Config = cfg
 
 	if podmanTaskConfig.Image == "" {
@@ -667,10 +712,23 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerStorageConfig.Image = podmanTaskConfig.Image
 	createOpts.ContainerStorageConfig.InitPath = podmanTaskConfig.InitPath
 	createOpts.ContainerStorageConfig.WorkDir = podmanTaskConfig.WorkingDir
-	allMounts, err := d.containerMounts(cfg, &podmanTaskConfig)
+	allMounts, rootlessMountDir, err := d.containerMounts(cfg, &podmanTaskConfig)
 	if err != nil {
 		return nil, nil, err
 	}
+	if rootlessMountDir != "" && createOpts.LogConfiguration.Driver == "k8s-file" {
+		rootlessDir := &rootlessTaskDir{
+			mountDir: rootlessMountDir,
+			allocDir: cfg.AllocDir,
+		}
+		createOpts.LogConfiguration.Path = rootlessDir.rewritePath(createOpts.LogConfiguration.Path)
+	}
+
+	// Note: we intentionally don't clean up the bind mount on StartTask error.
+	// The mount persists so that Nomad can retry, and rootlessMount() will
+	// clean up and recreate on the next StartTask call. This is important for
+	// task/alloc restarts where Nomad calls DestroyTask then StartTask.
+
 	createOpts.ContainerStorageConfig.Mounts = allMounts
 	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(podmanTaskConfig.Devices))
 	for idx, device := range podmanTaskConfig.Devices {
@@ -739,7 +797,13 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerSecurityConfig.CapAdd = podmanTaskConfig.CapAdd
 	createOpts.ContainerSecurityConfig.CapDrop = podmanTaskConfig.CapDrop
 	createOpts.ContainerSecurityConfig.SelinuxOpts = podmanTaskConfig.SelinuxOpts
-	createOpts.ContainerSecurityConfig.User = cfg.User
+	// UserSquash controls whether to pass the task user to podman.
+	// When true (default), cfg.User is passed through.
+	// When false, cfg.User is not passed, enabling rootless "fake root" where
+	// container uid 0 maps to the socket owner on the host.
+	if cfg.User != "" && podmanTaskConfig.UserSquash {
+		createOpts.ContainerSecurityConfig.User = cfg.User
+	}
 	createOpts.ContainerSecurityConfig.Privileged = podmanTaskConfig.Privileged
 	createOpts.ContainerSecurityConfig.ReadOnlyFilesystem = podmanTaskConfig.ReadOnlyRootfs
 	createOpts.ContainerSecurityConfig.ApparmorProfile = podmanTaskConfig.ApparmorProfile
@@ -1072,6 +1136,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 		userCPUStats:          cpustats.New(d.compute),
 		systemCPUStats:        cpustats.New(d.compute),
 		removeContainerOnExit: d.config.GC.Container,
+		rootlessMountDir:      rootlessMountDir,
 	}
 
 	if !recoverRunningContainer {
@@ -1616,6 +1681,11 @@ func (d *Driver) DestroyTask(taskID string, force bool) error {
 		}
 	}
 
+	// Note: we don't clean up the rootless bind mount here because DestroyTask
+	// is called for both restarts and full stops. On restart, the mount is reused.
+	// Orphaned mounts (after Nomad GCs the allocation) are cleaned up by
+	// cleanupOrphanedMounts() which runs during fingerprinting.
+
 	d.tasks.Delete(taskID)
 	return nil
 }
@@ -1780,11 +1850,45 @@ func getSElinuxVolumeLabel(vc VolumeConfig, mc *drivers.MountConfig) string {
 	return vc.SelinuxLabel
 }
 
-func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) ([]spec.Mount, error) {
+func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskConfig) (mounts []spec.Mount, rootlessMountDir string, retErr error) {
 	var binds []spec.Mount
-	binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
-	binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
-	binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+
+	// Get the podman client - use getPodmanClient for consistent empty name handling
+	podmanClient, clientErr := d.getPodmanClient(driverConfig.Socket)
+	if clientErr != nil {
+		return nil, "", fmt.Errorf("failed to get podman client for mounts: %w", clientErr)
+	}
+
+	if podmanClient.IsRootless() {
+		var err error
+		rootlessMountDir, err = d.rootlessMount(task, driverConfig)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to create rootless user mount: %w", err)
+		}
+		// Note: we intentionally don't clean up the bind mount on error here.
+		// rootlessMount() handles cleanup-and-recreate on subsequent calls,
+		// which is needed for task restarts. Aggressive cleanup here would
+		// remove the mount before Nomad has a chance to retry.
+	}
+
+	// Path helper for rootless bind mounting - stores both the bind mount path
+	// and the original alloc dir for rewriting paths
+	rootlessDir := &rootlessTaskDir{
+		mountDir: rootlessMountDir,
+		allocDir: task.AllocDir,
+		taskName: task.Name,
+	}
+
+	if rootlessMountDir != "" {
+		binds = append(binds, spec.Mount{Source: rootlessDir.sharedAllocDir(), Destination: task.Env[taskenv.AllocDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: rootlessDir.localDir(), Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: rootlessDir.secretsDir(), Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+
+	} else {
+		binds = append(binds, spec.Mount{Source: task.TaskDir().SharedAllocDir, Destination: task.Env[taskenv.AllocDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: task.TaskDir().LocalDir, Destination: task.Env[taskenv.TaskLocalDir], Type: "bind"})
+		binds = append(binds, spec.Mount{Source: task.TaskDir().SecretsDir, Destination: task.Env[taskenv.SecretsDir], Type: "bind"})
+	}
 
 	// TODO support volume drivers
 	// https://github.com/containers/libpod/pull/4548
@@ -1800,7 +1904,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 	for _, userbind := range driverConfig.Volumes {
 		src, dst, mode, err := parseVolumeSpec(userbind)
 		if err != nil {
-			return nil, fmt.Errorf("invalid docker volume %q: %w", userbind, err)
+			return nil, "", fmt.Errorf("invalid docker volume %q: %w", userbind, err)
 		}
 
 		// Paths inside task dir are always allowed when using the default driver,
@@ -1810,14 +1914,18 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		// Otherwise, we assume we receive a relative path binding in the format
 		// relative/to/task:/also/in/container
 		if taskLocalBindVolume {
-			src = expandPath(task.TaskDir().Dir, src)
+			if rootlessMountDir != "" {
+				src = expandPath(rootlessDir.dir(), src)
+			} else {
+				src = expandPath(task.TaskDir().Dir, src)
+			}
 		} else {
 			// Resolve dotted path segments
 			src = filepath.Clean(src)
 		}
 
 		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
-			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
+			return nil, "", fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
 		}
 		bind := spec.Mount{
 			Source:      src,
@@ -1833,10 +1941,12 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 
 	// create binds for host volumes, CSI plugins, and CSI volumes
 	for _, m := range task.Mounts {
+		// Rewrite paths under alloc dir to use bind mount for rootless
+		hostPath := rootlessDir.rewritePath(m.HostPath)
 		bind := spec.Mount{
 			Type:        "bind",
 			Destination: m.TaskPath,
-			Source:      m.HostPath,
+			Source:      hostPath,
 		}
 		if m.Readonly {
 			bind.Options = append(bind.Options, "ro")
@@ -1874,7 +1984,7 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 		binds = append(binds, bind)
 	}
 
-	return binds, nil
+	return binds, rootlessMountDir, nil
 }
 
 func (d *Driver) portMappings(taskCfg *drivers.TaskConfig, driverCfg TaskConfig) ([]api.PortMapping, error) {
@@ -2248,4 +2358,133 @@ func getSocketOwner(socketPath string) (int, int, bool) {
 		return 0, 0, false
 	}
 	return int(stat.Uid), int(stat.Gid), true
+}
+
+func (d *Driver) CreateNetwork(allocID string, createSpec *drivers.NetworkCreateRequest) (*drivers.NetworkIsolationSpec, bool, error) {
+
+	// Super hacky until we modify the NetworkCreateRequest in Nomad core, but we can use the
+	// hostname to specify which podman socket we want to use.
+	//
+	// Requires bug fix: https://github.com/hashicorp/nomad/pull/27273
+	// Note: This has really only been tested with "bridge" mode.
+	//
+	// Initialize docker API clients
+	podmanClient, err := d.getPodmanClient(createSpec.Hostname)
+	if err != nil {
+		return nil, false, fmt.Errorf("podman client with name %q not found, check your podman driver config", "default")
+	}
+
+	pauseImage := fmt.Sprintf("registry.k8s.io/pause-%s:3.3", runtime.GOARCH)
+
+	podmanClient.ImagePull(context.Background(), &registry.PullConfig{
+		Image: pauseImage,
+	})
+
+	pauseImageName := fmt.Sprintf("pause-%s", allocID)
+
+	// During task recovery, the container may already exist and not need re-creating
+	specFromContainer := func(c api.InspectContainerData, hostname string) *drivers.NetworkIsolationSpec {
+		spec := &drivers.NetworkIsolationSpec{
+			Mode: drivers.NetIsolationModeGroup,
+			Path: c.NetworkSettings.SandboxKey,
+			HostsConfig: &drivers.HostsConfig{
+				Hostname: hostname,
+			},
+			Labels: make(map[string]string),
+		}
+
+		// If the user supplied a hostname, set the label.
+		if hostname != "" {
+			spec.Labels["podman_pause_hostname"] = hostname
+		}
+
+		return spec
+	}
+
+	existingContainer, err := podmanClient.ContainerInspect(context.Background(), pauseImageName)
+	if err == nil {
+		if existingContainer.State.Running {
+			// Reuse the existing running pause container
+			return specFromContainer(existingContainer, createSpec.Hostname), false, nil
+		}
+		// Container exists but is stopped, remove it before creating a new one
+		if err = podmanClient.ContainerDelete(context.Background(), existingContainer.ID, true, true); err != nil {
+			return nil, false, fmt.Errorf("failed to remove stopped pause container: %w", err)
+		}
+	} else if !errors.Is(err, api.ContainerNotFound) {
+		// Some other error occurred
+		return nil, false, err
+	}
+	// Container doesn't exist (or was just removed), proceed to create it
+
+	container, err := podmanClient.ContainerCreate(context.Background(), api.SpecGenerator{
+		ContainerBasicConfig: api.ContainerBasicConfig{
+			Name: pauseImageName,
+		},
+		ContainerStorageConfig: api.ContainerStorageConfig{
+			Image: pauseImage,
+		},
+		ContainerNetworkConfig: api.ContainerNetworkConfig{
+			NetNS: api.Namespace{
+				NSMode: "none",
+			},
+		},
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create pause container: %w", err)
+	}
+
+	err = podmanClient.ContainerStart(context.Background(), container.Id)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to start pause container: %w", err)
+	}
+
+	ins, err := podmanClient.ContainerInspect(context.Background(), pauseImageName)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to inspect pause container: %w", err)
+	}
+
+	spec := &drivers.NetworkIsolationSpec{
+		Mode: drivers.NetIsolationModeGroup,
+		Path: fmt.Sprintf("/proc/%d/ns/net", ins.State.Pid),
+		HostsConfig: &drivers.HostsConfig{
+			Hostname: createSpec.Hostname,
+		},
+		Labels: make(map[string]string),
+	}
+
+	// If the user supplied a hostname, set the label.
+	if createSpec.Hostname != "" {
+		spec.Labels["podman_pause_hostname"] = createSpec.Hostname
+	}
+
+	// keep track of this pause container for reconciliation
+	d.pauseContainers[pauseImageName] = struct{}{}
+
+	return spec, true, nil
+}
+
+func (d *Driver) DestroyNetwork(allocID string, spec *drivers.NetworkIsolationSpec) error {
+
+	// Initialize docker API clients
+	podmanClient, err := d.getPodmanClient(spec.HostsConfig.Hostname)
+	if err != nil {
+		return fmt.Errorf("podman client with name %q not found, check your podman driver config", "default")
+	}
+
+	pauseImageName := fmt.Sprintf("pause-%s", allocID)
+
+	err = podmanClient.ContainerStop(context.Background(), pauseImageName, 0, false)
+	if err != nil {
+		return fmt.Errorf("failed to stop pause container, %w", err)
+	}
+
+	err = podmanClient.ContainerDelete(context.Background(), pauseImageName, true, true)
+	if err != nil {
+		return fmt.Errorf("failed to delete pause container, %w", err)
+	}
+
+	delete(d.pauseContainers, pauseImageName)
+
+	return nil
 }

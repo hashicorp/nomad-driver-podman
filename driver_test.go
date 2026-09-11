@@ -1289,9 +1289,6 @@ func TestPodmanDriver_OOM(t *testing.T) {
 
 // check setting a user for the task
 func TestPodmanDriver_User(t *testing.T) {
-	// if os.Getuid() != 0 {
-	// 	t.Skip("Skipping User test ")
-	// }
 	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
@@ -1300,6 +1297,7 @@ func TestPodmanDriver_User(t *testing.T) {
 		"-c",
 		"whoami",
 	})
+	taskCfg.UserSquash = true
 
 	task := &drivers.TaskConfig{
 		ID:        uuid.Generate(),
@@ -1338,6 +1336,78 @@ func TestPodmanDriver_User(t *testing.T) {
 	tasklog := readStdoutLog(t, task)
 	must.StrContains(t, tasklog, "www-data")
 
+}
+
+func TestPodmanDriver_UserSquash(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("user_squash integration test requires root to create allocation mounts")
+	}
+
+	testCases := []struct {
+		name       string
+		userSquash bool
+	}{
+		{name: "enabled", userSquash: true},
+		{name: "disabled", userSquash: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := podmanDriverHarness(t, nil)
+			driver := getPodmanDriver(t, d)
+			if _, err := driver.defaultPodman.Ping(context.Background()); err != nil {
+				t.Skipf("podman is not available for user_squash integration test: %v", err)
+			}
+
+			taskConfig := newTaskConfig("", []string{"whoami"})
+			taskConfig.UserSquash = tc.userSquash
+			task := &drivers.TaskConfig{
+				ID:        uuid.Generate(),
+				Name:      "user-squash-" + tc.name,
+				AllocID:   uuid.Generate(),
+				User:      "www-data",
+				Resources: createBasicResources(),
+			}
+			must.NoError(t, task.EncodeConcreteDriverConfig(&taskConfig))
+
+			cleanup := d.MkAllocDir(task, true)
+			defer cleanup()
+			_, _, err := d.StartTask(task)
+			must.NoError(t, err)
+			defer func() { _ = d.DestroyTask(task.ID, true) }()
+
+			waitCh, err := d.WaitTask(context.Background(), task.ID)
+			must.NoError(t, err)
+			select {
+			case result := <-waitCh:
+				must.True(t, result.Successful())
+			case <-time.After(10 * time.Second):
+				must.Unreachable(t, must.Sprint("container did not exit in time"))
+			}
+
+			tasklog := readStdoutLog(t, task)
+			if tc.userSquash {
+				must.StrContains(t, tasklog, "www-data")
+			} else {
+				must.StrNotContains(t, tasklog, "www-data")
+				must.StrContains(t, tasklog, "root")
+			}
+		})
+	}
+}
+
+func TestGetPodmanClientEmptyNameUsesDefault(t *testing.T) {
+	ci.Parallel(t)
+
+	client := &api.API{}
+	driver := &Driver{podmanClients: map[string]*api.API{"default": client}}
+
+	fromEmptyName, err := driver.getPodmanClient("")
+	must.NoError(t, err)
+	fromDefaultName, err := driver.getPodmanClient("default")
+	must.NoError(t, err)
+	must.True(t, fromEmptyName == client)
+	must.True(t, fromDefaultName == client)
 }
 
 func TestPodmanDriver_Device(t *testing.T) {
