@@ -49,6 +49,7 @@ type TaskHandle struct {
 	containerStats        api.Stats
 	removeContainerOnExit bool
 	logStreamer           bool
+	rootlessMountDir      string // bind mount path for rootless cleanup
 }
 
 func (h *TaskHandle) taskStatus() *drivers.TaskStatus {

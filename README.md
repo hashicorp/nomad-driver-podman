@@ -607,6 +607,14 @@ config {
 }
 ```
 
+* **user_squash** - (Optional) true (default) or false. Controls whether the task's `user` field is passed through to Podman as the container user. When `true` (the default), it is passed through. When `false`, the task user is not passed to Podman; under rootless Podman this enables "fake root", where container uid 0 maps to the user that owns the Podman socket on the host. Set this to `false` for images that must run as root inside their user namespace. This option only has an effect when the task also sets a `user`; with no task user, the container already runs as root in rootless mode.
+
+```hcl
+config {
+  user_squash = false
+}
+```
+
 * **ipc_mode** - (Optional) Set the [IPC namespace mode](https://docs.podman.io/en/latest/markdown/podman-run.1.html#ipc-ipc) for the container. When unset, Podman uses its default (a `private` IPC namespace).
 
 * `host`: use the host's IPC namespace. Note: this gives the container access to
@@ -649,6 +657,8 @@ config {
 ## Network Configuration
 
 [nomad lifecycle hooks](https://www.nomadproject.io/docs/job-specification/lifecycle) combined with the drivers `network_mode` allows very flexible network namespace definitions. This feature does not build upon the native podman pod structure but simply reuses the networking namespace of one container for other tasks in the same group.
+
+When running rootless with a group `network` stanza, the driver creates a per-allocation pause container named `pause-<allocID>` to hold the shared network namespace; it is created when the allocation network is set up and removed when the network is torn down, and is recovered automatically after an agent restart.
 
 A typical example is a network server and a metric exporter or log shipping sidecar. The metric exporter needs access to i.E. a private monitoring Port which should not be exposed the the network and thus is usually bound to localhost.
 
@@ -764,6 +774,14 @@ $ podman ps
 CONTAINER ID  IMAGE                           COMMAND       CREATED        STATUS            PORTS                                                 NAMES
 2423ae3efa21  docker.io/library/redis:latest  redis-server  7 seconds ago  Up 6 seconds ago  127.0.0.1:21510->6379/tcp, 127.0.0.1:21510->6379/udp  redis-b640480f-4b93-65fd-7bba-c15722886395
 ```
+
+### Rootless allocation bind mounts
+
+Nomad creates each allocation's working directories (the `alloc/`, task `local/`, and `secrets/` directories) beneath its own data directory, with ownership and permissions that an unprivileged rootless Podman process cannot read. To make these directories accessible to a rootless container, the driver bind-mounts the allocation directory into a location the socket user can reach, at `/var/run/user/<uid>/nomad/<allocID>`, where `<uid>` is the uid that owns the target Podman socket. The bind mount is recursive (`MS_REC`) so that tmpfs submounts that Nomad creates, such as the `secrets` tmpfs, are captured as well. The container's mounts (the `alloc`, `local`, and `secrets` directories, host volumes, and the native `k8s-file` log path) are then rewritten to point at this accessible location.
+
+This behavior is automatic and applies only when the target Podman socket is rootless. Rootful Podman is unaffected and continues to use the original allocation paths.
+
+Because these bind mounts live outside Nomad's own allocation-directory lifecycle, the driver runs a background housekeeping goroutine that removes orphaned bind mounts. It scans `/var/run/user/<uid>/nomad/` once at startup and every five minutes thereafter, and unmounts and removes any mount whose backing allocation no longer exists — detected because the expected `alloc/` subdirectory is no longer visible through the mount. This prevents stale bind mounts from accumulating after allocations are garbage-collected. There is no configuration option for this behavior.
 
 ## Local Development
 

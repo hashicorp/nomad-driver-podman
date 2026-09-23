@@ -1,5 +1,10 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+* config: Added `user_squash` task configuration option (default true) controlling whether the task user is passed to Podman; set to false for rootless "fake root" where container uid 0 maps to the socket owner.
+* driver: Added rootless support for bind-mounting allocation directories into a socket-user-accessible path, with a background goroutine that reaps orphaned bind mounts.
+* driver: Implemented CreateNetwork/DestroyNetwork for rootless pause-container networking, with recovery of pause containers after agent restart.
+
 ## 0.6.5 (July 13, 2026)
 
 IMPROVEMENTS:
