@@ -1816,8 +1816,10 @@ func (d *Driver) containerMounts(task *drivers.TaskConfig, driverConfig *TaskCon
 			src = filepath.Clean(src)
 		}
 
-		if !d.config.Volumes.Enabled && !isParentPath(task.AllocDir, src) {
-			return nil, fmt.Errorf("volumes are not enabled; cannot mount host paths: %+q", userbind)
+		if !d.config.Volumes.Enabled {
+			if err := escapesParentDir(task.AllocDir, src); err != nil {
+				return nil, fmt.Errorf("volumes are disabled; cannot mount host path: %q", userbind)
+			}
 		}
 		bind := spec.Mount{
 			Source:      src,
@@ -1977,11 +1979,40 @@ func parseVolumeSpec(volBind string) (hostPath string, containerPath string, mod
 	return parts[0], parts[1], m, nil
 }
 
-// isParentPath returns true if path is a child or a descendant of parent path.
-// Both inputs need to be absolute paths.
-func isParentPath(parent, path string) bool {
-	rel, err := filepath.Rel(parent, path)
-	return err == nil && !strings.HasPrefix(rel, "..")
+// escapesParentDir returns an error if the child escapes the parent,
+// or if it cannot say for sure due to some other error.
+//
+// The parent must exist. A missing child is not an error.
+//
+// It checks ../ style relative path traversal and symlinks. If child is a
+// symlink that resolves to an absolute path, it will be rejected regardless
+// of whether the target is in parent. A symlink to a relative path within
+// parent is allowed.
+//
+// Input paths may be absolute or relative, but if the parent is relative,
+// the child must be relative, too.
+//
+// This was copied from Nomad for the same purpose in the docker driver:
+// https://github.com/hashicorp/nomad/blob/v2.0.4/helper/escapingfs/escapes.go#L30
+func escapesParentDir(parent, child string) error {
+	var err error
+	if filepath.IsAbs(child) {
+		child, err = filepath.Rel(parent, child)
+		if err != nil {
+			return err
+		}
+	}
+	// os.Root accounts for relative paths and symlinks
+	root, err := os.OpenRoot(parent)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	_, err = root.Stat(child)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func setExtraHosts(hosts []string, createOpts *api.SpecGenerator) error {

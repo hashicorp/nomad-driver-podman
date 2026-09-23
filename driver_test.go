@@ -1164,7 +1164,7 @@ func TestPodmanDriver_Init(t *testing.T) {
 
 	// only test --init if catatonit is installed
 	initPath, err := exec.LookPath("catatonit")
-	if os.IsNotExist(err) {
+	if err != nil && strings.Contains(err.Error(), "executable file not found") {
 		t.Skip("Skipping --init test because catatonit is not installed")
 	}
 	must.NoError(t, err)
@@ -1344,10 +1344,9 @@ func TestPodmanDriver_Device(t *testing.T) {
 	ci.Parallel(t)
 
 	taskCfg := newTaskConfig("", []string{
-		// print our username to stdout
 		"sh",
 		"-c",
-		"sleep 1; ls -l /dev/net/tun",
+		"sleep 1; ls -l /dev/zero",
 	})
 
 	task := &drivers.TaskConfig{
@@ -1356,7 +1355,7 @@ func TestPodmanDriver_Device(t *testing.T) {
 		AllocID:   uuid.Generate(),
 		Resources: createBasicResources(),
 	}
-	taskCfg.Devices = []string{"/dev/net/tun"}
+	taskCfg.Devices = []string{"/dev/zero"}
 	must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
 	d := podmanDriverHarness(t, nil)
@@ -1384,7 +1383,7 @@ func TestPodmanDriver_Device(t *testing.T) {
 
 	// see if stdout was populated with the "whoami" output
 	tasklog := readStdoutLog(t, task)
-	must.StrContains(t, tasklog, "dev/net/tun")
+	must.StrContains(t, tasklog, "dev/zero")
 
 }
 
@@ -1495,14 +1494,23 @@ func TestPodmanDriver_Tmpfs(t *testing.T) {
 	}
 
 	// see if tmpfs was propagated to podman
-	inspectData, err := getPodmanDriver(t, d).defaultPodman.ContainerInspect(context.Background(), containerName)
+	podmanAPI := getPodmanDriver(t, d).defaultPodman
+	inspectData, err := podmanAPI.ContainerInspect(context.Background(), containerName)
 	must.NoError(t, err)
 
 	expectedFilesystem := map[string]string{
-		"/tmpdata1": "rw,rprivate,nosuid,nodev,tmpcopyup",
-		"/tmpdata2": "rshared,noexec,rw,nosuid,nodev,tmpcopyup",
+		"/tmpdata1": "rprivate,nosuid,nodev,tmpcopyup",
+		"/tmpdata2": "rshared,noexec,nosuid,nodev,tmpcopyup",
 	}
-	must.MapEq(t, expectedFilesystem, inspectData.HostConfig.Tmpfs)
+	// prior to podman 5.6.0, the default mount options included "rw"
+	// https://github.com/podman-container-tools/podman/commit/bf7dcd5619b9600d7fdf93da16c8d0258e58f896
+	// so to support test runs on either side of that change, strip "rw" from
+	// the podman api response.
+	gotFS := map[string]string{
+		"/tmpdata1": strings.Replace(inspectData.HostConfig.Tmpfs["/tmpdata1"], "rw,", "", 1),
+		"/tmpdata2": strings.Replace(inspectData.HostConfig.Tmpfs["/tmpdata2"], "rw,", "", 1),
+	}
+	must.MapEq(t, expectedFilesystem, gotFS)
 
 	// see if stdout was populated with expected "mount" output
 	tasklog := readStdoutLog(t, task)
@@ -1579,12 +1587,10 @@ func TestPodmanDriver_Mount(t *testing.T) {
 				aok = true
 			}
 			if prefix == "/tmp:/checkb:" {
-				must.SliceContains(t, opts, "rw")
 				must.SliceContains(t, opts, "private")
 				bok = true
 			}
 			if prefix == "/tmp:/checkc:" {
-				must.SliceContains(t, opts, "rw")
 				must.SliceContains(t, opts, "rprivate")
 				cok = true
 			}
@@ -1883,6 +1889,8 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 		mode     string
 		expected string
 		gateway  string
+		// skip non-default network modes if they're not available
+		skippable bool
 	}{
 		{
 			mode:    "host",
@@ -1899,13 +1907,15 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 			// slirp4netns information not populated by podman and
 			// is not supported for root containers
 			// https://github.com/containers/libpod/issues/6097
-			mode: "slirp4netns",
+			mode:      "slirp4netns",
+			skippable: true,
 		},
 		{
 			// podman doesn't populate network info for pasta mode:
 			// https://github.com/containers/podman/issues/26650
-			mode:    "pasta",
-			gateway: "",
+			mode:      "pasta",
+			gateway:   "",
+			skippable: true,
 		},
 		{
 			mode:    "none",
@@ -1915,8 +1925,13 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("%s_mode_%s", t.Name(), tc.mode), func(t *testing.T) {
-			if os.Geteuid() == 0 && tc.mode == "pasta" {
-				t.Skip("pasta network mode is not supported by podman when run as root")
+			d := podmanDriverHarness(t, nil)
+			podmanAPI := getPodmanDriver(t, d).defaultPodman
+
+			networkExists, err := podmanAPI.NetworkExists(t.Context(), tc.mode)
+			must.NoError(t, err)
+			if tc.skippable && !networkExists {
+				t.Skipf("network %q not available", tc.mode)
 			}
 
 			taskCfg := newTaskConfig("", busyboxLongRunningCmd)
@@ -1931,11 +1946,10 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 
 			must.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
 
-			d := podmanDriverHarness(t, nil)
 			defer d.MkAllocDir(task, true)()
 
 			containerName := BuildContainerName(task)
-			_, _, err := d.StartTask(task)
+			_, _, err = d.StartTask(task)
 			must.NoError(t, err)
 
 			defer func() {
@@ -1944,7 +1958,7 @@ func TestPodmanDriver_NetworkModes(t *testing.T) {
 
 			must.NoError(t, d.WaitUntilStarted(task.ID, 20*time.Second))
 
-			inspectData, err := getPodmanDriver(t, d).defaultPodman.ContainerInspect(context.Background(), containerName)
+			inspectData, err := podmanAPI.ContainerInspect(t.Context(), containerName)
 			must.NoError(t, err)
 			if tc.mode == "host" {
 				must.Eq(t, "host", inspectData.HostConfig.NetworkMode)
@@ -3811,4 +3825,204 @@ func TestPodmanDriver_CustomNetwork(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestContainerMounts_VolumesDisabled verifies that when volumes are disabled,
+// containerMounts rejects bind sources that escape the alloc dir (including
+// symlinks that point to an absolute path), while allowing paths within it.
+func TestContainerMounts_VolumesDisabled(t *testing.T) {
+	tmp := t.TempDir()
+	allocDir := filepath.Join(tmp, "alloc")
+	taskDir := filepath.Join(allocDir, "web")
+	must.NoError(t, os.MkdirAll(taskDir, 0755))
+
+	// a file that lives inside the alloc dir
+	safeFile := filepath.Join(taskDir, "local-file")
+	must.NoError(t, os.WriteFile(safeFile, []byte("hi"), 0600))
+
+	// a symlink inside the task dir whose target is an absolute path
+	absLink := filepath.Join(taskDir, "abs-link")
+	must.NoError(t, os.Symlink("/etc/passwd", absLink))
+
+	d := &Driver{
+		logger: testlog.HCLogger(t),
+		config: &PluginConfig{
+			Volumes: VolumeConfig{Enabled: false}, // explicitly disabled
+		},
+	}
+
+	task := &drivers.TaskConfig{
+		Name:     "web",
+		AllocDir: allocDir,
+		Env:      map[string]string{},
+	}
+
+	cases := []struct {
+		name      string
+		volume    string
+		expectErr string
+	}{
+		{
+			name:   "absolute path inside alloc dir is allowed",
+			volume: safeFile + ":/container/file",
+		},
+		{
+			name:   "relative path inside task dir is allowed",
+			volume: "local-file:/container/file",
+		},
+		{
+			name:      "absolute path outside alloc dir is rejected",
+			volume:    "/etc/passwd:/container/file",
+			expectErr: "volumes are disabled; cannot mount host path",
+		},
+		{
+			name:      "symlink to absolute path is rejected",
+			volume:    absLink + ":/container/file",
+			expectErr: "volumes are disabled; cannot mount host path",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			driverCfg := &TaskConfig{
+				Volumes: []string{tc.volume},
+			}
+			_, err := d.containerMounts(task, driverCfg)
+			if tc.expectErr == "" {
+				must.NoError(t, err)
+			} else {
+				must.ErrorContains(t, err, tc.expectErr)
+			}
+		})
+	}
+}
+
+// TestEscapesParentDir makes sure a given mount can't escape a parent dir.
+//
+// Like the func itself, this is copied from hashicorp/nomad - helper/escapingfs
+func TestEscapesParentDir(t *testing.T) {
+	// this is the main error we want to catch, from os.Root.Stat()
+	pathEscapesParent := "path escapes from parent"
+
+	tmp := t.TempDir()
+
+	// set up directory structure
+
+	// parent/
+	parent := filepath.Join(tmp, "parent")
+	must.NoError(t, os.Mkdir(parent, 0755))
+
+	// parent/just-a-file
+	absFile := filepath.Join(parent, "just-a-file")
+	must.NoError(t, os.WriteFile(absFile, []byte("hi"), 0600))
+
+	// parent/subdir/
+	subdir := filepath.Join(parent, "subdir")
+	must.NoError(t, os.Mkdir(subdir, 0755))
+
+	// symlinks - a symlink is safe if the link itself is in the parent, either
+	// absolute or relative, and the target is a relative path in the parent.
+	safeLink := filepath.Join(parent, "safe-link")
+	must.NoError(t, os.Symlink("just-a-file", safeLink))
+
+	// absolute symlink targets are not allowed, even if they are in the parent.
+	unsafeLink := filepath.Join(parent, "absolute-target-link")
+	must.NoError(t, os.Symlink(absFile, unsafeLink))
+
+	// symlink target must not escape the parent.
+	// note: target needs to actually exist. "001" is part of Go's t.TempDir()
+	escapeLink := filepath.Join(parent, "escape-link")
+	must.NoError(t, os.Symlink("../../001", escapeLink))
+
+	cases := []struct {
+		name      string
+		child     string
+		expectErr string
+	}{
+		{
+			name:  "child is parent",
+			child: parent,
+		},
+		// relative paths
+		{
+			name:  "relative child inside parent",
+			child: "just-a-file",
+		},
+		{
+			name:  "relative subdirectory inside parent",
+			child: "subdir",
+		},
+		{
+			name:  "relative non-existent child",
+			child: "no-exist",
+		},
+		{
+			name:      "relative escape via traversal",
+			child:     "../escape",
+			expectErr: pathEscapesParent,
+		},
+		// absolute paths
+		{
+			name:  "absolute child inside parent",
+			child: absFile,
+		},
+		{
+			name:  "absolute non-existent child inside parent",
+			child: filepath.Join(parent, "no-exist"),
+		},
+		{
+			name:      "absolute child outside parent",
+			child:     "/tmp",
+			expectErr: pathEscapesParent,
+		},
+		// symlinks
+		{
+			name:  "relative symlink to relative path inside parent",
+			child: "safe-link",
+		},
+		{
+			name:  "absolute symlink to relative path inside parent",
+			child: filepath.Join(parent, "safe-link"),
+		},
+		{
+			name:      "symlink to absolute path inside parent",
+			child:     "absolute-target-link",
+			expectErr: pathEscapesParent,
+		},
+		{
+			name:      "symlink escaping parent",
+			child:     "escape-link",
+			expectErr: pathEscapesParent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := escapesParentDir(parent, tc.child)
+			if tc.expectErr == "" {
+				must.NoError(t, err)
+			} else {
+				must.ErrorContains(t, err, tc.expectErr)
+			}
+		})
+	}
+
+	t.Run("relative parent", func(t *testing.T) {
+		// this test must not be t.Parallel, because os.Chdir is global.
+		curDir, err := os.Getwd()
+		must.NoError(t, err)
+		t.Cleanup(func() {
+			must.NoError(t, os.Chdir(curDir), must.Sprint("failed to restore original working dir"))
+		})
+		// go into tmp to test paths ./relative to it
+		must.NoError(t, os.Chdir(tmp))
+
+		must.NoError(t, escapesParentDir("./parent", "./parent/just-a-file"))
+
+		dotdot := filepath.Join("..", filepath.Base(tmp), "parent") // ../001/parent
+		must.NoError(t, escapesParentDir(dotdot, "./parent/just-a-file"))
+
+		absChildErr := fmt.Sprintf("Rel: can't make %s relative to ./parent", absFile)
+		must.EqError(t, escapesParentDir("./parent", absFile), absChildErr)
+	})
 }
