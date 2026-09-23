@@ -24,7 +24,7 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
-		return inspectData, ContainerNotFound
+		return inspectData, ErrContainerNotFound
 	}
 
 	if res.StatusCode != http.StatusOK {

@@ -525,7 +525,7 @@ func TestPodmanDriver_GC_Container_on(t *testing.T) {
 
 	// see if the container does not exist (404)
 	_, err = getPodmanDriver(t, d).defaultPodman.ContainerStats(context.Background(), containerName)
-	must.ErrorIs(t, err, api.ContainerNotFound)
+	must.ErrorIs(t, err, api.ErrContainerNotFound)
 }
 
 // check if container is destroyed if gc.container=false

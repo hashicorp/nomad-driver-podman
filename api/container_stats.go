@@ -12,8 +12,8 @@ import (
 	"net/http"
 )
 
-var ContainerNotFound = errors.New("No such Container")
-var ContainerWrongState = errors.New("Container has wrong state")
+var ErrContainerNotFound = errors.New("No such Container")
+var ErrContainerWrongState = errors.New("Container has wrong state")
 
 // ContainerStats data takes a name or ID of a container returns stats data
 func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
@@ -27,11 +27,11 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
-		return stats, ContainerNotFound
+		return stats, ErrContainerNotFound
 	}
 
 	if res.StatusCode == http.StatusConflict {
-		return stats, ContainerWrongState
+		return stats, ErrContainerWrongState
 	}
 	if res.StatusCode != http.StatusOK {
 		return stats, fmt.Errorf("cannot get stats of container, status code: %d", res.StatusCode)
@@ -44,13 +44,13 @@ func (c *API) ContainerStats(ctx context.Context, name string) (Stats, error) {
 
 	// Since podman 4.1.1, an empty 200 response is returned for stopped containers.
 	if len(body) == 0 {
-		return stats, ContainerNotFound
+		return stats, ErrContainerNotFound
 	}
 
 	// Since podman 4.6.0, a 200 response with `container is stopped` is returned for stopped containers.
 	var errResponse Error
 	if _ = json.Unmarshal(body, &errResponse); errResponse.Cause == "container is stopped" {
-		return stats, ContainerNotFound
+		return stats, ErrContainerNotFound
 	}
 
 	err = json.Unmarshal(body, &stats)
