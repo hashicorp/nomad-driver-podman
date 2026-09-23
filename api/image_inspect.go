@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var ImageNotFound = errors.New("No such Image")
+var ErrImageNotFound = errors.New("No such Image")
 
 type inspectIDImageResponse struct {
 	Id string `json:"Id"`
@@ -34,7 +34,7 @@ func (c *API) ImageInspectID(ctx context.Context, image string) (string, error) 
 		return "", err
 	}
 	if res.StatusCode == http.StatusNotFound {
-		return "", ImageNotFound
+		return "", ErrImageNotFound
 	}
 
 	if res.StatusCode != http.StatusOK {
@@ -77,7 +77,7 @@ func (c *API) ImageInspectIDForPlatform(ctx context.Context, image, os, arch, va
 		return "", err
 	}
 	if res.StatusCode == http.StatusNotFound {
-		return "", ImageNotFound
+		return "", ErrImageNotFound
 	}
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("cannot inspect image, status code: %d: %s", res.StatusCode, body)

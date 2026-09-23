@@ -1,61 +1,9 @@
-# Copyright IBM Corp. 2019, 2026
-# SPDX-License-Identifier: MPL-2.0
-
+version: "2"
 run:
-  # Timeout for analysis
-  deadline: 10m
-
-  # Include test files
   tests: true
-
-  # Skip directories
-  skip-dirs:
-    - iopodman
-    - build
-    - examples
-    - scripts
-
-# Output configuration
-output:
-  format: colored-line-number
-
-  # Print lines of code with issue
-  print-issued-lines: true
-
-  # Print linter name
-  print-linter-name: true
-
-# Specific linter settings
-linters-settings:
-  errcheck:
-    # Allow unchecked errors in type assertions
-    check-type-assertions: false
-
-  govet:
-    # Complain about shadowing
-    check-shadowing: true
-    settings:
-      shadow:
-        strict: false
-  gofmt:
-    # Complain about un-simplified code
-    simplify: true
-  maligned:
-    # Complain about non-minimized struct field alignment
-    suggest-new: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - goimports
-    - gocritic
-    - misspell
-    - govet
-    - ineffassign
-    - unconvert
-    - gofmt
-    - gosimple
-    - staticcheck
     - asasalint
     - asciicheck
     - bidichk
@@ -64,5 +12,42 @@ linters:
     - durationcheck
     - errchkjson
     - errorlint
-  fast: false
-
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+  settings:
+    errcheck:
+      check-type-assertions: false
+    staticcheck:
+      checks:
+        - all
+        - -QF1008
+        - -ST1003
+        - -ST1005
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

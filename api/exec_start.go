@@ -149,8 +149,8 @@ func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStart
 				return err
 			}
 
-			switch {
-			case fd == 0:
+			switch fd {
+			case 0:
 				// Write STDIN to STDOUT (echoing characters
 				// typed by another attach session)
 				if options.AttachInput {
@@ -158,19 +158,19 @@ func (c *API) ExecStart(ctx context.Context, sessionID string, options ExecStart
 						return err
 					}
 				}
-			case fd == 1:
+			case 1:
 				if options.AttachOutput {
 					if _, err := options.Stdout.Write(frame[0:l]); err != nil {
 						return err
 					}
 				}
-			case fd == 2:
+			case 2:
 				if options.AttachError {
 					if _, err := options.Stderr.Write(frame[0:l]); err != nil {
 						return err
 					}
 				}
-			case fd == 3:
+			case 3:
 				return fmt.Errorf("error from service from stream: %s", frame)
 			default:
 				return fmt.Errorf("unrecognized channel '%d' in header, 0-3 supported", fd)

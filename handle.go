@@ -207,9 +207,9 @@ func (h *TaskHandle) runContainerMonitor() {
 		containerStats, statsErr := h.podmanClient.ContainerStats(h.driver.ctx, h.containerID)
 		if statsErr != nil {
 			gone := false
-			if errors.Is(statsErr, api.ContainerNotFound) {
+			if errors.Is(statsErr, api.ErrContainerNotFound) {
 				gone = true
-			} else if errors.Is(statsErr, api.ContainerWrongState) {
+			} else if errors.Is(statsErr, api.ErrContainerWrongState) {
 				gone = true
 			}
 			if gone {

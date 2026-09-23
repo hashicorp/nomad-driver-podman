@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+IMPROVEMENTS:
+* build: Update Go to 1.27.1 [[GH-536](https://github.com/hashicorp/nomad-driver-podman/pull/536)]
+
 ## 0.6.5 (July 13, 2026)
 
 IMPROVEMENTS:

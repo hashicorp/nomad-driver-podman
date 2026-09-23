@@ -207,7 +207,7 @@ func (d *Driver) SetConfig(cfg *base.Config) error {
 
 	switch {
 	case len(d.config.Socket) > 0 && d.config.SocketPath != "":
-		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive.")
+		return fmt.Errorf("error: can't define socket blocks and socket_path, they're mutually exclusive")
 	case len(d.config.Socket) > 0:
 		d.podmanClients = d.makePodmanClients(d.config.Socket, timeout)
 	case d.config.SocketPath != "":
@@ -271,7 +271,7 @@ func cleanUpSocketName(name string) string {
 	var result strings.Builder
 	for i := 0; i < len(name); i++ {
 		b := name[i]
-		if !(('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')) {
+		if (b < 'a' || b > 'z') && (b < 'A' || b > 'Z') && (b < '0' || b > '9') {
 			result.WriteByte('_')
 		} else {
 			result.WriteByte(b)
@@ -451,7 +451,7 @@ func (d *Driver) RecoverTask(handle *drivers.TaskHandle) error {
 	taskPodmanClient, err := d.getPodmanClient(podmanTaskSocketName)
 	if err == nil {
 		inspectData, err = taskPodmanClient.ContainerInspect(d.ctx, taskState.ContainerID)
-		if errors.Is(err, api.ContainerNotFound) {
+		if errors.Is(err, api.ErrContainerNotFound) {
 			d.logger.Debug("Recovery lookup found no container", "task", handle.Config.ID, "container", taskState.ContainerID, "error", err)
 			return err
 		} else if err != nil {
@@ -1010,7 +1010,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 				return nil, nil, nstructs.WrapRecoverable(fmt.Sprintf("failed to remove dead container: %v", err), err)
 			}
 		}
-	} else if !errors.Is(err, api.ContainerNotFound) {
+	} else if !errors.Is(err, api.ErrContainerNotFound) {
 		return nil, nil, fmt.Errorf("failed to inspect container: %s: %w", containerName, err)
 	}
 
@@ -1352,7 +1352,7 @@ func (d *Driver) createImage(
 	}
 
 	imageID, err := podmanClient.ImageInspectID(d.ctx, imageName)
-	if err != nil && !errors.Is(err, api.ImageNotFound) {
+	if err != nil && !errors.Is(err, api.ErrImageNotFound) {
 		// If ImageInspectID errors, continue the operation and try
 		// to pull the image instead
 		d.logger.Warn("Unable to check for local image", "image", imageName, "error", err)
@@ -1569,7 +1569,7 @@ func (d *Driver) StopTask(taskID string, timeout time.Duration, signal string) e
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, api.ContainerNotFound):
+	case errors.Is(err, api.ErrContainerNotFound):
 		d.logger.Debug("Container not found while we wanted to stop it", "task", taskID, "container", handle.containerID, "error", err)
 		return nil
 	default:
