@@ -72,6 +72,8 @@ const (
 	labelNamespace     = "com.hashicorp.nomad.namespace"
 	labelNodeName      = "com.hashicorp.nomad.node_name"
 	labelNodeID        = "com.hashicorp.nomad.node_id"
+
+	nvidiaDeviceEnvKey = "NVIDIA_VISIBLE_DEVICES"
 )
 
 var (
@@ -675,6 +677,20 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerStorageConfig.Devices = make([]spec.LinuxDevice, len(podmanTaskConfig.Devices))
 	for idx, device := range podmanTaskConfig.Devices {
 		createOpts.ContainerStorageConfig.Devices[idx] = spec.LinuxDevice{Path: device}
+	}
+
+	// NVIDIA GPU handling:
+	// The NVIDIA GPU device plugin populates the TaskConfig's device environment with the GPU UUIDs allocated to the task.
+	// These need to be passed to Podman via CDI as new devices.
+	nvidiaVisibleDevices, nvidiaDevicesPresent := cfg.DeviceEnv[nvidiaDeviceEnvKey]
+	if nvidiaDevicesPresent && nvidiaVisibleDevices != "" && nvidiaVisibleDevices != "void" {
+		gpuIDs := strings.Split(nvidiaVisibleDevices, ",")
+		for _, gpuID := range gpuIDs {
+			newDevice := spec.LinuxDevice{
+				Path: "nvidia.com/gpu=" + gpuID, // create the fully-qualified CDI device name
+			}
+			createOpts.ContainerStorageConfig.Devices = append(createOpts.ContainerStorageConfig.Devices, newDevice)
+		}
 	}
 
 	// Set the nomad slice as cgroup parent
