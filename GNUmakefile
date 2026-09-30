@@ -43,8 +43,8 @@ hclfmt: ## Format HCL files with hclfmt
 .PHONY: deps
 deps: ## Install build dependencies
 	@echo "==> Installing build dependencies ..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
-	go install github.com/hashicorp/go-hclog/hclogvet@feaf6d2ec20fd895e711195c99e3fde93a68afc5
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+	go install github.com/hashicorp/go-hclog/hclogvet@e4c86b4cdbc417b598e03d5e4344ddff3419aea1
 	go install gotest.tools/gotestsum@v1.10.0
 	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 

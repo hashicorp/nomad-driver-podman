@@ -1,8 +1,13 @@
 ## UNRELEASED
 
 BUG FIXES:
-
 * driver: Fixed `localhost/` and shortname images incorrectly falling through to a registry pull instead of resolving from local storage. [[GH-525](https://github.com/hashicorp/nomad-driver-podman/pull/525)]
+
+SECURITY:
+* driver: Prevent using volumes to mount symlinks targeting the host filesystem when volumes are explicitly disabled [[GH-527](https://github.com/hashicorp/nomad-driver-podman/pull/527)]
+
+IMPROVEMENTS:
+* build: Update Go to 1.27.1 [[GH-536](https://github.com/hashicorp/nomad-driver-podman/pull/536)]
 
 ## 0.6.5 (July 13, 2026)
 
@@ -13,6 +18,7 @@ IMPROVEMENTS:
 * config: Added `ipc_mode` task configuration option to control the container IPC namespace (`host`, `private`, `shareable`, `none`, `container:<id>`, `ns:<path>`, `task:<name>`) [[GH-515](https://github.com/hashicorp/nomad-driver-podman/pull/515)]
 * config: Added support for `os`, `arch` and `variant` task config options to override the platform of the image to pull. [[GH-514](https://github.com/hashicorp/nomad-driver-podman/pull/514)]
 * build: Eliminated transitive dependency on Docker packages via `hclutils`.[[GH-512](https://github.com/hashicorp/nomad-driver-podman/pull/512)]
+* docs: Added a progressive set of real-world example jobs (hello-world through a rootless, hardened deployment), each with a runnable spec and a README covering run/verify steps and expected output. [[GH-516](https://github.com/hashicorp/nomad-driver-podman/pull/516)]
 
 BUG FIXES:
 * api: Fixed file descriptor leak when getting logs from the task [[GH-508](https://github.com/hashicorp/nomad-driver-podman/pull/508)]

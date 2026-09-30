@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2019, 2025
+// Copyright IBM Corp. 2019, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package api
@@ -23,7 +23,7 @@ func (c *API) ContainerStop(ctx context.Context, name string, timeout int, ignor
 	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
-		return ContainerNotFound
+		return ErrContainerNotFound
 	}
 
 	if res.StatusCode == http.StatusNoContent {

@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2019, 2025
+// Copyright IBM Corp. 2019, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package main
@@ -207,9 +207,9 @@ func (h *TaskHandle) runContainerMonitor() {
 		containerStats, statsErr := h.podmanClient.ContainerStats(h.driver.ctx, h.containerID)
 		if statsErr != nil {
 			gone := false
-			if errors.Is(statsErr, api.ContainerNotFound) {
+			if errors.Is(statsErr, api.ErrContainerNotFound) {
 				gone = true
-			} else if errors.Is(statsErr, api.ContainerWrongState) {
+			} else if errors.Is(statsErr, api.ErrContainerWrongState) {
 				gone = true
 			}
 			if gone {

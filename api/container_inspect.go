@@ -1,4 +1,4 @@
-// Copyright IBM Corp. 2019, 2025
+// Copyright IBM Corp. 2019, 2026
 // SPDX-License-Identifier: MPL-2.0
 
 package api
@@ -24,7 +24,7 @@ func (c *API) ContainerInspect(ctx context.Context, name string) (InspectContain
 	defer ignoreClose(res.Body)
 
 	if res.StatusCode == http.StatusNotFound {
-		return inspectData, ContainerNotFound
+		return inspectData, ErrContainerNotFound
 	}
 
 	if res.StatusCode != http.StatusOK {
