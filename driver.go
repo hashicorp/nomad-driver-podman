@@ -33,7 +33,6 @@ import (
 	"github.com/hashicorp/nomad/client/lib/cpustats"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/drivers/shared/eventer"
-	"github.com/hashicorp/nomad/helper/pointer"
 	nstructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/plugins/drivers"
@@ -701,8 +700,9 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	createOpts.ContainerResourceConfig.ResourceLimits.Memory.Limit = hard
 	// set PidsLimit only if configured.
 	if podmanTaskConfig.PidsLimit > 0 {
+		pidsLimit := podmanTaskConfig.PidsLimit
 		createOpts.ContainerResourceConfig.ResourceLimits.Pids = &spec.LinuxPids{
-			Limit: pointer.Of(podmanTaskConfig.PidsLimit),
+			Limit: &pidsLimit,
 		}
 	}
 

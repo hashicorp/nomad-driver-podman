@@ -5,6 +5,7 @@ SECURITY:
 
 IMPROVEMENTS:
 * build: Update Go to 1.27.1 [[GH-536](https://github.com/hashicorp/nomad-driver-podman/pull/536)]
+* build: Update Nomad to 2.0.7 [[GH-541](https://github.com/hashicorp/nomad-driver-podman/pull/541)]
 
 ## 0.6.5 (July 13, 2026)
 
