@@ -1,5 +1,8 @@
 ## UNRELEASED
 
+BUG FIXES:
+* driver: Fixed `localhost/` and shortname images incorrectly falling through to a registry pull instead of resolving from local storage. [[GH-525](https://github.com/hashicorp/nomad-driver-podman/pull/525)]
+
 SECURITY:
 * driver: Prevent using volumes to mount symlinks targeting the host filesystem when volumes are explicitly disabled [[GH-527](https://github.com/hashicorp/nomad-driver-podman/pull/527)]
 
