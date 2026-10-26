@@ -1,5 +1,0 @@
-{
-	"editor.experimentalWhitespaceRendering": "off",
-	"files.trimTrailingWhitespaceInRegexAndStrings": false,
-	"go.languageServerFlags": [ ],
-}
